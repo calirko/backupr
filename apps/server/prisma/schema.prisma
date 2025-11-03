@@ -1,0 +1,58 @@
+// This is your Prisma schema file for the server PostgreSQL database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  apiKey    String   @unique
+  name      String?
+  email     String?  @unique
+  createdAt DateTime @default(now())
+  backups   Backup[]
+}
+
+model Backup {
+  id          String       @id @default(uuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timestamp   DateTime     @default(now())
+  status      String       // completed, failed, in_progress
+  filesCount  Int          @default(0)
+  totalSize   Int          @default(0)
+  metadata    Json?
+  files       BackupFile[]
+  
+  @@index([userId, timestamp])
+}
+
+model BackupFile {
+  id         String   @id @default(uuid())
+  backupId   String
+  backup     Backup   @relation(fields: [backupId], references: [id], onDelete: Cascade)
+  filePath   String
+  fileSize   Int
+  checksum   String?
+  status     String   // uploaded, failed
+  uploadedAt DateTime @default(now())
+  
+  @@index([backupId])
+}
+
+model SyncLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String   // backup, restore
+  status    String   // success, failed
+  message   String?
+  timestamp DateTime @default(now())
+  metadata  Json?
+  
+  @@index([userId, timestamp])
+}
