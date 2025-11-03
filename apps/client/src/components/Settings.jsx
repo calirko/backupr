@@ -7,13 +7,7 @@ import { Button } from './ui/button';
 export function Settings() {
   const [settings, setSettings] = useState({
     serverHost: '',
-    apiKey: '',
-    dbConfig: {
-      host: 'localhost',
-      user: 'root',
-      password: '',
-      database: 'backupr'
-    }
+    apiKey: ''
   });
   const [saved, setSaved] = useState(false);
 
@@ -40,16 +34,6 @@ export function Settings() {
     setSettings(prev => ({
       ...prev,
       [field]: value
-    }));
-  };
-
-  const updateDbConfig = (field, value) => {
-    setSettings(prev => ({
-      ...prev,
-      dbConfig: {
-        ...prev.dbConfig,
-        [field]: value
-      }
     }));
   };
 
@@ -85,47 +69,14 @@ export function Settings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Database Settings</CardTitle>
-          <CardDescription>Configure MySQL database connection</CardDescription>
+          <CardTitle>Local Database</CardTitle>
+          <CardDescription>SQLite database is automatically managed in your application data folder</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="dbHost">Host</Label>
-            <Input
-              id="dbHost"
-              placeholder="localhost"
-              value={settings.dbConfig.host}
-              onChange={(e) => updateDbConfig('host', e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="dbUser">User</Label>
-            <Input
-              id="dbUser"
-              placeholder="root"
-              value={settings.dbConfig.user}
-              onChange={(e) => updateDbConfig('user', e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="dbPassword">Password</Label>
-            <Input
-              id="dbPassword"
-              type="password"
-              placeholder="Database password"
-              value={settings.dbConfig.password}
-              onChange={(e) => updateDbConfig('password', e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="dbName">Database Name</Label>
-            <Input
-              id="dbName"
-              placeholder="backupr"
-              value={settings.dbConfig.database}
-              onChange={(e) => updateDbConfig('database', e.target.value)}
-            />
-          </div>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            The local database is used to store sync history and backup configurations. 
+            It's automatically created and managed by the application.
+          </p>
         </CardContent>
       </Card>
 

@@ -71,22 +71,13 @@ function createTray() {
 ipcMain.handle('get-settings', async () => {
   return {
     serverHost: store.get('serverHost', ''),
-    apiKey: store.get('apiKey', ''),
-    dbConfig: store.get('dbConfig', {
-      host: 'localhost',
-      user: 'root',
-      password: '',
-      database: 'backupr'
-    })
+    apiKey: store.get('apiKey', '')
   };
 });
 
 ipcMain.handle('save-settings', async (event, settings) => {
   store.set('serverHost', settings.serverHost);
   store.set('apiKey', settings.apiKey);
-  if (settings.dbConfig) {
-    store.set('dbConfig', settings.dbConfig);
-  }
   return { success: true };
 });
 

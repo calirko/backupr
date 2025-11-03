@@ -1,35 +1,67 @@
-import mysql from 'mysql2/promise';
+import { PrismaClient } from '@prisma/client';
+import path from 'path';
+import { app } from 'electron';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
-let connection = null;
+const execAsync = promisify(exec);
 
-export async function initDatabase(config) {
+let prisma = null;
+
+export async function initDatabase() {
   try {
-    connection = await mysql.createConnection({
-      host: config.host || 'localhost',
-      user: config.user || 'root',
-      password: config.password || '',
-      database: config.database || 'backupr'
-    });
-
-    // Create tables if they don't exist
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS sync_history (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        file_path VARCHAR(500) NOT NULL,
-        synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        status VARCHAR(50) NOT NULL,
-        message TEXT
-      )
-    `);
-
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS settings (
-        key_name VARCHAR(100) PRIMARY KEY,
-        value TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-
+    if (!prisma) {
+      // Get user data directory for storing the database
+      const userDataPath = app.getPath('userData');
+      const dbPath = path.join(userDataPath, 'backupr.db');
+      
+      // Set the database URL for SQLite
+      process.env.DATABASE_URL = `file:${dbPath}`;
+      
+      prisma = new PrismaClient();
+      
+      // For SQLite with Electron, we use db push to create/update schema
+      // This ensures the database is created without needing migration files
+      try {
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "SyncHistory" (
+            "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            "filePath" TEXT NOT NULL,
+            "syncedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "status" TEXT NOT NULL,
+            "message" TEXT,
+            "fileSize" INTEGER,
+            "checksum" TEXT
+          )
+        `);
+        
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "Setting" (
+            "key" TEXT NOT NULL PRIMARY KEY,
+            "value" TEXT NOT NULL,
+            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "BackupConfig" (
+            "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            "filePath" TEXT NOT NULL,
+            "enabled" BOOLEAN NOT NULL DEFAULT true,
+            "addedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+      } catch (error) {
+        // Tables might already exist, which is fine
+        console.log('Database tables initialized');
+      }
+      
+      // Test connection
+      await prisma.$connect();
+      
+      console.log('Database initialized at:', dbPath);
+    }
+    
     return { success: true };
   } catch (error) {
     console.error('Database initialization error:', error);
@@ -37,33 +69,103 @@ export async function initDatabase(config) {
   }
 }
 
-export async function addSyncHistory(filePath, status, message = '') {
-  if (!connection) {
+export async function addSyncHistory(filePath, status, message = '', fileSize = null, checksum = null) {
+  if (!prisma) {
     throw new Error('Database not initialized');
   }
   
-  await connection.execute(
-    'INSERT INTO sync_history (file_path, status, message) VALUES (?, ?, ?)',
-    [filePath, status, message]
-  );
+  return await prisma.syncHistory.create({
+    data: {
+      filePath,
+      status,
+      message,
+      fileSize,
+      checksum
+    }
+  });
 }
 
 export async function getSyncHistory(limit = 50) {
-  if (!connection) {
+  if (!prisma) {
     return [];
   }
   
-  const [rows] = await connection.execute(
-    'SELECT * FROM sync_history ORDER BY synced_at DESC LIMIT ?',
-    [limit]
-  );
+  return await prisma.syncHistory.findMany({
+    orderBy: {
+      syncedAt: 'desc'
+    },
+    take: limit
+  });
+}
+
+export async function saveSetting(key, value) {
+  if (!prisma) {
+    throw new Error('Database not initialized');
+  }
   
-  return rows;
+  return await prisma.setting.upsert({
+    where: { key },
+    update: { value },
+    create: { key, value }
+  });
+}
+
+export async function getSetting(key) {
+  if (!prisma) {
+    return null;
+  }
+  
+  const setting = await prisma.setting.findUnique({
+    where: { key }
+  });
+  
+  return setting?.value || null;
+}
+
+export async function getBackupFiles() {
+  if (!prisma) {
+    return [];
+  }
+  
+  return await prisma.backupConfig.findMany({
+    where: {
+      enabled: true
+    },
+    orderBy: {
+      addedAt: 'desc'
+    }
+  });
+}
+
+export async function addBackupFile(filePath) {
+  if (!prisma) {
+    throw new Error('Database not initialized');
+  }
+  
+  return await prisma.backupConfig.create({
+    data: {
+      filePath,
+      enabled: true
+    }
+  });
+}
+
+export async function removeBackupFile(id) {
+  if (!prisma) {
+    throw new Error('Database not initialized');
+  }
+  
+  return await prisma.backupConfig.delete({
+    where: { id }
+  });
 }
 
 export async function closeDatabase() {
-  if (connection) {
-    await connection.end();
-    connection = null;
+  if (prisma) {
+    await prisma.$disconnect();
+    prisma = null;
   }
 }
+
+export { prisma };
+
