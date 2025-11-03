@@ -1,0 +1,17 @@
+{
+  "name": "@backupr/server",
+  "version": "1.0.0",
+  "description": "Backupr Bun Server",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run dist/index.js"
+  },
+  "dependencies": {
+    "hono": "^3.12.0"
+  },
+  "devDependencies": {
+    "bun-types": "^1.0.18"
+  }
+}
