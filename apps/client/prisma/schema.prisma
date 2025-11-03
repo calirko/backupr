@@ -1,0 +1,33 @@
+// This is your Prisma schema file for the client SQLite database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./backupr.db"
+}
+
+model SyncHistory {
+  id        Int      @id @default(autoincrement())
+  filePath  String
+  syncedAt  DateTime @default(now())
+  status    String   // success, failed, pending
+  message   String?
+  fileSize  Int?
+  checksum  String?
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model BackupConfig {
+  id        Int      @id @default(autoincrement())
+  filePath  String
+  enabled   Boolean  @default(true)
+  addedAt   DateTime @default(now())
+}

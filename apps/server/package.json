@@ -6,12 +6,17 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
-    "start": "bun run dist/index.js"
+    "start": "bun run dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
-    "hono": "^3.12.0"
+    "hono": "^3.12.0",
+    "@prisma/client": "^5.7.1"
   },
   "devDependencies": {
-    "bun-types": "^1.0.18"
+    "bun-types": "^1.0.18",
+    "prisma": "^5.7.1"
   }
 }
