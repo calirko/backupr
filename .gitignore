@@ -157,3 +157,5 @@ node_modules/@prisma
 # SQLite databases
 *.db
 *.db-journal
+
+backups

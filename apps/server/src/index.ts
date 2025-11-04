@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { PrismaClient } from "@prisma/client";
-import { writeFile, mkdir, readFile } from "fs/promises";
+import { writeFile, mkdir, readFile, appendFile, unlink } from "fs/promises";
 import { join } from "path";
 import { createHash } from "crypto";
 import { existsSync } from "fs";
+import { createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
 
 const app = new Hono();
 const prisma = new PrismaClient();
@@ -12,7 +14,24 @@ const prisma = new PrismaClient();
 const BACKUP_STORAGE_DIR =
 	process.env.BACKUP_STORAGE_DIR || join(process.cwd(), "backups");
 
-app.use("/*", cors());
+// Global type for upload sessions
+declare global {
+	var uploadSessions: Map<string, any>;
+}
+
+global.uploadSessions = global.uploadSessions || new Map();
+
+// Configure CORS with more permissive settings
+app.use(
+	"/*",
+	cors({
+		origin: "*",
+		allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+		allowHeaders: ["Content-Type", "X-API-Key"],
+		exposeHeaders: ["Content-Length", "Content-Type"],
+		maxAge: 86400,
+	}),
+);
 
 app.get("/", (c) => {
 	return c.json({
@@ -198,6 +217,312 @@ app.post("/api/backup/upload", validateApiKey, async (c) => {
 		}
 
 		return c.json({ error: "Backup failed", details: error.message }, 500);
+	}
+});
+
+// Chunked upload endpoints for large files
+// Start a chunked upload session
+app.post("/api/backup/upload/start", validateApiKey, async (c) => {
+	try {
+		const client = c.get("client");
+		const body = await c.req.json();
+		const { backupName, fileName, fileSize, totalChunks, metadata = {} } = body;
+
+		if (!backupName || !fileName || !fileSize || !totalChunks) {
+			return c.json(
+				{
+					error: "backupName, fileName, fileSize, and totalChunks are required",
+				},
+				400,
+			);
+		}
+
+		const version = await getNextVersion(client.id, backupName);
+		const timestamp = new Date();
+		const pad = (n: number) => n.toString().padStart(2, "0");
+		const d = timestamp.getDate();
+		const m = timestamp.getMonth() + 1;
+		const y = timestamp.getFullYear();
+		const h = timestamp.getHours();
+		const s = timestamp.getSeconds();
+		const isoDate = `${pad(h)}:${pad(s)},${pad(d)}-${pad(m)}-${y}`;
+
+		// Create backup folder
+		const backupFolder = join(BACKUP_STORAGE_DIR, client.name, backupName);
+		await mkdir(backupFolder, { recursive: true });
+
+		// Create temp folder for chunks
+		const tempFolder = join(backupFolder, ".chunks", isoDate);
+		await mkdir(tempFolder, { recursive: true });
+
+		const uploadSession = {
+			sessionId: `${Date.now()}_${Math.random().toString(36).substring(7)}`,
+			backupName,
+			fileName,
+			fileSize,
+			totalChunks,
+			version,
+			isoDate,
+			clientId: client.id,
+			tempFolder,
+			uploadedChunks: 0,
+		};
+
+		// Store session in a simple in-memory map (in production, use Redis or database)
+		global.uploadSessions = global.uploadSessions || new Map();
+		global.uploadSessions.set(uploadSession.sessionId, uploadSession);
+
+		return c.json({
+			success: true,
+			sessionId: uploadSession.sessionId,
+			version,
+			message: "Upload session created",
+		});
+	} catch (error: any) {
+		console.error("Start upload error:", error);
+		return c.json(
+			{ error: "Failed to start upload", details: error.message },
+			500,
+		);
+	}
+});
+
+// Upload a chunk
+app.post("/api/backup/upload/chunk", validateApiKey, async (c) => {
+	try {
+		const formData = await c.req.formData();
+		const sessionId = formData.get("sessionId") as string;
+		const chunkIndex = parseInt(formData.get("chunkIndex") as string);
+		const chunk = formData.get("chunk") as File;
+
+		if (!sessionId || chunkIndex === undefined || !chunk) {
+			return c.json(
+				{
+					error: "sessionId, chunkIndex, and chunk are required",
+				},
+				400,
+			);
+		}
+
+		global.uploadSessions = global.uploadSessions || new Map();
+		const session = global.uploadSessions.get(sessionId);
+
+		if (!session) {
+			return c.json({ error: "Invalid session ID" }, 404);
+		}
+
+		// Write chunk to temporary file
+		const chunkPath = join(session.tempFolder, `chunk_${chunkIndex}`);
+		const buffer = Buffer.from(await chunk.arrayBuffer());
+		await writeFile(chunkPath, buffer);
+
+		session.uploadedChunks++;
+
+		return c.json({
+			success: true,
+			uploadedChunks: session.uploadedChunks,
+			totalChunks: session.totalChunks,
+		});
+	} catch (error: any) {
+		console.error("Chunk upload error:", error);
+		return c.json(
+			{ error: "Failed to upload chunk", details: error.message },
+			500,
+		);
+	}
+});
+
+// Complete the chunked upload
+app.post("/api/backup/upload/complete", validateApiKey, async (c) => {
+	try {
+		const client = c.get("client");
+		const body = await c.req.json();
+		const { sessionId } = body;
+
+		if (!sessionId) {
+			return c.json({ error: "sessionId is required" }, 400);
+		}
+
+		global.uploadSessions = global.uploadSessions || new Map();
+		const session = global.uploadSessions.get(sessionId);
+
+		if (!session) {
+			return c.json({ error: "Invalid session ID" }, 404);
+		}
+
+		// Verify all chunks are uploaded
+		if (session.uploadedChunks !== session.totalChunks) {
+			return c.json(
+				{
+					error: "Not all chunks uploaded",
+					uploadedChunks: session.uploadedChunks,
+					totalChunks: session.totalChunks,
+				},
+				400,
+			);
+		}
+
+		// Create backup folder
+		const backupFolder = join(
+			BACKUP_STORAGE_DIR,
+			client.name,
+			session.backupName,
+		);
+		await mkdir(backupFolder, { recursive: true });
+
+		// Assemble chunks into final file
+		const prefixedFileName = `${session.isoDate}_${session.fileName}`;
+		const finalFilePath = join(backupFolder, prefixedFileName);
+
+		// Create final file by concatenating chunks
+		for (let i = 0; i < session.totalChunks; i++) {
+			const chunkPath = join(session.tempFolder, `chunk_${i}`);
+			const chunkData = await readFile(chunkPath);
+
+			if (i === 0) {
+				await writeFile(finalFilePath, chunkData);
+			} else {
+				await appendFile(finalFilePath, chunkData);
+			}
+
+			// Delete chunk file
+			await unlink(chunkPath);
+		}
+
+		// Calculate checksum of final file
+		const finalBuffer = await readFile(finalFilePath);
+		const checksum = calculateChecksum(finalBuffer);
+		const fileSize = finalBuffer.length;
+
+		// Create or update backup record
+		let backup = await prisma.backup.findFirst({
+			where: {
+				clientId: session.clientId,
+				backupName: session.backupName,
+				version: session.version,
+			},
+		});
+
+		if (!backup) {
+			backup = await prisma.backup.create({
+				data: {
+					clientId: session.clientId,
+					backupName: session.backupName,
+					version: session.version,
+					status: "in_progress",
+					filesCount: 0,
+					totalSize: 0,
+					metadata: { isoDate: session.isoDate },
+				},
+			});
+		}
+
+		// Create file record
+		await prisma.backupFile.create({
+			data: {
+				backupId: backup.id,
+				filePath: prefixedFileName,
+				fileSize: fileSize,
+				checksum,
+				status: "uploaded",
+			},
+		});
+
+		// Update backup totals
+		const fileCount = await prisma.backupFile.count({
+			where: { backupId: backup.id },
+		});
+		const totalSize = await prisma.backupFile.aggregate({
+			where: { backupId: backup.id },
+			_sum: { fileSize: true },
+		});
+
+		await prisma.backup.update({
+			where: { id: backup.id },
+			data: {
+				filesCount: fileCount,
+				totalSize: totalSize._sum.fileSize || 0,
+			},
+		});
+
+		// Clean up session
+		global.uploadSessions.delete(sessionId);
+
+		return c.json({
+			success: true,
+			message: "File uploaded successfully",
+			fileName: session.fileName,
+			fileSize,
+			checksum,
+		});
+	} catch (error: any) {
+		console.error("Complete upload error:", error);
+		return c.json(
+			{ error: "Failed to complete upload", details: error.message },
+			500,
+		);
+	}
+});
+
+// Finalize the entire backup (after all files uploaded)
+app.post("/api/backup/finalize", validateApiKey, async (c) => {
+	try {
+		const client = c.get("client");
+		const body = await c.req.json();
+		const { backupName, version } = body;
+
+		if (!backupName || !version) {
+			return c.json({ error: "backupName and version are required" }, 400);
+		}
+
+		const backup = await prisma.backup.findFirst({
+			where: {
+				clientId: client.id,
+				backupName,
+				version,
+			},
+			include: {
+				files: true,
+			},
+		});
+
+		if (!backup) {
+			return c.json({ error: "Backup not found" }, 404);
+		}
+
+		await prisma.backup.update({
+			where: { id: backup.id },
+			data: {
+				status: "completed",
+			},
+		});
+
+		await prisma.syncLog.create({
+			data: {
+				clientId: client.id,
+				action: "backup",
+				status: "success",
+				message: `Backed up ${backup.filesCount} files (v${version})`,
+				metadata: { backupId: backup.id, backupName, version },
+			},
+		});
+
+		return c.json({
+			success: true,
+			message: "Backup finalized",
+			backupId: backup.id,
+			backupName,
+			version,
+			timestamp: backup.timestamp,
+			filesCount: backup.filesCount,
+			totalSize: backup.totalSize.toString(),
+		});
+	} catch (error: any) {
+		console.error("Finalize backup error:", error);
+		return c.json(
+			{ error: "Failed to finalize backup", details: error.message },
+			500,
+		);
 	}
 });
 

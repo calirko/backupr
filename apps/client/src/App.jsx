@@ -16,7 +16,7 @@ function App() {
 				<div>
 					<div className="p-6 flex flex-col gap-6">
 						<div className="flex gap-4 items-center">
-							<img src="logo.svg" alt="Backupr Logo" className="h-14 w-14" />
+							<img src="icon.png" alt="Backupr Logo" className="h-14 w-14" />
 							<div>
 								<h1 className="text-3xl font-bold">Backupr</h1>
 								<p className="text-muted-foreground">Simple file backup tool</p>
