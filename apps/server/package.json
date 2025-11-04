@@ -1,22 +1,25 @@
 {
-  "name": "@backupr/server",
-  "version": "1.0.0",
-  "description": "Backupr Bun Server",
-  "type": "module",
-  "scripts": {
-    "dev": "bun run --watch src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
-    "start": "bun run dist/index.js",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
-  },
-  "dependencies": {
-    "hono": "^3.12.0",
-    "@prisma/client": "^5.7.1"
-  },
-  "devDependencies": {
-    "bun-types": "^1.0.18",
-    "prisma": "^5.7.1"
-  }
+	"name": "@backupr/server",
+	"version": "1.0.0",
+	"description": "Backupr Bun Server",
+	"type": "module",
+	"scripts": {
+		"dev": "bun run --watch src/index.ts",
+		"build": "bun build src/index.ts --outdir dist --target bun",
+		"start": "bun run dist/index.js",
+		"cli": "bun run src/cli.ts",
+		"prisma:generate": "prisma generate",
+		"prisma:migrate": "prisma migrate dev",
+		"prisma:studio": "prisma studio"
+	},
+	"dependencies": {
+		"@hono/node-server": "^1.5.0",
+		"@prisma/client": "^5.7.1",
+		"commander": "^14.0.2",
+		"hono": "^3.12.0"
+	},
+	"devDependencies": {
+		"bun-types": "^1.0.18",
+		"prisma": "^5.7.1"
+	}
 }

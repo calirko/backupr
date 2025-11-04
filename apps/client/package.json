@@ -1,43 +1,47 @@
 {
-  "name": "@backupr/client",
-  "version": "1.0.0",
-  "description": "Backupr Electron Client",
-  "main": "electron/main.js",
-  "scripts": {
-    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_START_URL=http://localhost:5173 electron .\"",
-    "build": "vite build",
-    "start": "electron .",
-    "package": "electron-builder --config electron-builder.json"
-  },
-  "dependencies": {
-    "electron-store": "^8.1.0",
-    "@prisma/client": "^5.7.1"
-  },
-  "devDependencies": {
-    "@radix-ui/react-dialog": "^1.0.5",
-    "@radix-ui/react-label": "^2.0.2",
-    "@radix-ui/react-select": "^2.0.0",
-    "@radix-ui/react-slot": "^1.0.2",
-    "@radix-ui/react-tabs": "^1.0.4",
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.16",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.0.0",
-    "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1",
-    "lucide-react": "^0.298.0",
-    "postcss": "^8.4.32",
-    "prisma": "^5.7.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "tailwind-merge": "^2.1.0",
-    "tailwindcss": "^3.3.6",
-    "tailwindcss-animate": "^1.0.7",
-    "vite": "^5.0.8",
-    "wait-on": "^7.2.0"
-  }
+	"name": "@backupr/client",
+	"version": "1.0.0",
+	"description": "Backupr Electron Client",
+	"main": "electron/main.js",
+	"scripts": {
+		"dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_START_URL=http://localhost:5173 electron .\"",
+		"build": "vite build",
+		"build:win": "vite build && electron-builder --win --x64 --config electron-builder.json",
+		"start": "electron .",
+		"package": "electron-builder --config electron-builder.json"
+	},
+	"dependencies": {
+		"@prisma/client": "^5.7.1",
+		"@radix-ui/react-toast": "^1.2.15",
+		"electron-store": "^8.1.0",
+		"form-data": "^4.0.0",
+		"node-fetch": "^2.7.0"
+	},
+	"devDependencies": {
+		"@radix-ui/react-dialog": "^1.0.5",
+		"@radix-ui/react-label": "^2.0.2",
+		"@radix-ui/react-select": "^2.0.0",
+		"@radix-ui/react-slot": "^1.0.2",
+		"@radix-ui/react-tabs": "^1.0.4",
+		"@types/react": "^18.2.43",
+		"@types/react-dom": "^18.2.17",
+		"@vitejs/plugin-react": "^4.2.1",
+		"autoprefixer": "^10.4.16",
+		"class-variance-authority": "^0.7.0",
+		"clsx": "^2.0.0",
+		"concurrently": "^8.2.2",
+		"cross-env": "^7.0.3",
+		"electron": "^28.0.0",
+		"electron-builder": "^24.9.1",
+		"lucide-react": "^0.298.0",
+		"postcss": "^8.4.32",
+		"prisma": "^5.7.1",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"tailwind-merge": "^2.1.0",
+		"tailwindcss": "^3.3.6",
+		"tailwindcss-animate": "^1.0.7",
+		"vite": "^5.0.8",
+		"wait-on": "^7.2.0"
+	}
 }
