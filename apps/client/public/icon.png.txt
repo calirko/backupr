@@ -1,3 +1,0 @@
-# This is a placeholder for the tray icon
-# In a real application, you would use a proper PNG icon file
-# For now, electron will use a default icon
