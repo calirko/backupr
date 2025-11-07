@@ -7,6 +7,11 @@
 		"output": "out"
 	},
 	"files": ["dist/**/*", "electron/**/*", "package.json"],
+	"publish": {
+		"provider": "github",
+		"owner": "calirko",
+		"repo": "backupr"
+	},
 	"extraResources": [
 		{
 			"from": "build/tray-icon.ico",

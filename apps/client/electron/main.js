@@ -2,10 +2,128 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, dialog } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const Store = require("electron-store");
+const { autoUpdater } = require("electron-updater");
 
 const store = new Store();
 let mainWindow = null;
 let tray = null;
+
+// Configure auto-updater
+autoUpdater.autoDownload = false; // Don't auto-download, ask user first
+autoUpdater.autoInstallOnAppQuit = true; // Install update when app quits
+
+// Auto-updater event handlers
+autoUpdater.on("checking-for-update", () => {
+	console.log("Checking for updates...");
+	sendStatusToWindow("Checking for updates...");
+});
+
+autoUpdater.on("update-available", (info) => {
+	console.log("Update available:", info.version);
+	sendStatusToWindow(`Update available: ${info.version}`);
+
+	// Show dialog to user
+	if (mainWindow) {
+		dialog
+			.showMessageBox(mainWindow, {
+				type: "info",
+				title: "Update Available",
+				message: `A new version (${info.version}) is available!`,
+				detail: "Would you like to download and install it?",
+				buttons: ["Download", "Later"],
+				defaultId: 0,
+				cancelId: 1,
+			})
+			.then((result) => {
+				if (result.response === 0) {
+					// User clicked "Download"
+					autoUpdater.downloadUpdate();
+					sendStatusToWindow("Downloading update...");
+				}
+			});
+	}
+});
+
+autoUpdater.on("update-not-available", (info) => {
+	console.log("Update not available:", info.version);
+	sendStatusToWindow("You are running the latest version.");
+
+	// Only show dialog if user manually checked for updates
+	if (mainWindow && store.get("manualUpdateCheck")) {
+		dialog.showMessageBox(mainWindow, {
+			type: "info",
+			title: "No Updates",
+			message: "You are already running the latest version!",
+			detail: `Current version: ${info.version}`,
+			buttons: ["OK"],
+		});
+		store.set("manualUpdateCheck", false);
+	}
+});
+
+autoUpdater.on("error", (err) => {
+	console.error("Update error:", err);
+	sendStatusToWindow(`Update error: ${err.message}`);
+
+	if (mainWindow && store.get("manualUpdateCheck")) {
+		dialog.showMessageBox(mainWindow, {
+			type: "error",
+			title: "Update Error",
+			message: "Failed to check for updates",
+			detail: err.message,
+			buttons: ["OK"],
+		});
+		store.set("manualUpdateCheck", false);
+	}
+});
+
+autoUpdater.on("download-progress", (progressObj) => {
+	const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(2)}% (${progressObj.transferred}/${progressObj.total})`;
+	console.log(message);
+	sendStatusToWindow(message);
+
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		mainWindow.webContents.send("update-download-progress", {
+			percent: progressObj.percent,
+			transferred: progressObj.transferred,
+			total: progressObj.total,
+		});
+	}
+});
+
+autoUpdater.on("update-downloaded", (info) => {
+	console.log("Update downloaded:", info.version);
+	sendStatusToWindow("Update downloaded. Will install on quit.");
+
+	// Show dialog to user
+	if (mainWindow) {
+		dialog
+			.showMessageBox(mainWindow, {
+				type: "info",
+				title: "Update Ready",
+				message: `Version ${info.version} has been downloaded!`,
+				detail:
+					"The update will be installed when you quit and restart the application. Would you like to restart now?",
+				buttons: ["Restart Now", "Later"],
+				defaultId: 0,
+				cancelId: 1,
+			})
+			.then((result) => {
+				if (result.response === 0) {
+					// User clicked "Restart Now"
+					app.isQuitting = true;
+					autoUpdater.quitAndInstall(false, true);
+				}
+			});
+	}
+});
+
+// Helper function to send status messages to window
+function sendStatusToWindow(text) {
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		mainWindow.webContents.send("update-status", text);
+	}
+}
 
 // Backup scheduler
 const backupTimers = new Map(); // Map<itemId, timeoutId>
@@ -68,6 +186,11 @@ function createWindow() {
 		}
 	});
 
+	// handle crashes
+	mainWindow.webContents.on("crashed", () => {
+		mainWindow.reload();
+	});
+
 	// Hide on close instead of quitting
 	mainWindow.on("close", (event) => {
 		if (!app.isQuitting) {
@@ -125,6 +248,14 @@ function createTray() {
 
 	const contextMenu = Menu.buildFromTemplate([
 		{
+			label: "Backupr",
+			enabled: false,
+			icon: iconPath,
+		},
+		{
+			type: "separator",
+		},
+		{
 			label: "Show Backupr",
 			click: () => {
 				mainWindow.show();
@@ -144,6 +275,14 @@ function createTray() {
 				mainWindow.show();
 				mainWindow.focus();
 				mainWindow.webContents.send("trigger-backup");
+			},
+		},
+		{ type: "separator" },
+		{
+			label: "Check for Updates",
+			click: () => {
+				store.set("manualUpdateCheck", true);
+				autoUpdater.checkForUpdates();
 			},
 		},
 		{ type: "separator" },
@@ -197,7 +336,7 @@ ipcMain.handle("get-settings", async () => {
 	};
 });
 
-ipcMain.handle("save-settings", async (event, settings) => {
+ipcMain.handle("save-settings", async (_event, settings) => {
 	store.set("serverHost", settings.serverHost);
 	store.set("apiKey", settings.apiKey);
 	return { success: true };
@@ -210,7 +349,7 @@ ipcMain.handle("get-backup-config", async () => {
 	});
 });
 
-ipcMain.handle("save-backup-config", async (event, config) => {
+ipcMain.handle("save-backup-config", async (_event, config) => {
 	store.set("backupConfig", config);
 	return { success: true };
 });
@@ -319,7 +458,7 @@ function calculateNextBackupTime(interval, customHours, lastBackup) {
 			intervalMs = 7 * 24 * 60 * 60 * 1000; // 7 days
 			break;
 		case "custom": {
-			const hours = parseInt(customHours) || 12;
+			const hours = parseInt(customHours, 10) || 12;
 			intervalMs = hours * 60 * 60 * 1000;
 			break;
 		}
@@ -1010,13 +1149,29 @@ ipcMain.handle("close-window", () => {
 	}
 });
 
+// Auto-update controls
+ipcMain.handle("check-for-updates", async () => {
+	store.set("manualUpdateCheck", true);
+	try {
+		const result = await autoUpdater.checkForUpdates();
+		return { success: true, updateInfo: result?.updateInfo };
+	} catch (error) {
+		console.error("Check for updates error:", error);
+		return { success: false, error: error.message };
+	}
+});
+
+ipcMain.handle("get-app-version", () => {
+	return app.getVersion();
+});
+
 // Internal Firebird backup function
 async function performFirebirdBackupInternal(params) {
 	const { serverHost, apiKey, backupName, dbPath, gbakPath } = params;
-	const { exec } = require("child_process");
-	const { promisify } = require("util");
+	const { exec } = require("node:child_process");
+	const { promisify } = require("node:util");
 	const execAsync = promisify(exec);
-	const zlib = require("zlib");
+	const zlib = require("node:zlib");
 
 	let tempBackupPath = null;
 	let tempCompressedPath = null;
@@ -1035,8 +1190,8 @@ async function performFirebirdBackupInternal(params) {
 		sendProgress("Starting Firebird backup...", 0);
 
 		// Create temporary directory for backup files
-		const os = require("os");
-		const crypto = require("crypto");
+		const os = require("node:os");
+		const crypto = require("node:crypto");
 		const tempDir = os.tmpdir();
 		const timestamp = Date.now();
 		const randomId = crypto.randomBytes(8).toString("hex");
@@ -1219,6 +1374,17 @@ app.whenReady().then(() => {
 
 	// Initialize the backup scheduler after app is ready
 	initializeScheduler();
+
+	// Check for updates on startup (only in production)
+	if (!process.env.ELECTRON_START_URL) {
+		// Wait a few seconds before checking for updates to allow app to fully initialize
+		setTimeout(() => {
+			console.log("Checking for updates on startup...");
+			autoUpdater.checkForUpdates().catch((err) => {
+				console.error("Failed to check for updates:", err);
+			});
+		}, 3000);
+	}
 
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) {

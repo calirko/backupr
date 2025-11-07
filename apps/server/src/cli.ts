@@ -22,8 +22,13 @@ program
 	.description("Backupr Server CLI for managing sync clients")
 	.version("1.0.0");
 
-program
-	.command("add-client")
+// Client commands group
+const clientCommand = program
+	.command("client")
+	.description("Manage sync clients");
+
+clientCommand
+	.command("add")
 	.description("Add a new sync client and generate an API key")
 	.requiredOption(
 		"-n, --name <name>",
@@ -34,13 +39,11 @@ program
 		try {
 			const { name, email } = options;
 
-			// Validate name
 			if (!name || name.trim().length === 0) {
 				console.error("❌ Error: Client name cannot be empty");
 				process.exit(1);
 			}
 
-			// Check if client with this name already exists
 			const existingClient = await prisma.client.findUnique({
 				where: { name: name.trim() },
 			});
@@ -50,16 +53,11 @@ program
 				process.exit(1);
 			}
 
-			// Generate API key
 			const apiKey = generateApiKey();
-
-			// Create client folder path
 			const clientFolderPath = join(BACKUP_STORAGE_DIR, name.trim());
 
-			// Create the client folder
 			await mkdir(clientFolderPath, { recursive: true });
 
-			// Create client in database
 			const client = await prisma.client.create({
 				data: {
 					name: name.trim(),
@@ -90,8 +88,8 @@ program
 		}
 	});
 
-program
-	.command("list-clients")
+clientCommand
+	.command("list")
 	.description("List all registered sync clients")
 	.option("-v, --verbose", "Show detailed information including API keys")
 	.action(async (options) => {
@@ -136,8 +134,8 @@ program
 		}
 	});
 
-program
-	.command("remove-client")
+clientCommand
+	.command("remove")
 	.description(
 		"Remove a sync client (WARNING: This will delete all associated backups)",
 	)
@@ -170,7 +168,6 @@ program
 				process.exit(0);
 			}
 
-			// Delete client (cascades to backups and files)
 			await prisma.client.delete({
 				where: { id: client.id },
 			});
@@ -187,7 +184,7 @@ program
 		}
 	});
 
-program
+clientCommand
 	.command("regenerate-key")
 	.description("Regenerate API key for a client")
 	.requiredOption("-n, --name <name>", "Client name")
@@ -227,8 +224,8 @@ program
 		}
 	});
 
-program
-	.command("client-info")
+clientCommand
+	.command("info")
 	.description("Show detailed information about a client")
 	.requiredOption("-n, --name <name>", "Client name")
 	.action(async (options) => {
