@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { ThemeToggle } from "../components/ThemeToggle";
+import { Button } from "./ui/button";
 import {
 	Card,
 	CardContent,
@@ -6,10 +8,8 @@ import {
 	CardHeader,
 	CardTitle,
 } from "./ui/card";
-import { Label } from "./ui/label";
 import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import { ThemeToggle } from "../components/ThemeToggle";
+import { Label } from "./ui/label";
 import { useToast } from "./ui/use-toast";
 
 export function Settings() {
@@ -17,12 +17,17 @@ export function Settings() {
 		serverHost: "",
 		apiKey: "",
 	});
+	const [startupBehavior, setStartupBehavior] = useState({
+		startInBackground: false,
+	});
 	const [saved, setSaved] = useState(false);
 	const [testing, setTesting] = useState(false);
 	const { toast } = useToast();
 
 	useEffect(() => {
 		loadSettings();
+		loadStartupBehavior();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const loadSettings = async () => {
@@ -32,9 +37,17 @@ export function Settings() {
 		}
 	};
 
+	const loadStartupBehavior = async () => {
+		if (window.electron) {
+			const data = await window.electron.getStartupBehavior();
+			setStartupBehavior(data);
+		}
+	};
+
 	const handleSave = async () => {
 		if (window.electron) {
 			await window.electron.saveSettings(settings);
+			await window.electron.setStartupBehavior(startupBehavior);
 			setSaved(true);
 			setTimeout(() => setSaved(false), 2000);
 		}
@@ -148,6 +161,38 @@ export function Settings() {
 				</CardHeader>
 				<CardContent>
 					<ThemeToggle />
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>Startup Behavior</CardTitle>
+					<CardDescription>
+						Control how the application starts when your system boots
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-4">
+					<div className="flex items-center space-x-2">
+						<input
+							type="checkbox"
+							id="startInBackground"
+							checked={startupBehavior.startInBackground}
+							onChange={(e) =>
+								setStartupBehavior((prev) => ({
+									...prev,
+									startInBackground: e.target.checked,
+								}))
+							}
+							className="w-4 h-4 rounded border-gray-300"
+						/>
+						<Label htmlFor="startInBackground" className="cursor-pointer">
+							Start in background (show only in system tray)
+						</Label>
+					</div>
+					<p className="text-sm text-muted-foreground">
+						When enabled, the application will start minimized in the system
+						tray. You can click the tray icon to show or hide the window.
+					</p>
 				</CardContent>
 			</Card>
 

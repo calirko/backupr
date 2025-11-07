@@ -37,4 +37,8 @@ contextBridge.exposeInMainWorld("electron", {
 			callback(data),
 		);
 	},
+	// Startup behavior
+	getStartupBehavior: () => ipcRenderer.invoke("get-startup-behavior"),
+	setStartupBehavior: (settings) =>
+		ipcRenderer.invoke("set-startup-behavior", settings),
 });

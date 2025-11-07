@@ -181,7 +181,11 @@ function createWindow() {
 
 	// Show window when ready
 	mainWindow.once("ready-to-show", () => {
-		if (!store.get("startInBackground")) {
+		// Check if we should start in background
+		// This is set from Settings UI or on first startup
+		const startInBackground = store.get("startInBackground", false);
+
+		if (!startInBackground) {
 			mainWindow.show();
 		}
 	});
@@ -247,14 +251,6 @@ function createTray() {
 	tray = new Tray(iconPath);
 
 	const contextMenu = Menu.buildFromTemplate([
-		{
-			label: "Backupr",
-			enabled: false,
-			icon: iconPath,
-		},
-		{
-			type: "separator",
-		},
 		{
 			label: "Show Backupr",
 			click: () => {
@@ -1163,6 +1159,18 @@ ipcMain.handle("check-for-updates", async () => {
 
 ipcMain.handle("get-app-version", () => {
 	return app.getVersion();
+});
+
+// Startup behavior settings
+ipcMain.handle("get-startup-behavior", async () => {
+	return {
+		startInBackground: store.get("startInBackground", false),
+	};
+});
+
+ipcMain.handle("set-startup-behavior", async (_event, settings) => {
+	store.set("startInBackground", settings.startInBackground);
+	return { success: true };
 });
 
 // Internal Firebird backup function
