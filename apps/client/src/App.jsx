@@ -1,7 +1,7 @@
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Settings } from "./components/Settings";
-import { Backup } from "./components/BackupNew";
+import { Backup } from "./components/Backup";
 import { TitleBar } from "./components/TitleBar";
 import { Toaster } from "./components/ui/toaster";
 import { useToast } from "./components/ui/use-toast";

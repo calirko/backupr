@@ -126,7 +126,18 @@ All backup/restore endpoints require `X-API-Key` header for authentication.
 - [Development Guide](docs/DEVELOPMENT.md) - Detailed development information
 - [Database Setup](docs/DATABASE.md) - Database configuration for both client and server
 - [Server Setup](docs/SERVER_SETUP.md) - PostgreSQL setup guide
+- [Auto-Update System](AUTO_UPDATE.md) - How to publish updates and use the auto-update feature
 - [Contributing](CONTRIBUTING.md) - Contribution guidelines
+
+## Auto-Updates
+
+The Backupr client includes an automatic update system that checks for new releases from GitHub:
+- Automatically checks for updates on startup
+- Manual update check via tray menu "Check for Updates" option
+- Downloads updates in the background with user confirmation
+- Installs updates on app restart
+
+See [AUTO_UPDATE.md](AUTO_UPDATE.md) for detailed documentation on how to publish updates and use the auto-update feature.
 
 ## Technology Stack
 
