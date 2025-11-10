@@ -1,23 +1,3 @@
-# Build stage
-FROM oven/bun:latest AS builder
-
-WORKDIR /app
-
-# Copy package files
-COPY package.json bun.lockb* ./
-
-# Install dependencies
-RUN bun install --frozen-lockfile
-
-# Copy source code
-COPY src ./src
-COPY tsconfig.json ./
-COPY prisma ./prisma
-
-# Build the application
-RUN bun build src/index.ts --outdir dist --target bun
-
-# Runtime stage
 FROM oven/bun:latest
 
 WORKDIR /app
@@ -25,32 +5,33 @@ WORKDIR /app
 # Install OpenSSL for Prisma
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-# Create backup directory with proper permissions
-RUN mkdir -p /bkp && chmod 755 /bkp
-
-# Copy package files from builder
+# Copy package files
 COPY package.json bun.lockb* ./
 
-# Install dependencies (production only)
-RUN bun install --frozen-lockfile --production
+# Install dependencies
+RUN bun install --production
 
-# Copy built application from builder
-COPY --from=builder /app/dist ./dist
-
-# Copy prisma schema for runtime
+# Copy source code
+COPY src ./src
 COPY prisma ./prisma
 
-# Copy .env if needed (optional, can be overridden at runtime)
-# COPY .env* ./
+# Build the application
+RUN bun run build
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV BACKUP_STORAGE_DIR=/bkp
+# Build arguments
+ARG DATABASE_URL
+ARG BACKUP_STORAGE_DIR=/bkp
+ARG PORT=3000
 
-# Create necessary directories
-RUN mkdir -p /bkp && chmod 755 /bkp
+# Environment variables
+ENV DATABASE_URL=${DATABASE_URL}
+ENV BACKUP_STORAGE_DIR=${BACKUP_STORAGE_DIR}
+ENV PORT=${PORT}
 
-# Create startup script
+# Create backup directory
+RUN mkdir -p ${BACKUP_STORAGE_DIR}
+
+# Create startup script with Prisma operations
 RUN echo '#!/bin/bash\n\
 echo "Generating Prisma client..."\n\
 bun run prisma generate\n\
@@ -67,13 +48,12 @@ fi\n\
 echo "Starting server..."\n\
 exec bun run dist/index.js' > /app/start.sh && chmod +x /app/start.sh
 
-# Expose ports
-# Default port for Hono server (change if your server uses different port)
-EXPOSE 3000
+# Expose port
+EXPOSE ${PORT}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD bun run -e "fetch('http://localhost:3000/').then(r => r.ok ? process.exit(0) : process.exit(1))"
+   CMD bun run -e "fetch('http://localhost:${PORT}').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 # Run the application with startup script
 CMD ["/app/start.sh"]
