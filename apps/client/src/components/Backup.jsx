@@ -65,14 +65,15 @@ export function Backup() {
 		loadSyncItems();
 
 		// Listen for progress updates
-		if (window.Electron && window.electron.onBackupProgress) {
+		if (window.electron?.onBackupProgress) {
 			window.electron.onBackupProgress((data) => {
+				console.log("Progress update received:", data); // Debug log
 				setUploadProgress(data);
 			});
 		}
 
 		// Listen for tray backup trigger
-		if (window.Electron && window.electron.onTriggerBackup) {
+		if (window.electron?.onTriggerBackup) {
 			window.electron.onTriggerBackup(() => {
 				handleBackupAll();
 			});

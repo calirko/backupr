@@ -844,7 +844,8 @@ async function performBackupInternal(params) {
 			const uploadFile = async (filePath) => {
 				const stats = fs.statSync(filePath);
 				if (stats.isFile()) {
-					const fileName = path.basename(filePath);
+					// Normalize filename to use forward slashes for cross-platform compatibility
+					const fileName = path.basename(filePath).replace(/\\/g, "/");
 					const result = await uploadFileInChunks(
 						serverHost,
 						apiKey,
@@ -866,7 +867,10 @@ async function performBackupInternal(params) {
 							const fullPath = path.join(dirPath, item);
 							const itemStats = fs.statSync(fullPath);
 							if (itemStats.isFile()) {
-								const relativePath = path.relative(baseDir, fullPath);
+								// Normalize relative path to use forward slashes for cross-platform compatibility
+								const relativePath = path
+									.relative(baseDir, fullPath)
+									.replace(/\\/g, "/");
 								const result = await uploadFileInChunks(
 									serverHost,
 									apiKey,
@@ -975,7 +979,8 @@ async function performBackupInternal(params) {
 			for (const filePath of files) {
 				const stats = fs.statSync(filePath);
 				if (stats.isFile()) {
-					const fileName = path.basename(filePath);
+					// Normalize filename to use forward slashes for cross-platform compatibility
+					const fileName = path.basename(filePath).replace(/\\/g, "/");
 					const fileSize = stats.size;
 
 					// For files larger than 10MB, use streaming
@@ -1008,7 +1013,10 @@ async function performBackupInternal(params) {
 							const fullPath = path.join(dirPath, item);
 							const itemStats = fs.statSync(fullPath);
 							if (itemStats.isFile()) {
-								const relativePath = path.relative(baseDir, fullPath);
+								// Normalize relative path to use forward slashes for cross-platform compatibility
+								const relativePath = path
+									.relative(baseDir, fullPath)
+									.replace(/\\/g, "/");
 								const fileSize = itemStats.size;
 
 								// For files larger than 10MB, use streaming
@@ -1203,7 +1211,10 @@ async function performFirebirdBackupInternal(params) {
 		const tempDir = os.tmpdir();
 		const timestamp = Date.now();
 		const randomId = crypto.randomBytes(8).toString("hex");
-		const dbFileName = path.basename(dbPath, path.extname(dbPath));
+		// Normalize database filename to avoid path separator issues
+		const dbFileName = path
+			.basename(dbPath, path.extname(dbPath))
+			.replace(/\\/g, "_");
 
 		tempBackupPath = path.join(
 			tempDir,
@@ -1307,7 +1318,12 @@ async function performFirebirdBackupInternal(params) {
 		);
 
 		const fileStream = fs.createReadStream(tempCompressedPath);
-		formData.append("file_0", fileStream, `${dbFileName}_${timestamp}.fbk.gz`);
+		// Ensure filename uses forward slashes and no backslashes for cross-platform compatibility
+		const normalizedFileName = `${dbFileName}_${timestamp}.fbk.gz`.replace(
+			/\\/g,
+			"/",
+		);
+		formData.append("file_0", fileStream, normalizedFileName);
 
 		const fetch = require("node-fetch");
 		const response = await fetch(`${serverHost}/api/backup/upload`, {

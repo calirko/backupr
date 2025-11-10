@@ -81,8 +81,9 @@ export function setupBackupUploadRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {
 					const buffer = Buffer.from(await file.arrayBuffer());
 					const checksum = calculateChecksum(buffer);
 
-					// Use ISO date as prefix: {isoDate}_{filename}
-					const prefixedFileName = `${isoDate}_${file.name}`;
+					// Normalize filename: replace backslashes with forward slashes and use ISO date as prefix
+					const normalizedFileName = file.name.replace(/\\/g, "/");
+					const prefixedFileName = `${isoDate}_${normalizedFileName}`;
 					const filePath = join(backupFolder, prefixedFileName);
 					const fileDir = join(
 						backupFolder,
