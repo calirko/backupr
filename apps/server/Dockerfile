@@ -8,10 +8,10 @@ RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists
 # Copy package files
 COPY package.json bun.lockb* ./
 
-# Install dependencies
-RUN bun install --production
+# Install dependencies (including dev dependencies for prisma CLI)
+RUN bun install
 
-# Copy source code
+# Copy source code and prisma files
 COPY src ./src
 COPY prisma ./prisma
 
@@ -36,12 +36,16 @@ RUN mkdir -p ${BACKUP_STORAGE_DIR}
 
 # Create startup script with database operations
 RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
 echo "Running Prisma migrations..."\n\
-bun run prisma migrate deploy\n\
+bunx prisma migrate deploy\n\
 if [ $? -ne 0 ]; then\n\
   echo "Migration failed, exiting..."\n\
   exit 1\n\
 fi\n\
+\n\
+echo "Migrations completed successfully!"\n\
 echo "Starting server..."\n\
 exec bun run dist/index.js' > /app/start.sh && chmod +x /app/start.sh
 
