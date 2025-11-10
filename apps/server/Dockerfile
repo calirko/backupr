@@ -47,6 +47,9 @@ ENV BACKUP_STORAGE_DIR=/bkp
 # Create necessary directories
 RUN mkdir -p /bkp && chmod 755 /bkp
 
+# Run Prisma migrations
+RUN bun run prisma migrate deploy
+
 # Expose ports
 # Default port for Hono server (change if your server uses different port)
 EXPOSE 3000
@@ -56,4 +59,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD bun run -e "fetch('http://localhost:3000/').then(r => r.ok ? process.exit(0) : process.exit(1))"
 
 # Run the application
-CMD ["bun", "run", "dist/index.js"]
+CMD ["bun", "run", "dist/index.ts"]
