@@ -149,8 +149,6 @@ apps/server/dist
 # Prisma
 apps/client/prisma/*.db
 apps/client/prisma/*.db-journal
-apps/client/prisma/migrations
-apps/server/prisma/migrations
 node_modules/.prisma
 node_modules/@prisma
 
