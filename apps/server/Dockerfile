@@ -15,6 +15,9 @@ RUN bun install --production
 COPY src ./src
 COPY prisma ./prisma
 
+# Generate Prisma client first
+RUN bun run prisma:generate
+
 # Build the application
 RUN bun run build
 
@@ -31,14 +34,8 @@ ENV PORT=${PORT}
 # Create backup directory
 RUN mkdir -p ${BACKUP_STORAGE_DIR}
 
-# Create startup script with Prisma operations
+# Create startup script with database operations
 RUN echo '#!/bin/bash\n\
-echo "Generating Prisma client..."\n\
-bun run prisma generate\n\
-if [ $? -ne 0 ]; then\n\
-  echo "Prisma generate failed, exiting..."\n\
-  exit 1\n\
-fi\n\
 echo "Running Prisma migrations..."\n\
 bun run prisma migrate deploy\n\
 if [ $? -ne 0 ]; then\n\
