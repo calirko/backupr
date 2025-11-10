@@ -54,13 +54,13 @@ export function setupBackupChunkedRoutes(
 			const body = await c.req.json();
 			const {
 				backupName,
-				fileName,
+				fileName: rawFileName,
 				fileSize,
 				totalChunks,
 				metadata = {},
 			} = body;
 
-			if (!backupName || !fileName || !fileSize || !totalChunks) {
+			if (!backupName || !rawFileName || !fileSize || !totalChunks) {
 				return c.json(
 					{
 						error:
@@ -69,6 +69,9 @@ export function setupBackupChunkedRoutes(
 					400,
 				);
 			}
+
+			// Normalize filename: replace backslashes with forward slashes
+			const fileName = rawFileName.replace(/\\/g, "/");
 
 			const version = await getNextVersion(client.id, backupName);
 			const timestamp = new Date();
@@ -201,8 +204,9 @@ export function setupBackupChunkedRoutes(
 			);
 			await mkdir(backupFolder, { recursive: true });
 
-			// Assemble chunks into final file
-			const prefixedFileName = `${session.isoDate}_${session.fileName}`;
+			// Assemble chunks into final file with normalized filename
+			const normalizedFileName = session.fileName.replace(/\\/g, "/");
+			const prefixedFileName = `${session.isoDate}_${normalizedFileName}`;
 			const finalFilePath = join(backupFolder, prefixedFileName);
 
 			// Create final file by concatenating chunks
