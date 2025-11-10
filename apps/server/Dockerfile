@@ -62,7 +62,7 @@ if [ $? -ne 0 ]; then\n\
   exit 1\n\
 fi\n\
 echo "Starting server..."\n\
-exec bun run dist/index.ts' > /app/start.sh && chmod +x /app/start.sh
+exec bun run dist/index.js' > /app/start.sh && chmod +x /app/start.sh
 
 # Expose ports
 # Default port for Hono server (change if your server uses different port)
