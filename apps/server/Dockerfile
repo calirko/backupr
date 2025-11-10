@@ -50,11 +50,14 @@ ENV BACKUP_STORAGE_DIR=/bkp
 # Create necessary directories
 RUN mkdir -p /bkp && chmod 755 /bkp
 
-# Generate Prisma client (migrations will be run at startup)
-RUN bun run prisma generate
-
 # Create startup script
 RUN echo '#!/bin/bash\n\
+echo "Generating Prisma client..."\n\
+bun run prisma generate\n\
+if [ $? -ne 0 ]; then\n\
+  echo "Prisma generate failed, exiting..."\n\
+  exit 1\n\
+fi\n\
 echo "Running Prisma migrations..."\n\
 bun run prisma migrate deploy\n\
 if [ $? -ne 0 ]; then\n\
