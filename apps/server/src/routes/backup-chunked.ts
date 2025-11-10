@@ -71,7 +71,15 @@ export function setupBackupChunkedRoutes(
 			}
 
 			// Normalize filename: replace backslashes with forward slashes
-			const fileName = rawFileName.replace(/\\/g, "/");
+			let fileName = rawFileName.replace(/\\/g, "/");
+
+			// If filename looks like a Windows short name (contains ~), try to extract a meaningful name
+			if (fileName.includes("~") && fileName.length <= 12) {
+				// Extract extension and create a more readable name
+				const ext = fileName.split(".").pop();
+				const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+				fileName = `file_${timestamp}.${ext}`;
+			}
 
 			const version = await getNextVersion(client.id, backupName);
 			const timestamp = new Date();
