@@ -13,9 +13,6 @@ COPY prisma ./prisma
 # Install dependencies
 RUN bun install
 
-# Generate Prisma client
-RUN bun run prisma:generate
-
 # Build arguments
 ARG DATABASE_URL
 ARG BACKUP_STORAGE_DIR=/bkp
@@ -32,9 +29,8 @@ RUN mkdir -p ${BACKUP_STORAGE_DIR}
 # Expose port
 EXPOSE ${PORT}
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-   CMD bun run -e "fetch('http://localhost:${PORT}').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+# Generate Prisma client
+RUN bun run prisma:generate
 
 # Run migrations and start server
 CMD bun run prisma:migrate && bun run dev
