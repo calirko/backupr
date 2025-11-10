@@ -844,8 +844,16 @@ async function performBackupInternal(params) {
 			const uploadFile = async (filePath) => {
 				const stats = fs.statSync(filePath);
 				if (stats.isFile()) {
-					// Normalize filename to use forward slashes for cross-platform compatibility
-					const fileName = path.basename(filePath).replace(/\\/g, "/");
+					// Get proper filename resolving Windows short names and normalize
+					const getProperFileName = (fPath) => {
+						try {
+							const realPath = fs.realpathSync(fPath);
+							return path.basename(realPath);
+						} catch (_error) {
+							return path.basename(fPath);
+						}
+					};
+					const fileName = getProperFileName(filePath).replace(/\\/g, "/");
 					const result = await uploadFileInChunks(
 						serverHost,
 						apiKey,
@@ -867,10 +875,20 @@ async function performBackupInternal(params) {
 							const fullPath = path.join(dirPath, item);
 							const itemStats = fs.statSync(fullPath);
 							if (itemStats.isFile()) {
-								// Normalize relative path to use forward slashes for cross-platform compatibility
-								const relativePath = path
-									.relative(baseDir, fullPath)
-									.replace(/\\/g, "/");
+								// Get proper relative path resolving Windows short names
+								const getProperRelativePath = (base, full) => {
+									try {
+										const realBasePath = fs.realpathSync(base);
+										const realFullPath = fs.realpathSync(full);
+										return path.relative(realBasePath, realFullPath);
+									} catch (_error) {
+										return path.relative(base, full);
+									}
+								};
+								const relativePath = getProperRelativePath(
+									baseDir,
+									fullPath,
+								).replace(/\\/g, "/");
 								const result = await uploadFileInChunks(
 									serverHost,
 									apiKey,
@@ -979,8 +997,16 @@ async function performBackupInternal(params) {
 			for (const filePath of files) {
 				const stats = fs.statSync(filePath);
 				if (stats.isFile()) {
-					// Normalize filename to use forward slashes for cross-platform compatibility
-					const fileName = path.basename(filePath).replace(/\\/g, "/");
+					// Get proper filename resolving Windows short names and normalize
+					const getProperFileName = (fPath) => {
+						try {
+							const realPath = fs.realpathSync(fPath);
+							return path.basename(realPath);
+						} catch (_error) {
+							return path.basename(fPath);
+						}
+					};
+					const fileName = getProperFileName(filePath).replace(/\\/g, "/");
 					const fileSize = stats.size;
 
 					// For files larger than 10MB, use streaming
@@ -1013,10 +1039,20 @@ async function performBackupInternal(params) {
 							const fullPath = path.join(dirPath, item);
 							const itemStats = fs.statSync(fullPath);
 							if (itemStats.isFile()) {
-								// Normalize relative path to use forward slashes for cross-platform compatibility
-								const relativePath = path
-									.relative(baseDir, fullPath)
-									.replace(/\\/g, "/");
+								// Get proper relative path resolving Windows short names
+								const getProperRelativePath = (base, full) => {
+									try {
+										const realBasePath = fs.realpathSync(base);
+										const realFullPath = fs.realpathSync(full);
+										return path.relative(realBasePath, realFullPath);
+									} catch (_error) {
+										return path.relative(base, full);
+									}
+								};
+								const relativePath = getProperRelativePath(
+									baseDir,
+									fullPath,
+								).replace(/\\/g, "/");
 								const fileSize = itemStats.size;
 
 								// For files larger than 10MB, use streaming
@@ -1211,10 +1247,19 @@ async function performFirebirdBackupInternal(params) {
 		const tempDir = os.tmpdir();
 		const timestamp = Date.now();
 		const randomId = crypto.randomBytes(8).toString("hex");
-		// Normalize database filename to avoid path separator issues
-		const dbFileName = path
-			.basename(dbPath, path.extname(dbPath))
-			.replace(/\\/g, "_");
+		// Extract database filename - handle Windows short names by using the original path
+		const getProperFileName = (filePath) => {
+			// Try to get the real filename by using fs.realpathSync to resolve any short names
+			try {
+				const realPath = fs.realpathSync(filePath);
+				return path.basename(realPath, path.extname(realPath));
+			} catch (_error) {
+				// Fallback to regular basename if realpath fails
+				return path.basename(filePath, path.extname(filePath));
+			}
+		};
+
+		const dbFileName = getProperFileName(dbPath).replace(/[\\/:*?"<>|]/g, "_");
 
 		tempBackupPath = path.join(
 			tempDir,

@@ -34,8 +34,7 @@
 	"nsis": {
 		"oneClick": false,
 		"allowToChangeInstallationDirectory": true,
-		"runAfterFinish": true,
-		"installerFilename": "Backupr-Setup-${version}.exe"
+		"runAfterFinish": true
 	},
 	"linux": {
 		"target": ["AppImage", "deb"],

@@ -82,7 +82,20 @@ export function setupBackupUploadRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {
 					const checksum = calculateChecksum(buffer);
 
 					// Normalize filename: replace backslashes with forward slashes and use ISO date as prefix
-					const normalizedFileName = file.name.replace(/\\/g, "/");
+					// Also handle Windows short filenames (8.3 format) by cleaning invalid characters
+					let normalizedFileName = file.name.replace(/\\/g, "/");
+
+					// If filename looks like a Windows short name (contains ~), try to extract a meaningful name
+					if (
+						normalizedFileName.includes("~") &&
+						normalizedFileName.length <= 12
+					) {
+						// Extract extension and create a more readable name
+						const ext = normalizedFileName.split(".").pop();
+						const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+						normalizedFileName = `file_${timestamp}.${ext}`;
+					}
+
 					const prefixedFileName = `${isoDate}_${normalizedFileName}`;
 					const filePath = join(backupFolder, prefixedFileName);
 					const fileDir = join(
