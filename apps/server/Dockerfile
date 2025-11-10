@@ -22,6 +22,9 @@ FROM oven/bun:latest
 
 WORKDIR /app
 
+# Install OpenSSL for Prisma
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 # Create backup directory with proper permissions
 RUN mkdir -p /bkp && chmod 755 /bkp
 
@@ -47,8 +50,19 @@ ENV BACKUP_STORAGE_DIR=/bkp
 # Create necessary directories
 RUN mkdir -p /bkp && chmod 755 /bkp
 
-# Run Prisma migrations
-RUN bun run prisma migrate deploy
+# Generate Prisma client (migrations will be run at startup)
+RUN bun run prisma generate
+
+# Create startup script
+RUN echo '#!/bin/bash\n\
+echo "Running Prisma migrations..."\n\
+bun run prisma migrate deploy\n\
+if [ $? -ne 0 ]; then\n\
+  echo "Migration failed, exiting..."\n\
+  exit 1\n\
+fi\n\
+echo "Starting server..."\n\
+exec bun run dist/index.ts' > /app/start.sh && chmod +x /app/start.sh
 
 # Expose ports
 # Default port for Hono server (change if your server uses different port)
@@ -58,5 +72,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD bun run -e "fetch('http://localhost:3000/').then(r => r.ok ? process.exit(0) : process.exit(1))"
 
-# Run the application
-CMD ["bun", "run", "dist/index.ts"]
+# Run the application with startup script
+CMD ["/app/start.sh"]
