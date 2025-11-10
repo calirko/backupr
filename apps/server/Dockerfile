@@ -28,9 +28,9 @@ RUN mkdir -p ${BACKUP_STORAGE_DIR}
 
 # Expose port
 EXPOSE ${PORT}
-
+#
 # Generate Prisma client
 RUN bun run prisma:generate
 
 # Run migrations and start server
-CMD bun run prisma:migrate && bun run dev
+CMD bunx prisma migrate deploy && bun run dev
