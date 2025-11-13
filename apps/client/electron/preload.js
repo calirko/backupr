@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld("electron", {
 	performBackup: (params) => ipcRenderer.invoke("perform-backup", params),
 	performFirebirdBackup: (params) =>
 		ipcRenderer.invoke("perform-firebird-backup", params),
+	pauseBackup: () => ipcRenderer.invoke("pause-backup"),
+	resumeBackup: () => ipcRenderer.invoke("resume-backup"),
 	getBackupHistory: () => ipcRenderer.invoke("get-backup-history"),
 	getSyncItems: () => ipcRenderer.invoke("get-sync-items"),
 	saveSyncItem: (item) => ipcRenderer.invoke("save-sync-item", item),
