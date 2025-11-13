@@ -5,8 +5,15 @@ const AutoLaunch = require("auto-launch");
 // Import modules
 const { createWindow, createTray } = require("./window-manager");
 const { setupIpcHandlers } = require("./ipc-handlers");
-const { configureAutoUpdater, setupAutoUpdaterHandlers, checkForUpdatesOnStartup } = require("./auto-updater");
-const { initializeScheduler, clearAllScheduledBackups } = require("./scheduler");
+const {
+	configureAutoUpdater,
+	setupAutoUpdaterHandlers,
+	checkForUpdatesOnStartup,
+} = require("./auto-updater");
+const {
+	initializeScheduler,
+	clearAllScheduledBackups,
+} = require("./scheduler");
 
 const store = new Store();
 let mainWindow = null;
@@ -1312,9 +1319,24 @@ async function performFirebirdBackupInternal(params) {
 		}
 
 		// Check if nbackup is accessible
+		let nbackupAccessible = false;
 		try {
 			await execAsync(`"${nbackupCommand}" -?`);
-		} catch (_error) {
+			nbackupAccessible = true;
+		} catch (error) {
+			// nbackup -? returns exit code 1, so check if stdout contains help text
+			if (error.stdout?.includes("Physical Backup Manager")) {
+				nbackupAccessible = true;
+			} else if (error.stderr?.includes("Physical Backup Manager")) {
+				nbackupAccessible = true;
+			}
+		}
+
+		if (!nbackupAccessible) {
+			console.error(
+				"nbackup command not found or not executable:",
+				nbackupCommand,
+			);
 			throw new Error(
 				"nbackup executable not found. Please install Firebird tools or specify the correct path.",
 			);
@@ -1332,7 +1354,7 @@ async function performFirebirdBackupInternal(params) {
 		sendProgress("Locking database for backup (nbackup -LOCK)...", 10);
 
 		// Step 1: Lock the database
-		const nbackupLockCmd = `"${nbackupCommand}" -LOCK "${dbPath}"`;
+		const nbackupLockCmd = `"${nbackupCommand}" -LOCK "${dbPath}" -U SYSDBA -P masterkey`;
 
 		console.log("Executing nbackup lock command:", nbackupLockCmd);
 
@@ -1390,10 +1412,10 @@ async function performFirebirdBackupInternal(params) {
 			throw new Error("Backup was cancelled");
 		}
 
-		sendProgress("Unlocking database (nbackup -UNLOCK)...", 60);
+		sendProgress("Unlocking database (nbackup -N)...", 60);
 
 		// Step 3: Unlock the database
-		const nbackupUnlockCmd = `"${nbackupCommand}" -UNLOCK "${dbPath}"`;
+		const nbackupUnlockCmd = `"${nbackupCommand}" -N "${dbPath}" -U SYSDBA -P masterkey`;
 
 		console.log("Executing nbackup unlock command:", nbackupUnlockCmd);
 
@@ -1419,7 +1441,7 @@ async function performFirebirdBackupInternal(params) {
 		sendProgress("Fixing up backup copy (nbackup -FIXUP)...", 65);
 
 		// Step 4: Fix up the copied database
-		const nbackupFixupCmd = `"${nbackupCommand}" -FIXUP "${tempBackupPath}"`;
+		const nbackupFixupCmd = `"${nbackupCommand}" -FIXUP "${tempBackupPath}" -U SYSDBA -P masterkey`;
 
 		console.log("Executing nbackup fixup command:", nbackupFixupCmd);
 
@@ -1572,7 +1594,7 @@ async function performFirebirdBackupInternal(params) {
 							process.platform === "win32" ? "nbackup.exe" : "nbackup",
 						)
 					: "nbackup";
-				const nbackupUnlockCmd = `"${nbackupCommand}" -UNLOCK "${dbPath}"`;
+				const nbackupUnlockCmd = `"${nbackupCommand}" -N "${dbPath}"`;
 				await execAsync(nbackupUnlockCmd);
 				console.log("Successfully unlocked database in cleanup");
 			} catch (unlockError) {

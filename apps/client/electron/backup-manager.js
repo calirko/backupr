@@ -188,12 +188,21 @@ async function performBackupInternal(params, store, mainWindow) {
 
 		// Use chunked upload for large files
 		if (shouldUseChunked) {
-			sendProgress("Processing files for chunked upload...", 0);
+			const archiver = require("archiver");
+			const os = require("node:os");
+			const crypto = require("node:crypto");
 
-			let processedFiles = 0;
+			const tempDir = os.tmpdir();
+			const timestamp = Date.now();
+			const randomId = crypto.randomBytes(8).toString("hex");
+			const tempZipPath = path.join(
+				tempDir,
+				`backup_${backupName.replace(/[\\/:*?"<>|]/g, "_")}_${timestamp}_${randomId}.zip`,
+			);
+
 			let totalFiles = 0;
 
-			// Count total files
+			// First, count total files
 			const countFiles = (filePath) => {
 				const stats = fs.statSync(filePath);
 				if (stats.isFile()) {
@@ -210,121 +219,190 @@ async function performBackupInternal(params, store, mainWindow) {
 				countFiles(filePath);
 			}
 
-			// Upload each file using chunked upload
-			const uploadFile = async (filePath) => {
-				const stats = fs.statSync(filePath);
-				if (stats.isFile()) {
-					// Get proper filename resolving Windows short names and normalize
-					const getProperFileName = (fPath) => {
-						try {
-							const realPath = fs.realpathSync(fPath);
-							return path.basename(realPath);
-						} catch (_error) {
-							return path.basename(fPath);
-						}
-					};
-					const fileName = getProperFileName(filePath).replace(/\\/g, "/");
-					const result = await uploadFileInChunks(
-						serverHost,
-						apiKey,
-						backupName,
-						filePath,
-						fileName,
-						(msg, pct) => {
-							const overallProgress =
-								(processedFiles / totalFiles) * 100 + pct / totalFiles;
-							sendProgress(msg, overallProgress);
-						},
+			sendProgress(`Compressing ${totalFiles} files into archive...`, 0);
+
+			// Create ZIP archive
+			let originalTotalSize = 0;
+			await new Promise((resolve, reject) => {
+				const output = fs.createWriteStream(tempZipPath);
+				const archive = archiver("zip", {
+					zlib: { level: 9 }, // Maximum compression
+				});
+
+				archive.on("progress", (progress) => {
+					const compressionProgress = Math.min(
+						(progress.entries.processed / totalFiles) * 70,
+						70,
 					);
-					if (!version) version = result.version;
-					processedFiles++;
-				} else if (stats.isDirectory()) {
-					const addDirectory = async (dirPath, baseDir) => {
-						const items = fs.readdirSync(dirPath);
-						for (const item of items) {
-							const fullPath = path.join(dirPath, item);
-							const itemStats = fs.statSync(fullPath);
-							if (itemStats.isFile()) {
-								// Get proper relative path resolving Windows short names
-								const getProperRelativePath = (base, full) => {
-									try {
-										const realBasePath = fs.realpathSync(base);
-										const realFullPath = fs.realpathSync(full);
-										return path.relative(realBasePath, realFullPath);
-									} catch (_error) {
-										return path.relative(base, full);
-									}
-								};
-								const relativePath = getProperRelativePath(
-									baseDir,
-									fullPath,
-								).replace(/\\/g, "/");
-								const result = await uploadFileInChunks(
-									serverHost,
-									apiKey,
-									backupName,
-									fullPath,
-									relativePath,
-									(msg, pct) => {
-										const overallProgress =
-											(processedFiles / totalFiles) * 100 + pct / totalFiles;
-										sendProgress(msg, overallProgress);
-									},
-								);
-								if (!version) version = result.version;
-								processedFiles++;
-							} else if (itemStats.isDirectory()) {
-								await addDirectory(fullPath, baseDir);
+					sendProgress(
+						`Compressing: ${progress.entries.processed}/${totalFiles} files (${Math.round(compressionProgress)}%)`,
+						compressionProgress,
+					);
+				});
+
+				output.on("close", () => {
+					originalTotalSize = archive.pointer();
+					resolve();
+				});
+				archive.on("error", reject);
+				output.on("error", reject);
+
+				archive.pipe(output);
+
+				// Add files to archive
+				const addToArchive = async (filePath) => {
+					// Check for pause state
+					while (backupState.isPaused && backupState.isRunning) {
+						await new Promise((resolve) => setTimeout(resolve, 1000));
+					}
+
+					if (!backupState.isRunning) {
+						archive.abort();
+						reject(new Error("Backup was cancelled"));
+						return;
+					}
+
+					const stats = fs.statSync(filePath);
+					if (stats.isFile()) {
+						// Get proper filename resolving Windows short names and normalize
+						const getProperFileName = (fPath) => {
+							try {
+								const realPath = fs.realpathSync(fPath);
+								return path.basename(realPath);
+							} catch (_error) {
+								return path.basename(fPath);
 							}
-						}
-					};
-					await addDirectory(filePath, path.dirname(filePath));
-				}
-			};
+						};
+						const fileName = getProperFileName(filePath).replace(/\\/g, "/");
+						archive.file(filePath, { name: fileName });
+					} else if (stats.isDirectory()) {
+						// Get proper directory name
+						const getProperDirName = (fPath) => {
+							try {
+								const realPath = fs.realpathSync(fPath);
+								return path.basename(realPath);
+							} catch (_error) {
+								return path.basename(fPath);
+							}
+						};
+						const dirName = getProperDirName(filePath);
+						// Add directory recursively
+						archive.directory(filePath, dirName);
+					}
+				};
 
-			for (const filePath of files) {
-				await uploadFile(filePath);
-			}
-
-			// Finalize the backup
-			sendProgress("Finalizing backup...", 95);
-			const finalizeResponse = await fetch(
-				`${serverHost}/api/backup/finalize`,
-				{
-					method: "POST",
-					headers: {
-						"X-API-Key": apiKey,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({ backupName, version }),
-				},
-			);
-
-			if (!finalizeResponse.ok) {
-				throw new Error(`Failed to finalize: ${await finalizeResponse.text()}`);
-			}
-
-			const result = await finalizeResponse.json();
-			sendProgress("Backup completed!", 100);
-
-			// Store backup history
-			const history = store.get("backupHistory", []);
-			history.unshift({
-				backupName: result.backupName,
-				version: result.version,
-				timestamp: result.timestamp,
-				filesCount: result.filesCount,
-				totalSize: result.totalSize,
-				status: "completed",
+				// Add all files/directories to archive
+				Promise.all(files.map((filePath) => addToArchive(filePath)))
+					.then(() => {
+						archive.finalize();
+					})
+					.catch(reject);
 			});
 
-			if (history.length > 50) {
-				history.length = 50;
+			// Check for pause state
+			while (backupState.isPaused && backupState.isRunning) {
+				await new Promise((resolve) => setTimeout(resolve, 1000));
 			}
 
-			store.set("backupHistory", history);
+			if (!backupState.isRunning) {
+				// Clean up temporary ZIP
+				if (fs.existsSync(tempZipPath)) {
+					fs.unlinkSync(tempZipPath);
+				}
+				throw new Error("Backup was cancelled");
+			}
 
-			return result;
+			const zipStats = fs.statSync(tempZipPath);
+			sendProgress(
+				`Uploading compressed archive via chunked upload (${(zipStats.size / 1024 / 1024).toFixed(2)} MB)...`,
+				75,
+			);
+
+			// Upload the ZIP file using chunked upload
+			try {
+				const normalizedFileName =
+					`${backupName.replace(/[\\/:*?"<>|]/g, "_")}_${timestamp}.zip`.replace(
+						/\\/g,
+						"/",
+					);
+
+				const result = await uploadFileInChunks(
+					serverHost,
+					apiKey,
+					backupName,
+					tempZipPath,
+					normalizedFileName,
+					(msg, pct) => {
+						const uploadProgress = 75 + pct * 0.2; // Map 0-100% to 75-95%
+						sendProgress(msg, uploadProgress);
+					},
+				);
+
+				version = result.version;
+
+				// Finalize the backup
+				sendProgress("Finalizing backup...", 95);
+				const finalizeResponse = await fetch(
+					`${serverHost}/api/backup/finalize`,
+					{
+						method: "POST",
+						headers: {
+							"X-API-Key": apiKey,
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							backupName,
+							version,
+							metadata: {
+								platform: process.platform,
+								timestamp: new Date().toISOString(),
+								compressed: true,
+								originalSize: originalTotalSize,
+								compressedSize: zipStats.size,
+								filesCount: totalFiles,
+							},
+						}),
+					},
+				);
+
+				if (!finalizeResponse.ok) {
+					throw new Error(
+						`Failed to finalize: ${await finalizeResponse.text()}`,
+					);
+				}
+
+				const finalResult = await finalizeResponse.json();
+				sendProgress("Backup completed!", 100);
+
+				// Store backup history
+				const history = store.get("backupHistory", []);
+				history.unshift({
+					backupName: finalResult.backupName,
+					version: finalResult.version,
+					timestamp: finalResult.timestamp,
+					filesCount: finalResult.filesCount,
+					totalSize: finalResult.totalSize,
+					status: "completed",
+				});
+
+				if (history.length > 50) {
+					history.length = 50;
+				}
+
+				store.set("backupHistory", history);
+
+				return finalResult;
+			} finally {
+				// Clean up temporary ZIP file
+				try {
+					if (fs.existsSync(tempZipPath)) {
+						fs.unlinkSync(tempZipPath);
+						console.log("Deleted temporary ZIP file:", tempZipPath);
+					}
+				} catch (cleanupError) {
+					console.error("Error deleting temporary ZIP file:", cleanupError);
+				}
+			}
 		} else {
 			// Traditional upload for smaller files - compress into ZIP first
 			const archiver = require("archiver");
@@ -649,24 +727,53 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 
 		// Determine nbackup executable path (usually in same directory as gbak)
 		let nbackupCommand = "nbackup";
+		let nbackupFound = false;
 
 		if (gbakPath) {
 			// If gbak path is specified, look for nbackup in same directory
-			const gbakDir = path.dirname(gbakPath);
+			const normalizedGbakPath = path.normalize(gbakPath);
+
+			// Handle both cases: path to bin folder or path to gbak executable
+			let searchDir = normalizedGbakPath;
+
+			// If the path points to a file (gbak.exe), get its directory
+			if (fs.existsSync(normalizedGbakPath)) {
+				const stats = fs.statSync(normalizedGbakPath);
+				if (stats.isFile()) {
+					searchDir = path.dirname(normalizedGbakPath);
+				}
+			} else {
+				// Path doesn't exist, assume it's meant to be a directory path (bin folder)
+				searchDir = normalizedGbakPath;
+			}
+
 			const nbackupPath = path.join(
-				gbakDir,
+				searchDir,
 				process.platform === "win32" ? "nbackup.exe" : "nbackup",
 			);
+
+			console.log("Looking for nbackup at:", nbackupPath);
+
 			if (fs.existsSync(nbackupPath)) {
 				nbackupCommand = nbackupPath;
+				nbackupFound = true;
+				console.log("Found nbackup at:", nbackupCommand);
+			} else {
+				console.log("nbackup not found at expected path:", nbackupPath);
 			}
-		} else {
+		}
+
+		if (!nbackupFound) {
 			// Try common installation paths
 			const commonPaths = [
-				"C:\\Program Files\\Firebird\\Firebird_3_0\\nbackup.exe",
-				"C:\\Program Files\\Firebird\\Firebird_4_0\\nbackup.exe",
-				"C:\\Program Files\\Firebird\\Firebird_5_0\\nbackup.exe",
-				"C:\\Program Files (x86)\\Firebird\\Firebird_3_0\\nbackup.exe",
+				"C:\\Program Files\\Firebird\\Firebird_2_5\\bin\\nbackup.exe",
+				"C:\\Program Files\\Firebird\\Firebird_3_0\\bin\\nbackup.exe",
+				"C:\\Program Files\\Firebird\\Firebird_4_0\\bin\\nbackup.exe",
+				"C:\\Program Files\\Firebird\\Firebird_5_0\\bin\\nbackup.exe",
+				"C:\\Program Files (x86)\\Firebird\\Firebird_2_5\\bin\\nbackup.exe",
+				"C:\\Program Files (x86)\\Firebird\\Firebird_3_0\\bin\\nbackup.exe",
+				"C:\\Program Files (x86)\\Firebird\\Firebird_4_0\\bin\\nbackup.exe",
+				"C:\\Program Files (x86)\\Firebird\\Firebird_5_0\\bin\\nbackup.exe",
 				"/usr/bin/nbackup",
 				"/opt/firebird/bin/nbackup",
 			];
@@ -674,6 +781,8 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 			for (const testPath of commonPaths) {
 				if (fs.existsSync(testPath)) {
 					nbackupCommand = testPath;
+					nbackupFound = true;
+					console.log("Found nbackup at common path:", nbackupCommand);
 					break;
 				}
 			}
@@ -682,9 +791,11 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 		// Check if nbackup is accessible
 		try {
 			await execAsync(`"${nbackupCommand}" -?`);
-		} catch (_error) {
+			console.log("nbackup is accessible and responds to commands");
+		} catch (error) {
+			console.error("nbackup test failed:", error);
 			throw new Error(
-				"nbackup executable not found. Please install Firebird tools or specify the correct path.",
+				`nbackup executable not found or not accessible. Searched path: ${gbakPath ? path.join(path.normalize(gbakPath), process.platform === "win32" ? "nbackup.exe" : "nbackup") : "system PATH"}. Please verify that nbackup.exe exists in the same directory as gbak.exe.`,
 			);
 		}
 
