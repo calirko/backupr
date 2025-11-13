@@ -5,6 +5,8 @@ import {
 	Edit,
 	File,
 	Folder,
+	Pause,
+	Play,
 	Plus,
 	Trash2,
 	Upload,
@@ -38,10 +40,12 @@ export function Backup() {
 	const [editingItem, setEditingItem] = useState(null);
 	const [showAddForm, setShowAddForm] = useState(false);
 	const [uploading, setUploading] = useState(false);
+	const [isPaused, setIsPaused] = useState(false);
 	const [uploadProgress, setUploadProgress] = useState({
 		message: "",
 		percent: 0,
 	});
+	const [isGloballyPaused, setIsGloballyPaused] = useState(false);
 
 	// Confirm dialog hook
 	const { confirm, confirmState, handleClose, handleCancel } = useConfirm();
@@ -69,13 +73,19 @@ export function Backup() {
 			window.electron.onBackupProgress((data) => {
 				console.log("Progress update received:", data); // Debug log
 				setUploadProgress(data);
+				// Handle pause state from progress data
+				if (data.paused !== undefined) {
+					setIsPaused(data.paused);
+				}
 			});
 		}
 
 		// Listen for tray backup trigger
 		if (window.electron?.onTriggerBackup) {
 			window.electron.onTriggerBackup(() => {
-				handleBackupAll();
+				if (!isGloballyPaused) {
+					handleBackupAll();
+				}
 			});
 		}
 
@@ -85,7 +95,14 @@ export function Backup() {
 		}, 10000);
 
 		return () => clearInterval(interval);
-	}, []);
+	}, [isGloballyPaused]);
+
+	// Effect to handle global pause communication with Electron
+	useEffect(() => {
+		if (window.electron?.setGlobalPause) {
+			window.electron.setGlobalPause(isGloballyPaused);
+		}
+	}, [isGloballyPaused]);
 
 	const loadSettings = async () => {
 		if (window.electron) {
@@ -270,6 +287,15 @@ export function Backup() {
 	};
 
 	const handleBackupItem = async (item) => {
+		if (isGloballyPaused) {
+			toast({
+				title: "Backups paused",
+				description: "All backups are currently paused. Resume to continue.",
+				variant: "destructive",
+			});
+			return;
+		}
+
 		if (!settings.serverHost || !settings.apiKey) {
 			toast({
 				title: "Configuration required",
@@ -341,7 +367,30 @@ export function Backup() {
 		}
 	};
 
+	const handlePauseBackup = async () => {
+		if (window.electron) {
+			await window.electron.pauseBackup();
+			setIsPaused(true);
+		}
+	};
+
+	const handleResumeBackup = async () => {
+		if (window.electron) {
+			await window.electron.resumeBackup();
+			setIsPaused(false);
+		}
+	};
+
 	const handleBackupAll = async () => {
+		if (isGloballyPaused) {
+			toast({
+				title: "Backups paused",
+				description: "All backups are currently paused. Resume to continue.",
+				variant: "destructive",
+			});
+			return;
+		}
+
 		const enabledItems = syncItems.filter((item) => item.enabled);
 		if (enabledItems.length === 0) {
 			toast({
@@ -403,12 +452,20 @@ export function Backup() {
 					<h2 className="text-2xl font-bold">Sync Items</h2>
 					<p className="text-muted-foreground">
 						Manage your backup configurations
+						<br />
+						{isGloballyPaused && (
+							<span className="text-orange-600 font-medium">
+								All backups paused
+							</span>
+						)}
 					</p>
 				</div>
-				<Button onClick={() => setShowAddForm(true)} className="gap-2">
-					<Plus className="h-4 w-4" />
-					Add Sync Item
-				</Button>
+				<div className="flex gap-2">
+					<Button onClick={() => setShowAddForm(true)} className="gap-2">
+						<Plus className="h-4 w-4" />
+						Add Sync Item
+					</Button>
+				</div>
 			</div>
 
 			{/* Upload Progress */}
@@ -418,11 +475,34 @@ export function Backup() {
 						<div className="space-y-2">
 							<div className="flex justify-between items-center">
 								<span className="text-sm font-medium">
+									{isPaused ? "Paused: " : ""}
 									{uploadProgress.message}
 								</span>
-								<span className="text-sm text-muted-foreground">
-									{Math.round(uploadProgress.percent)}%
-								</span>
+								<div className="flex items-center gap-2">
+									{!isPaused && (
+										<Button
+											onClick={handlePauseBackup}
+											size="sm"
+											variant="outline"
+											className="h-7 w-7 p-0"
+										>
+											<Pause className="h-3 w-3" />
+										</Button>
+									)}
+									{isPaused && (
+										<Button
+											onClick={handleResumeBackup}
+											size="sm"
+											variant="outline"
+											className="h-7 w-7 p-0"
+										>
+											<Play className="h-3 w-3" />
+										</Button>
+									)}
+									<span className="text-sm text-muted-foreground">
+										{Math.round(uploadProgress.percent)}%
+									</span>
+								</div>
 							</div>
 							<div className="w-full bg-muted-foreground rounded-full h-2">
 								<div
@@ -794,12 +874,21 @@ export function Backup() {
 
 								<Button
 									onClick={() => handleBackupItem(item)}
-									disabled={uploading || !item.enabled}
+									disabled={uploading || !item.enabled || isGloballyPaused}
 									className="w-full"
 									size="sm"
 								>
-									<Upload className="mr-2 h-4 w-4" />
-									Backup Now
+									{isGloballyPaused ? (
+										<>
+											<Pause className="mr-2 h-4 w-4" />
+											Paused
+										</>
+									) : (
+										<>
+											<Upload className="mr-2 h-4 w-4" />
+											Backup Now
+										</>
+									)}
 								</Button>
 							</CardContent>
 						</Card>
@@ -807,18 +896,45 @@ export function Backup() {
 				</div>
 			)}
 
-			{/* Backup All Button */}
-			{syncItems.length > 0 && (
+			<div className="flex gap-2">
 				<Button
-					onClick={handleBackupAll}
-					disabled={uploading}
-					className="w-full"
-					size="lg"
+					onClick={() => setIsGloballyPaused(!isGloballyPaused)}
+					variant={isGloballyPaused ? "destructive" : "outline"}
+					className="gap-2"
 				>
-					<Upload className="mr-2 h-5 w-5" />
-					Backup All Enabled Items
+					{isGloballyPaused ? (
+						<>
+							<Play className="h-4 w-4" />
+							Resume All
+						</>
+					) : (
+						<>
+							<Pause className="h-4 w-4" />
+							Pause All
+						</>
+					)}
 				</Button>
-			)}
+				{/* Backup All Button */}
+				{syncItems.length > 0 && (
+					<Button
+						onClick={handleBackupAll}
+						disabled={uploading || isGloballyPaused}
+						className="w-full"
+					>
+						{isGloballyPaused ? (
+							<>
+								<Pause className="mr-2 h-5 w-5" />
+								All Backups Paused
+							</>
+						) : (
+							<>
+								<Upload className="mr-2 h-5 w-5" />
+								Backup All
+							</>
+						)}
+					</Button>
+				)}
+			</div>
 
 			{/* Confirm Dialog */}
 			<ConfirmDialog

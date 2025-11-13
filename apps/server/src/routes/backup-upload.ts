@@ -3,6 +3,7 @@ import type { Hono } from "hono";
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { formatIsoDate } from "../lib/formatter";
 
 const prisma = new PrismaClient();
 
@@ -25,16 +26,6 @@ async function getNextVersion(
 	});
 
 	return latestBackup ? latestBackup.version + 1 : 1;
-}
-
-function formatIsoDate(timestamp: Date): string {
-	const pad = (n: number) => n.toString().padStart(2, "0");
-	const d = timestamp.getDate();
-	const m = timestamp.getMonth() + 1;
-	const y = timestamp.getFullYear();
-	const h = timestamp.getHours();
-	const s = timestamp.getSeconds();
-	return `${pad(h)}:${pad(s)},${pad(d)}-${pad(m)}-${y}`;
 }
 
 export function setupBackupUploadRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {

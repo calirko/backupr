@@ -168,7 +168,7 @@ export function Settings() {
 				<CardHeader>
 					<CardTitle>Startup Behavior</CardTitle>
 					<CardDescription>
-						Control how the application starts when your system boots
+						Control how the application starts with your system
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
@@ -186,12 +186,14 @@ export function Settings() {
 							className="w-4 h-4 rounded border-gray-300"
 						/>
 						<Label htmlFor="startInBackground" className="cursor-pointer">
-							Start in background (show only in system tray)
+							Launch at system startup (start minimized in system tray)
 						</Label>
 					</div>
 					<p className="text-sm text-muted-foreground">
-						When enabled, the application will start minimized in the system
-						tray. You can click the tray icon to show or hide the window.
+						When enabled, Backupr will automatically start with your system and
+						run in the background. The app will be minimized to the system tray
+						and you can click the tray icon to show or hide the window. This
+						ensures your scheduled backups run automatically.
 					</p>
 				</CardContent>
 			</Card>
