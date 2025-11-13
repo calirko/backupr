@@ -6,7 +6,8 @@
 		"buildResources": "build",
 		"output": "out"
 	},
-	"files": ["dist/**/*", "electron/**/*", "package.json"],
+	"files": ["dist/**/*", "electron/**/*", "package.json", "build/**/*"],
+	"asarUnpack": ["build/**/*"],
 	"publish": {
 		"provider": "github",
 		"owner": "calirko",
@@ -20,6 +21,18 @@
 		{
 			"from": "build/tray.png",
 			"to": "tray.png"
+		},
+		{
+			"from": "build/icon.ico",
+			"to": "icon.ico"
+		},
+		{
+			"from": "build/icon.icns",
+			"to": "icon.icns"
+		},
+		{
+			"from": "build/icon.png",
+			"to": "icon.png"
 		}
 	],
 	"mac": {

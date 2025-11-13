@@ -6,6 +6,48 @@ const fs = require("node:fs");
  * Create the main application window
  */
 function createWindow() {
+	// Determine the correct icon path based on platform
+	let iconPath;
+	if (process.platform === "win32") {
+		// For Windows, use ICO format
+		if (app.isPackaged) {
+			// Try multiple possible locations for packaged app
+			const possiblePaths = [
+				path.join(process.resourcesPath, "icon.ico"),
+				path.join(
+					process.resourcesPath,
+					"app.asar.unpacked",
+					"build",
+					"icon.ico",
+				),
+				path.join(path.dirname(process.execPath), "resources", "icon.ico"),
+			];
+
+			iconPath = possiblePaths.find((p) => fs.existsSync(p));
+			if (!iconPath) {
+				console.warn("Could not find icon.ico in packaged app, using default");
+			}
+		} else {
+			iconPath = path.join(__dirname, "../build/icon.ico");
+		}
+	} else if (process.platform === "darwin") {
+		// For macOS
+		iconPath = app.isPackaged
+			? path.join(process.resourcesPath, "icon.icns")
+			: path.join(__dirname, "../build/icon.icns");
+	} else {
+		// For Linux, use PNG
+		iconPath = app.isPackaged
+			? path.join(process.resourcesPath, "icon.png")
+			: path.join(__dirname, "../build/icon.png");
+	}
+
+	console.log("Window icon path:", iconPath);
+	console.log(
+		"Window icon exists:",
+		iconPath ? fs.existsSync(iconPath) : false,
+	);
+
 	const mainWindow = new BrowserWindow({
 		width: 500,
 		height: 600,
@@ -16,6 +58,7 @@ function createWindow() {
 		show: false,
 		frame: false, // Remove window frame
 		autoHideMenuBar: true, // Remove menu bar
+		icon: iconPath, // Set the window icon
 		webPreferences: {
 			nodeIntegration: false,
 			contextIsolation: true,

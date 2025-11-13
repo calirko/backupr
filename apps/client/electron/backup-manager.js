@@ -790,8 +790,24 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 
 		// Check if nbackup is accessible
 		try {
-			await execAsync(`"${nbackupCommand}" -?`);
-			console.log("nbackup is accessible and responds to commands");
+			const { stdout } = await execAsync(`"${nbackupCommand}" -?`).catch(
+				(err) => {
+					// nbackup returns exit code 1 for help, but still outputs help text
+					if (err.stdout && err.stdout.includes("Physical Backup Manager")) {
+						return { stdout: err.stdout, stderr: err.stderr };
+					}
+					throw err;
+				},
+			);
+
+			if (
+				stdout.includes("Physical Backup Manager") ||
+				stdout.includes("nbackup")
+			) {
+				console.log("nbackup is accessible and responds to commands");
+			} else {
+				throw new Error("nbackup did not return expected output");
+			}
 		} catch (error) {
 			console.error("nbackup test failed:", error);
 			throw new Error(
@@ -811,7 +827,7 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 		sendProgress("Locking database for backup (nbackup -LOCK)...", 10);
 
 		// Step 1: Lock the database
-		const nbackupLockCmd = `"${nbackupCommand}" -LOCK "${dbPath}"`;
+		const nbackupLockCmd = `"${nbackupCommand}" -LOCK "${dbPath}" -U SYSDBA -P masterkey`;
 
 		console.log("Executing nbackup lock command:", nbackupLockCmd);
 
@@ -821,8 +837,14 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 			if (stderr) console.log("nbackup lock stderr:", stderr);
 			nbackupLocked = true;
 		} catch (error) {
-			console.error("nbackup lock error:", error);
-			throw new Error(`Failed to lock database: ${error.message}`);
+			if (
+				error.stderr.includes("Database is already in the physical backup mode")
+			) {
+				nbackupLocked = true;
+			} else {
+				console.error("nbackup lock error:", error);
+				throw new Error(`Failed to lock database: ${error.message}`);
+			}
 		}
 
 		// Check for pause state
@@ -869,10 +891,10 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 			throw new Error("Backup was cancelled");
 		}
 
-		sendProgress("Unlocking database (nbackup -UNLOCK)...", 60);
+		sendProgress("Unlocking database (nbackup -N)...", 60);
 
 		// Step 3: Unlock the database
-		const nbackupUnlockCmd = `"${nbackupCommand}" -UNLOCK "${dbPath}"`;
+		const nbackupUnlockCmd = `"${nbackupCommand}" -N "${dbPath}" -U SYSDBA -P masterkey`;
 
 		console.log("Executing nbackup unlock command:", nbackupUnlockCmd);
 
@@ -898,7 +920,7 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 		sendProgress("Fixing up backup copy (nbackup -FIXUP)...", 65);
 
 		// Step 4: Fix up the copied database
-		const nbackupFixupCmd = `"${nbackupCommand}" -FIXUP "${tempBackupPath}"`;
+		const nbackupFixupCmd = `"${nbackupCommand}" -FIXUP "${tempBackupPath}" -U SYSDBA -P masterkey`;
 
 		console.log("Executing nbackup fixup command:", nbackupFixupCmd);
 
@@ -961,71 +983,204 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 		}
 
 		const compressedStats = fs.statSync(tempCompressedPath);
-		sendProgress(
-			`Uploading compressed backup (${(compressedStats.size / 1024 / 1024).toFixed(2)} MB)...`,
-			90,
-		);
-
-		// Upload the compressed backup
-		const FormData = require("form-data");
-		const formData = new FormData();
-
-		formData.append("backupName", backupName);
-		formData.append(
-			"metadata",
-			JSON.stringify({
-				platform: process.platform,
-				timestamp: new Date().toISOString(),
-				backupType: "firebird",
-				originalSize: backupStats.size,
-				compressedSize: compressedStats.size,
-				databasePath: dbPath,
-			}),
-		);
-
-		const fileStream = fs.createReadStream(tempCompressedPath);
-		// Ensure filename uses forward slashes and no backslashes for cross-platform compatibility
-		const normalizedFileName = `${dbFileName}_${timestamp}.fbk.zip`.replace(
-			/\\/g,
-			"/",
-		);
-		formData.append("file_0", fileStream, normalizedFileName);
+		const CHUNKED_THRESHOLD = 100 * 1024 * 1024; // 100MB
+		const shouldUseChunked = compressedStats.size > CHUNKED_THRESHOLD;
 
 		const fetch = require("node-fetch");
-		const response = await fetch(`${serverHost}/api/backup/upload`, {
-			method: "POST",
-			headers: {
-				"X-API-Key": apiKey,
-				...formData.getHeaders(),
-			},
-			body: formData,
-		});
 
-		const result = await response.json();
+		// Use chunked upload for large files (same logic as normal backup)
+		if (shouldUseChunked) {
+			sendProgress(
+				`Uploading compressed backup via chunked upload (${(compressedStats.size / 1024 / 1024).toFixed(2)} MB)...`,
+				90,
+			);
 
-		if (result.success) {
-			sendProgress("Backup completed successfully!", 100);
+			// Upload using chunked upload
+			try {
+				const normalizedFileName = `${dbFileName}_${timestamp}.fbk.zip`.replace(
+					/\\/g,
+					"/",
+				);
 
-			// Store backup history
-			const history = store.get("backupHistory", []);
-			history.unshift({
-				backupName: result.backupName,
-				version: result.version,
-				timestamp: result.timestamp,
-				filesCount: result.filesCount,
-				totalSize: result.totalSize,
-				status: "completed",
-				backupType: "firebird",
+				const result = await uploadFileInChunks(
+					serverHost,
+					apiKey,
+					backupName,
+					tempCompressedPath,
+					normalizedFileName,
+					(msg, pct) => {
+						const uploadProgress = 90 + pct * 0.05; // Map 0-100% to 90-95%
+						sendProgress(msg, uploadProgress);
+					},
+				);
+
+				const version = result.version;
+
+				// Finalize the backup
+				sendProgress("Finalizing backup...", 95);
+				const finalizeResponse = await fetch(
+					`${serverHost}/api/backup/finalize`,
+					{
+						method: "POST",
+						headers: {
+							"X-API-Key": apiKey,
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							backupName,
+							version,
+							metadata: {
+								platform: process.platform,
+								timestamp: new Date().toISOString(),
+								backupType: "firebird",
+								originalSize: backupStats.size,
+								compressedSize: compressedStats.size,
+								databasePath: dbPath,
+							},
+						}),
+					},
+				);
+
+				if (!finalizeResponse.ok) {
+					throw new Error(
+						`Failed to finalize: ${await finalizeResponse.text()}`,
+					);
+				}
+
+				const finalResult = await finalizeResponse.json();
+				sendProgress("Backup completed successfully!", 100);
+
+				// Store backup history
+				const history = store.get("backupHistory", []);
+				history.unshift({
+					backupName: finalResult.backupName,
+					version: finalResult.version,
+					timestamp: finalResult.timestamp,
+					filesCount: finalResult.filesCount,
+					totalSize: finalResult.totalSize,
+					status: "completed",
+					backupType: "firebird",
+				});
+
+				if (history.length > 50) {
+					history.length = 50;
+				}
+
+				store.set("backupHistory", history);
+
+				return finalResult;
+			} catch (uploadError) {
+				console.error("Upload error:", uploadError);
+
+				// Provide more specific error messages
+				let errorMessage = uploadError.message;
+				if (uploadError.code === "EPIPE") {
+					errorMessage =
+						"Server connection lost during upload. The file might be too large or the server is not responding.";
+				} else if (uploadError.code === "ECONNREFUSED") {
+					errorMessage =
+						"Cannot connect to server. Make sure the server is running.";
+				} else if (uploadError.type === "request-timeout") {
+					errorMessage = "Upload timed out. The file might be too large.";
+				}
+
+				throw new Error(errorMessage);
+			}
+		} else {
+			// Traditional upload for smaller files (same logic as normal backup)
+			sendProgress(
+				`Uploading compressed backup (${(compressedStats.size / 1024 / 1024).toFixed(2)} MB)...`,
+				90,
+			);
+
+			const FormData = require("form-data");
+			const formData = new FormData();
+
+			formData.append("backupName", backupName);
+			formData.append(
+				"metadata",
+				JSON.stringify({
+					platform: process.platform,
+					timestamp: new Date().toISOString(),
+					backupType: "firebird",
+					originalSize: backupStats.size,
+					compressedSize: compressedStats.size,
+					databasePath: dbPath,
+				}),
+			);
+
+			const fileStream = fs.createReadStream(tempCompressedPath);
+			const normalizedFileName = `${dbFileName}_${timestamp}.fbk.zip`.replace(
+				/\\/g,
+				"/",
+			);
+			formData.append("file_0", fileStream, {
+				filename: normalizedFileName,
+				knownLength: compressedStats.size,
 			});
 
-			if (history.length > 50) {
-				history.length = 50;
+			sendProgress("Uploading to server...", 92);
+
+			try {
+				const response = await fetch(`${serverHost}/api/backup/upload`, {
+					method: "POST",
+					headers: {
+						"X-API-Key": apiKey,
+						...formData.getHeaders(),
+					},
+					body: formData,
+				});
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					throw new Error(
+						`Server responded with ${response.status}: ${errorText}`,
+					);
+				}
+
+				const result = await response.json();
+
+				if (result.success) {
+					sendProgress("Backup completed successfully!", 100);
+
+					// Store backup history
+					const history = store.get("backupHistory", []);
+					history.unshift({
+						backupName: result.backupName,
+						version: result.version,
+						timestamp: result.timestamp,
+						filesCount: result.filesCount,
+						totalSize: result.totalSize,
+						status: "completed",
+						backupType: "firebird",
+					});
+
+					if (history.length > 50) {
+						history.length = 50;
+					}
+
+					store.set("backupHistory", history);
+				}
+
+				return result;
+			} catch (uploadError) {
+				console.error("Upload error:", uploadError);
+
+				// Provide more specific error messages
+				let errorMessage = uploadError.message;
+				if (uploadError.code === "EPIPE") {
+					errorMessage =
+						"Server connection lost during upload. The file might be too large or the server is not responding.";
+				} else if (uploadError.code === "ECONNREFUSED") {
+					errorMessage =
+						"Cannot connect to server. Make sure the server is running.";
+				} else if (uploadError.type === "request-timeout") {
+					errorMessage = "Upload timed out. The file might be too large.";
+				}
+
+				throw new Error(errorMessage);
 			}
-
-			store.set("backupHistory", history);
 		}
-
-		return result;
 	} catch (error) {
 		console.error("Firebird backup error:", error);
 		if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1051,7 +1206,7 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 							process.platform === "win32" ? "nbackup.exe" : "nbackup",
 						)
 					: "nbackup";
-				const nbackupUnlockCmd = `"${nbackupCommand}" -UNLOCK "${dbPath}"`;
+				const nbackupUnlockCmd = `"${nbackupCommand}" -N "${dbPath}" -U SYSDBA -P masterkey`;
 				await execAsync(nbackupUnlockCmd);
 				console.log("Successfully unlocked database in cleanup");
 			} catch (unlockError) {
