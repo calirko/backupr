@@ -34,35 +34,63 @@ function getSchedulerContext() {
 /**
  * Calculate next backup time based on interval
  */
-function calculateNextBackupTime(interval, customHours, lastBackup) {
-	if (!interval || interval === "manual") {
-		return null;
-	}
-
-	const baseTime = lastBackup ? new Date(lastBackup) : new Date();
-	let intervalMs = 0;
+const calculateNextBackup = (
+	interval,
+	customHours,
+	dailyTime,
+	weeklyDay,
+	weeklyTime,
+) => {
+	const now = new Date();
 
 	switch (interval) {
+		case "manual":
+			return null;
 		case "hourly":
-			intervalMs = 60 * 60 * 1000; // 1 hour
-			break;
-		case "daily":
-			intervalMs = 24 * 60 * 60 * 1000; // 24 hours
-			break;
-		case "weekly":
-			intervalMs = 7 * 24 * 60 * 60 * 1000; // 7 days
-			break;
+			return new Date(now.getTime() + 60 * 60 * 1000);
+		case "daily": {
+			// Calculate next daily backup at specified time
+			const [hours, minutes] = (dailyTime || "00:00").split(":").map(Number);
+			const next = new Date(now);
+			next.setHours(hours, minutes, 0, 0);
+
+			console.log("Calculated daily next backup time:", next);
+			console.log("Current time:", now);
+			console.log(next < now);
+
+			// If the time today has passed, schedule for tomorrow
+			if (next < now) {
+				next.setDate(next.getDate() + 1);
+			}
+			return next;
+		}
+		case "weekly": {
+			// Calculate next weekly backup at specified day and time
+			const [hours, minutes] = (weeklyTime || "00:00").split(":").map(Number);
+			const targetDay = parseInt(weeklyDay, 10) || 1;
+			const next = new Date(now);
+			next.setHours(hours, minutes, 0, 0);
+
+			// Calculate days until target day
+			const currentDay = next.getDay();
+			let daysUntilTarget = targetDay - currentDay;
+
+			// If target day is today but time has passed, or target is before today, go to next week
+			if (daysUntilTarget < 0 || (daysUntilTarget === 0 && next <= now)) {
+				daysUntilTarget += 7;
+			}
+
+			next.setDate(next.getDate() + daysUntilTarget);
+			return next;
+		}
 		case "custom": {
-			const hours = parseInt(customHours, 10) || 12;
-			intervalMs = hours * 60 * 60 * 1000;
-			break;
+			const hours = parseInt(customHours, 10) || 1;
+			return new Date(now.getTime() + hours * 60 * 60 * 1000);
 		}
 		default:
 			return null;
 	}
-
-	return new Date(baseTime.getTime() + intervalMs);
-}
+};
 
 /**
  * Schedule a backup for an item
@@ -79,17 +107,22 @@ function scheduleBackup(item) {
 		return;
 	}
 
-	const nextBackupTime = calculateNextBackupTime(
+	const nextBackupTime = calculateNextBackup(
 		item.interval,
 		item.customHours,
-		item.lastBackup,
+		item.dailyTime,
+		item.weeklyDay,
+		item.weeklyTime,
 	);
+
+	console.log(`Next backup time for item "${item.name}":`, nextBackupTime);
 
 	if (!nextBackupTime) {
 		return;
 	}
 
 	const now = new Date();
+	console.log(nextBackupTime, now, item);
 	const timeUntilBackup = nextBackupTime.getTime() - now.getTime();
 
 	// If the next backup time is in the past or very soon (within 1 minute), run immediately
@@ -139,7 +172,7 @@ async function executeScheduledBackup(item, store, mainWindow) {
 			return;
 		}
 
-		// Send notification to UI if window is available
+		// Send initial notification to UI (the detailed progress will be handled by backup-manager)
 		if (mainWindow && !mainWindow.isDestroyed()) {
 			mainWindow.webContents.send("backup-progress", {
 				message: `Starting scheduled backup: ${item.name}`,
@@ -149,8 +182,9 @@ async function executeScheduledBackup(item, store, mainWindow) {
 
 		let result;
 
+		// Execute backup using the same internal functions that handle all progress updates
 		if (item.backupType === "firebird") {
-			// Execute Firebird backup
+			// Execute Firebird backup - performFirebirdBackupInternal handles all progress updates
 			result = await performFirebirdBackupInternal(
 				{
 					serverHost: settings.serverHost,
@@ -163,7 +197,7 @@ async function executeScheduledBackup(item, store, mainWindow) {
 				mainWindow,
 			);
 		} else {
-			// Execute normal file backup
+			// Execute normal file backup - performBackupInternal handles all progress updates
 			result = await performBackupInternal(
 				{
 					serverHost: settings.serverHost,
@@ -193,12 +227,16 @@ async function executeScheduledBackup(item, store, mainWindow) {
 
 			console.log(`Backup "${item.name}" completed successfully`);
 
-			// Send success notification to UI
+			// The final progress update is already sent by backup-manager,
+			// but we can send an additional completion notification
 			if (mainWindow && !mainWindow.isDestroyed()) {
-				mainWindow.webContents.send("backup-progress", {
-					message: `Scheduled backup "${item.name}" completed successfully!`,
-					percent: 100,
-				});
+				// Small delay to ensure the 100% progress from backup-manager is shown first
+				setTimeout(() => {
+					mainWindow.webContents.send("backup-progress", {
+						message: `Scheduled backup "${item.name}" completed successfully!`,
+						percent: 100,
+					});
+				}, 500);
 			}
 
 			// Schedule the next backup based on the new lastBackup time
@@ -215,7 +253,7 @@ async function executeScheduledBackup(item, store, mainWindow) {
 				});
 			}
 
-			// Reschedule for later (retry after 1 hour)
+			// Reschedule for later
 			scheduleNextBackup(item, store);
 		}
 	} catch (error) {
@@ -243,10 +281,12 @@ async function executeScheduledBackup(item, store, mainWindow) {
  */
 function scheduleNextBackup(item, store) {
 	// Calculate and schedule the next backup
-	const nextBackupTime = calculateNextBackupTime(
+	const nextBackupTime = calculateNextBackup(
 		item.interval,
 		item.customHours,
-		item.lastBackup,
+		item.dailyTime,
+		item.weeklyDay,
+		item.weeklyTime,
 	);
 
 	if (nextBackupTime) {
@@ -299,7 +339,7 @@ module.exports = {
 	scheduleNextBackup,
 	initializeScheduler,
 	clearAllScheduledBackups,
-	calculateNextBackupTime,
+	calculateNextBackup,
 	setSchedulerContext,
 	getSchedulerContext,
 };

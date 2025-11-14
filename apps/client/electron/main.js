@@ -21,7 +21,7 @@ let mainWindow = null;
 // Configure auto-launch for system startup
 const autoLauncher = new AutoLaunch({
 	name: "Backupr",
-	path: app.getPath("exe"),
+	path: process.execPath,
 });
 
 // Configure auto-updater
