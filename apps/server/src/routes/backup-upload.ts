@@ -3,6 +3,7 @@ import type { Hono } from "hono";
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { cleanupOldBackups } from "../lib/backup-cleanup";
 import { formatIsoDate } from "../lib/formatter";
 
 const prisma = new PrismaClient();
@@ -121,6 +122,14 @@ export function setupBackupUploadRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {
 					totalSize,
 				},
 			});
+
+			// Clean up old backups if limit exceeded
+			await cleanupOldBackups(
+				client.id,
+				backupName,
+				BACKUP_STORAGE_DIR,
+				client.name,
+			);
 
 			await prisma.syncLog.create({
 				data: {
