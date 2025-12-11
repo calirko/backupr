@@ -1,6 +1,6 @@
 {
 	"name": "@backupr/client",
-	"version": "1.0.9",
+	"version": "1.1.0",
 	"description": "Backupr Electron Client",
 	"main": "electron/main.js",
 	"author": {

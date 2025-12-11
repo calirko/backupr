@@ -9,6 +9,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
+import { cleanupOldBackups } from "../lib/backup-cleanup";
 import { formatIsoDate } from "../lib/formatter";
 
 const prisma = new PrismaClient();
@@ -276,8 +277,17 @@ export function setupBackupChunkedRoutes(
 				data: {
 					filesCount: fileCount,
 					totalSize: totalSize._sum.fileSize || 0,
+					status: "completed",
 				},
 			});
+
+			// Clean up old backups if limit exceeded
+			await cleanupOldBackups(
+				session.clientId,
+				session.backupName,
+				BACKUP_STORAGE_DIR,
+				client.name,
+			);
 
 			// Clean up session
 			global.uploadSessions.delete(sessionId);

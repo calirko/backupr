@@ -3,6 +3,8 @@ const {
 	performFirebirdBackupInternal,
 } = require("./backup-manager");
 
+const { calculateNextBackup } = require("./lib/scheduler-utils");
+
 /**
  * Backup scheduler
  */
@@ -30,67 +32,6 @@ function setSchedulerContext(store, mainWindow) {
 function getSchedulerContext() {
 	return schedulerContext;
 }
-
-/**
- * Calculate next backup time based on interval
- */
-const calculateNextBackup = (
-	interval,
-	customHours,
-	dailyTime,
-	weeklyDay,
-	weeklyTime,
-) => {
-	const now = new Date();
-
-	switch (interval) {
-		case "manual":
-			return null;
-		case "hourly":
-			return new Date(now.getTime() + 60 * 60 * 1000);
-		case "daily": {
-			// Calculate next daily backup at specified time
-			const [hours, minutes] = (dailyTime || "00:00").split(":").map(Number);
-			const next = new Date(now);
-			next.setHours(hours, minutes, 0, 0);
-
-			console.log("Calculated daily next backup time:", next);
-			console.log("Current time:", now);
-			console.log(next < now);
-
-			// If the time today has passed, schedule for tomorrow
-			if (next < now) {
-				next.setDate(next.getDate() + 1);
-			}
-			return next;
-		}
-		case "weekly": {
-			// Calculate next weekly backup at specified day and time
-			const [hours, minutes] = (weeklyTime || "00:00").split(":").map(Number);
-			const targetDay = parseInt(weeklyDay, 10) || 1;
-			const next = new Date(now);
-			next.setHours(hours, minutes, 0, 0);
-
-			// Calculate days until target day
-			const currentDay = next.getDay();
-			let daysUntilTarget = targetDay - currentDay;
-
-			// If target day is today but time has passed, or target is before today, go to next week
-			if (daysUntilTarget < 0 || (daysUntilTarget === 0 && next <= now)) {
-				daysUntilTarget += 7;
-			}
-
-			next.setDate(next.getDate() + daysUntilTarget);
-			return next;
-		}
-		case "custom": {
-			const hours = parseInt(customHours, 10) || 1;
-			return new Date(now.getTime() + hours * 60 * 60 * 1000);
-		}
-		default:
-			return null;
-	}
-};
 
 /**
  * Schedule a backup for an item
@@ -339,7 +280,6 @@ module.exports = {
 	scheduleNextBackup,
 	initializeScheduler,
 	clearAllScheduledBackups,
-	calculateNextBackup,
 	setSchedulerContext,
 	getSchedulerContext,
 };
