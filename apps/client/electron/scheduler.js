@@ -10,6 +10,11 @@ const { calculateNextBackup } = require("./lib/scheduler-utils");
  */
 const backupTimers = new Map(); // Map<itemId, timeoutId>
 
+// Maximum safe setTimeout delay (24.8 days in milliseconds)
+// Using a slightly smaller value to be safe
+const MAX_TIMEOUT_DELAY = 2147483647; // ~24.8 days
+const SAFE_TIMEOUT_DELAY = 86400000 * 20; // 20 days in milliseconds
+
 /**
  * Scheduler context (store and mainWindow references)
  */
@@ -69,26 +74,68 @@ function scheduleBackup(item) {
 	// If the next backup time is in the past or very soon (within 1 minute), run immediately
 	if (timeUntilBackup < 60000) {
 		console.log(`Backup "${item.name}" is overdue, executing now...`);
-		// Execute with current context
+		// Execute with current context (don't await to avoid blocking)
 		const { store, mainWindow } = schedulerContext;
 		if (store && mainWindow) {
-			executeScheduledBackup(item, store, mainWindow);
+			executeScheduledBackup(item, store, mainWindow).catch((error) => {
+				console.error(
+					`Error in immediate backup execution for "${item.name}":`,
+					error,
+				);
+				// Try to reschedule even if execution failed
+				scheduleNextBackup(item, store);
+			});
 		}
 		return;
 	}
 
-	// Schedule the backup
-	console.log(
-		`Scheduling backup "${item.name}" for ${nextBackupTime.toISOString()} (in ${Math.round(timeUntilBackup / 1000 / 60)} minutes)`,
-	);
+	// Check if the delay exceeds the safe setTimeout limit
+	// If it does, schedule a recheck instead of the actual backup
+	let actualDelay = timeUntilBackup;
+	let isRecheckSchedule = false;
+
+	if (timeUntilBackup > SAFE_TIMEOUT_DELAY) {
+		actualDelay = SAFE_TIMEOUT_DELAY;
+		isRecheckSchedule = true;
+		console.log(
+			`Backup "${item.name}" is scheduled too far in future (${Math.round(timeUntilBackup / 1000 / 60 / 60 / 24)} days). ` +
+				`Scheduling a recheck in ${Math.round(actualDelay / 1000 / 60 / 60 / 24)} days instead.`,
+		);
+	} else {
+		console.log(
+			`Scheduling backup "${item.name}" for ${nextBackupTime.toISOString()} (in ${Math.round(timeUntilBackup / 1000 / 60)} minutes)`,
+		);
+	}
 
 	const timerId = setTimeout(() => {
 		// Get current context when timer fires
 		const { store, mainWindow } = schedulerContext;
-		if (store && mainWindow) {
-			executeScheduledBackup(item, store, mainWindow);
+		if (!store || !mainWindow) {
+			console.error(`Scheduler context lost for "${item.name}"`);
+			return;
 		}
-	}, timeUntilBackup);
+
+		if (isRecheckSchedule) {
+			// This was a recheck, not the actual backup time
+			// Reload the item and reschedule
+			console.log(`Rechecking schedule for "${item.name}"...`);
+			const items = store.get("syncItems", []);
+			const currentItem = items.find((i) => i.id === item.id);
+			if (currentItem?.enabled) {
+				scheduleBackup(currentItem);
+			}
+		} else {
+			// This is the actual backup time
+			executeScheduledBackup(item, store, mainWindow).catch((error) => {
+				console.error(
+					`Error in scheduled backup execution for "${item.name}":`,
+					error,
+				);
+				// Try to reschedule even if execution failed
+				scheduleNextBackup(item, store);
+			});
+		}
+	}, actualDelay);
 
 	backupTimers.set(item.id, timerId);
 }
@@ -274,12 +321,24 @@ function clearAllScheduledBackups() {
 	backupTimers.clear();
 }
 
+/**
+ * Clear a specific scheduled backup by item ID
+ */
+function clearScheduledBackup(itemId) {
+	if (backupTimers.has(itemId)) {
+		console.log(`Clearing scheduled backup for item: ${itemId}`);
+		clearTimeout(backupTimers.get(itemId));
+		backupTimers.delete(itemId);
+	}
+}
+
 module.exports = {
 	scheduleBackup,
 	executeScheduledBackup,
 	scheduleNextBackup,
 	initializeScheduler,
 	clearAllScheduledBackups,
+	clearScheduledBackup,
 	setSchedulerContext,
 	getSchedulerContext,
 };
