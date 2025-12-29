@@ -72,9 +72,9 @@ function setupIpcHandlers(mainWindow, store, autoLauncher) {
 		const filtered = items.filter((i) => i.id !== itemId);
 		store.set("syncItems", filtered);
 
-		// Clear the timer for this item
-		const { clearAllScheduledBackups } = require("./scheduler");
-		clearAllScheduledBackups();
+		// Clear the timer for only this specific item
+		const { clearScheduledBackup } = require("./scheduler");
+		clearScheduledBackup(itemId);
 
 		return { success: true };
 	});
