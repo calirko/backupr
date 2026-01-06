@@ -42,14 +42,25 @@ function getSchedulerContext() {
  * Schedule a backup for an item
  */
 function scheduleBackup(item) {
+	console.log(
+		`[SCHEDULER] === scheduleBackup called for "${item.name}" (ID: ${item.id}) ===`,
+	);
+	console.log(
+		`[SCHEDULER] Item enabled: ${item.enabled}, interval: ${item.interval}`,
+	);
+
 	// Clear existing timer if any
 	if (backupTimers.has(item.id)) {
+		console.log(`[SCHEDULER] Clearing existing timer for "${item.name}"`);
 		clearTimeout(backupTimers.get(item.id));
 		backupTimers.delete(item.id);
 	}
 
 	// Don't schedule if manual or disabled
 	if (!item.enabled || !item.interval || item.interval === "manual") {
+		console.log(
+			`[SCHEDULER] Not scheduling "${item.name}" - disabled or manual`,
+		);
 		return;
 	}
 
@@ -61,31 +72,72 @@ function scheduleBackup(item) {
 		item.weeklyTime,
 	);
 
-	console.log(`Next backup time for item "${item.name}":`, nextBackupTime);
+	console.log(
+		`[SCHEDULER] Next backup time for item "${item.name}":`,
+		nextBackupTime,
+	);
 
 	if (!nextBackupTime) {
+		console.log(
+			`[SCHEDULER] No next backup time calculated for "${item.name}"`,
+		);
 		return;
 	}
 
 	const now = new Date();
-	console.log(nextBackupTime, now, item);
+	console.log(
+		`[SCHEDULER] Current time: ${now.toISOString()}, Next backup: ${nextBackupTime.toISOString()}`,
+	);
 	const timeUntilBackup = nextBackupTime.getTime() - now.getTime();
+	console.log(
+		`[SCHEDULER] Time until backup for "${item.name}": ${timeUntilBackup}ms (${Math.round(timeUntilBackup / 60000)} minutes)`,
+	);
 
 	// If the next backup time is in the past or very soon (within 1 minute), run immediately
 	if (timeUntilBackup < 60000) {
-		console.log(`Backup "${item.name}" is overdue, executing now...`);
+		console.log(
+			`[SCHEDULER] Backup "${item.name}" is overdue or due soon, executing now...`,
+		);
 		// Execute with current context (don't await to avoid blocking)
 		const { store, mainWindow } = schedulerContext;
 		if (store && mainWindow) {
-			executeScheduledBackup(item, store, mainWindow).catch((error) => {
-				console.error(
-					`Error in immediate backup execution for "${item.name}":`,
-					error,
-				);
-				// Try to reschedule even if execution failed
-				scheduleNextBackup(item, store);
-			});
+			executeScheduledBackup(item, store, mainWindow)
+				.then(() => {
+					// After successful execution, reschedule will be handled by executeScheduledBackup
+					console.log(
+						`Immediate backup for "${item.name}" completed, next backup scheduled`,
+					);
+				})
+				.catch((error) => {
+					console.error(
+						`Error in immediate backup execution for "${item.name}":`,
+						error,
+					);
+					// Try to reschedule even if execution failed
+					scheduleNextBackup(item, store);
+				});
+		} else {
+			console.error(
+				`Cannot execute immediate backup for "${item.name}": missing context`,
+			);
 		}
+		// Don't return early - instead, schedule a recheck in case immediate execution fails
+		// This ensures the item stays in the scheduler
+		const recheckDelay = 300000; // 5 minutes
+		console.log(
+			`Scheduling recheck for "${item.name}" in 5 minutes as fallback`,
+		);
+		const timerId = setTimeout(() => {
+			const { store } = schedulerContext;
+			if (store) {
+				const items = store.get("syncItems", []);
+				const currentItem = items.find((i) => i.id === item.id);
+				if (currentItem?.enabled) {
+					scheduleBackup(currentItem);
+				}
+			}
+		}, recheckDelay);
+		backupTimers.set(item.id, timerId);
 		return;
 	}
 
@@ -144,7 +196,12 @@ function scheduleBackup(item) {
  * Execute a scheduled backup
  */
 async function executeScheduledBackup(item, store, mainWindow) {
-	console.log(`Executing scheduled backup: ${item.name}`);
+	console.log(
+		`[SCHEDULER] Executing scheduled backup: ${item.name} (ID: ${item.id})`,
+	);
+	console.log(`[SCHEDULER] Current time: ${new Date().toISOString()}`);
+	console.log(`[SCHEDULER] Item last backup: ${item.lastBackup || "never"}`);
+	console.log(`[SCHEDULER] Item next backup: ${item.nextBackup || "not set"}`);
 
 	try {
 		// Get current settings
@@ -154,7 +211,9 @@ async function executeScheduledBackup(item, store, mainWindow) {
 		};
 
 		if (!settings.serverHost || !settings.apiKey) {
-			console.error("Cannot execute backup: Server settings not configured");
+			console.error(
+				`[SCHEDULER] Cannot execute backup "${item.name}": Server settings not configured`,
+			);
 			// Reschedule for later
 			scheduleNextBackup(item, store);
 			return;
@@ -268,6 +327,10 @@ async function executeScheduledBackup(item, store, mainWindow) {
  * Schedule the next backup for an item
  */
 function scheduleNextBackup(item, store) {
+	console.log(
+		`[SCHEDULER] Scheduling next backup for "${item.name}" (ID: ${item.id})`,
+	);
+
 	// Calculate and schedule the next backup
 	const nextBackupTime = calculateNextBackup(
 		item.interval,
@@ -275,6 +338,10 @@ function scheduleNextBackup(item, store) {
 		item.dailyTime,
 		item.weeklyDay,
 		item.weeklyTime,
+	);
+
+	console.log(
+		`[SCHEDULER] Next backup time calculated for "${item.name}": ${nextBackupTime?.toISOString() || "null (manual)"}`,
 	);
 
 	if (nextBackupTime) {
@@ -285,9 +352,19 @@ function scheduleNextBackup(item, store) {
 			items[index].nextBackup = nextBackupTime.toISOString();
 			store.set("syncItems", items);
 
+			console.log(`[SCHEDULER] Updated nextBackup in store for "${item.name}"`);
+
 			// Schedule the backup
 			scheduleBackup(items[index]);
+		} else {
+			console.error(
+				`[SCHEDULER] Could not find item "${item.name}" (ID: ${item.id}) in store to update nextBackup`,
+			);
 		}
+	} else {
+		console.log(
+			`[SCHEDULER] No next backup scheduled for "${item.name}" (manual or invalid interval)`,
+		);
 	}
 }
 
@@ -295,19 +372,37 @@ function scheduleNextBackup(item, store) {
  * Initialize scheduler for all enabled items
  */
 function initializeScheduler(store, mainWindow) {
+	console.log(`[SCHEDULER] ========================================`);
+	console.log(`[SCHEDULER] Initializing scheduler...`);
+	console.log(`[SCHEDULER] ========================================`);
+
 	// Set the scheduler context
 	setSchedulerContext(store, mainWindow);
 
 	// Load all sync items and schedule enabled ones
 	const items = store.get("syncItems", []);
 
-	console.log(`Initializing scheduler for ${items.length} sync items...`);
+	console.log(`[SCHEDULER] Found ${items.length} sync items in store`);
 
 	for (const item of items) {
+		console.log(`[SCHEDULER] Processing item: "${item.name}" (ID: ${item.id})`);
+		console.log(`[SCHEDULER]   - enabled: ${item.enabled}`);
+		console.log(`[SCHEDULER]   - interval: ${item.interval}`);
+		console.log(`[SCHEDULER]   - lastBackup: ${item.lastBackup || "never"}`);
+		console.log(`[SCHEDULER]   - nextBackup: ${item.nextBackup || "not set"}`);
+
 		if (item.enabled && item.interval && item.interval !== "manual") {
+			console.log(`[SCHEDULER]   -> Scheduling this item`);
 			scheduleBackup(item);
+		} else {
+			console.log(`[SCHEDULER]   -> Skipping (disabled or manual)`);
 		}
 	}
+
+	console.log(`[SCHEDULER] ========================================`);
+	console.log(`[SCHEDULER] Scheduler initialization complete`);
+	console.log(`[SCHEDULER] Active timers: ${backupTimers.size}`);
+	console.log(`[SCHEDULER] ========================================`);
 }
 
 /**

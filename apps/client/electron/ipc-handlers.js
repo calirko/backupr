@@ -45,36 +45,54 @@ function setupIpcHandlers(mainWindow, store, autoLauncher) {
 	});
 
 	ipcMain.handle("save-sync-item", async (_event, item) => {
+		console.log(
+			`[IPC] Saving sync item: "${item.name}" (ID: ${item.id || "NEW"})`,
+		);
 		const items = store.get("syncItems", []);
 
 		if (item.id) {
 			// Update existing item
 			const index = items.findIndex((i) => i.id === item.id);
 			if (index !== -1) {
+				console.log(`[IPC] Updating existing item at index ${index}`);
 				items[index] = item;
+			} else {
+				console.log(
+					`[IPC] Warning: Item ID ${item.id} not found, adding as new`,
+				);
+				item.id = Date.now().toString();
+				items.push(item);
 			}
 		} else {
 			// Add new item with unique ID
 			item.id = Date.now().toString();
+			console.log(`[IPC] Adding new item with ID ${item.id}`);
 			items.push(item);
 		}
 
 		store.set("syncItems", items);
+		console.log(`[IPC] Saved to store. Total items: ${items.length}`);
 
 		// Update scheduler for this item
+		console.log(`[IPC] Calling scheduleBackup for "${item.name}"`);
 		scheduleBackup(item);
 
 		return { success: true, item };
 	});
 
 	ipcMain.handle("delete-sync-item", async (_event, itemId) => {
+		console.log(`[IPC] Deleting sync item with ID: ${itemId}`);
 		const items = store.get("syncItems", []);
 		const filtered = items.filter((i) => i.id !== itemId);
+		console.log(
+			`[IPC] Items before: ${items.length}, after: ${filtered.length}`,
+		);
 		store.set("syncItems", filtered);
 
 		// Clear the timer for only this specific item
 		const { clearScheduledBackup } = require("./scheduler");
 		clearScheduledBackup(itemId);
+		console.log(`[IPC] Cleared scheduled backup for item ${itemId}`);
 
 		return { success: true };
 	});
