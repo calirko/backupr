@@ -6,6 +6,7 @@ import {
 	getIntervalDisplay,
 } from "../lib/backup-utils";
 import { useBackupOperations } from "../lib/use-backup-operations";
+import { ActiveTasksPanel } from "./ActiveTasksPanel";
 import { BackupForm } from "./BackupForm";
 import { BackupItemCard } from "./BackupItemCard";
 import { EmptyState } from "./EmptyState";
@@ -264,6 +265,9 @@ export function Backup() {
 					</Button>
 				</div>
 			</div>
+
+			{/* Active Tasks Panel */}
+			<ActiveTasksPanel />
 
 			{/* Upload Progress */}
 			{uploading && (
