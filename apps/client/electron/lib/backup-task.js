@@ -99,19 +99,44 @@ class BackupTask extends EventEmitter {
 		} catch (error) {
 			this.error = error.message;
 
+			// Detect network-related errors
+			const isNetworkError =
+				error.code === "ECONNREFUSED" ||
+				error.code === "ETIMEDOUT" ||
+				error.code === "ENOTFOUND" ||
+				error.code === "EPIPE" ||
+				error.message.includes("network") ||
+				error.message.includes("connect") ||
+				error.message.includes("connection");
+
 			// Check if we should retry
 			if (this.retryCount < this.maxRetries && !this.isCancelled) {
 				this.retryCount++;
 				this.status = "failed";
-				this.emit("retry", { attempt: this.retryCount, error: this.error });
+				this.emit("retry", {
+					attempt: this.retryCount,
+					error: this.error,
+					isNetworkError,
+				});
 
 				// Exponential backoff: 30s, 60s, 120s
-				const delay = Math.min(30000 * Math.pow(2, this.retryCount - 1), 120000);
+				// For network errors, use longer delays
+				const baseDelay = isNetworkError ? 60000 : 30000;
+				const delay = Math.min(
+					baseDelay * Math.pow(2, this.retryCount - 1),
+					isNetworkError ? 300000 : 120000,
+				);
+
+				console.log(
+					`[BackupTask] Retrying in ${delay / 1000}s (attempt ${this.retryCount}/${this.maxRetries})`,
+				);
+
 				await new Promise((resolve) => setTimeout(resolve, delay));
 
 				// Retry if not cancelled
 				if (!this.isCancelled) {
 					this.status = "pending";
+					this.error = null; // Clear error before retry
 					return this.execute();
 				}
 			}
