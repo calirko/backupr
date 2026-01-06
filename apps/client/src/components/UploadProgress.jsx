@@ -10,15 +10,35 @@ export function UploadProgress({
 }) {
 	if (!uploadProgress.message) return null;
 
+	const getStageLabel = (stage) => {
+		switch (stage) {
+			case "compressing":
+				return "Compressing";
+			case "uploading":
+				return "Uploading";
+			case "preparing":
+				return "Preparing";
+			default:
+				return "";
+		}
+	};
+
 	return (
 		<Card>
 			<CardContent className="pt-6">
 				<div className="space-y-2">
 					<div className="flex justify-between items-center">
-						<span className="text-sm font-medium">
-							{isPaused ? "Paused: " : ""}
-							{uploadProgress.message}
-						</span>
+						<div className="flex flex-col gap-1">
+							<span className="text-sm font-medium">
+								{isPaused ? "Paused: " : ""}
+								{uploadProgress.message}
+							</span>
+							{uploadProgress.stage && (
+								<span className="text-xs text-muted-foreground">
+									Stage: {getStageLabel(uploadProgress.stage)}
+								</span>
+							)}
+						</div>
 						<div className="flex items-center gap-2">
 							{!isPaused && (
 								<Button

@@ -6,6 +6,7 @@ import {
 	getIntervalDisplay,
 } from "../lib/backup-utils";
 import { useBackupOperations } from "../lib/use-backup-operations";
+import { ActiveTasksPanel } from "./ActiveTasksPanel";
 import { BackupForm } from "./BackupForm";
 import { BackupItemCard } from "./BackupItemCard";
 import { EmptyState } from "./EmptyState";
@@ -114,9 +115,17 @@ export function Backup() {
 
 	// Effect to handle global pause communication with Electron
 	useEffect(() => {
-		if (window.electron?.setGlobalPause) {
-			window.electron.setGlobalPause(isGloballyPaused);
-		}
+		const handleGlobalPause = async () => {
+			if (window.electron) {
+				if (isGloballyPaused) {
+					await window.electron.pauseAllBackups();
+				} else {
+					await window.electron.resumeAllBackups();
+				}
+			}
+		};
+
+		handleGlobalPause();
 	}, [isGloballyPaused]);
 
 	const handleSaveItem = async () => {
@@ -256,6 +265,9 @@ export function Backup() {
 					</Button>
 				</div>
 			</div>
+
+			{/* Active Tasks Panel */}
+			<ActiveTasksPanel />
 
 			{/* Upload Progress */}
 			{uploading && (
