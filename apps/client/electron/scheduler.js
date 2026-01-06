@@ -1,12 +1,8 @@
-const {
-	performBackupInternal,
-	performFirebirdBackupInternal,
-} = require("./backup-manager");
-
 const { calculateNextBackup } = require("./lib/scheduler-utils");
+const { BackupTaskManager } = require("./lib/backup-task-manager");
 
 /**
- * Backup scheduler
+ * Backup scheduler with task manager
  */
 const backupTimers = new Map(); // Map<itemId, timeoutId>
 
@@ -14,6 +10,11 @@ const backupTimers = new Map(); // Map<itemId, timeoutId>
 // Using a slightly smaller value to be safe
 const MAX_TIMEOUT_DELAY = 2147483647; // ~24.8 days
 const SAFE_TIMEOUT_DELAY = 86400000 * 20; // 20 days in milliseconds
+
+/**
+ * Global task manager instance
+ */
+let taskManager = null;
 
 /**
  * Scheduler context (store and mainWindow references)
@@ -24,11 +25,56 @@ let schedulerContext = {
 };
 
 /**
+ * Initialize task manager
+ */
+function initializeTaskManager() {
+	if (!taskManager) {
+		taskManager = new BackupTaskManager();
+
+		// Set up task manager event listeners
+		taskManager.on("taskStatusChange", (state) => {
+			const { mainWindow } = schedulerContext;
+			if (mainWindow && !mainWindow.isDestroyed()) {
+				mainWindow.webContents.send("task-status-update", state);
+			}
+		});
+
+		taskManager.on("taskCompleted", ({ taskId, result }) => {
+			console.log(`[SCHEDULER] Task ${taskId} completed successfully`);
+		});
+
+		taskManager.on("taskFailed", ({ taskId, error }) => {
+			console.error(`[SCHEDULER] Task ${taskId} failed:`, error);
+		});
+
+		taskManager.on("taskRetry", ({ taskId, attempt, error }) => {
+			console.log(`[SCHEDULER] Task ${taskId} retry attempt ${attempt}:`, error);
+		});
+
+		console.log("[SCHEDULER] Task manager initialized");
+	}
+	return taskManager;
+}
+
+/**
+ * Get task manager instance
+ */
+function getTaskManager() {
+	if (!taskManager) {
+		initializeTaskManager();
+	}
+	return taskManager;
+}
+
+/**
  * Set scheduler context
  */
 function setSchedulerContext(store, mainWindow) {
 	schedulerContext.store = store;
 	schedulerContext.mainWindow = mainWindow;
+
+	// Initialize task manager with context
+	initializeTaskManager();
 }
 
 /**
@@ -193,7 +239,7 @@ function scheduleBackup(item) {
 }
 
 /**
- * Execute a scheduled backup
+ * Execute a scheduled backup using task manager
  */
 async function executeScheduledBackup(item, store, mainWindow) {
 	console.log(
@@ -219,7 +265,7 @@ async function executeScheduledBackup(item, store, mainWindow) {
 			return;
 		}
 
-		// Send initial notification to UI (the detailed progress will be handled by backup-manager)
+		// Send initial notification to UI
 		if (mainWindow && !mainWindow.isDestroyed()) {
 			mainWindow.webContents.send("backup-progress", {
 				message: `Starting scheduled backup: ${item.name}`,
@@ -227,38 +273,42 @@ async function executeScheduledBackup(item, store, mainWindow) {
 			});
 		}
 
-		let result;
+		// Create and execute task using task manager
+		const task = await taskManager.createTask(item, settings, store, mainWindow);
 
-		// Execute backup using the same internal functions that handle all progress updates
-		if (item.backupType === "firebird") {
-			// Execute Firebird backup - performFirebirdBackupInternal handles all progress updates
-			result = await performFirebirdBackupInternal(
-				{
-					serverHost: settings.serverHost,
-					apiKey: settings.apiKey,
-					backupName: item.name,
-					dbPath: item.firebirdDbPath,
-					gbakPath: item.gbakPath || undefined,
-				},
-				store,
-				mainWindow,
+		if (!task) {
+			console.log(
+				`[SCHEDULER] Task creation skipped for "${item.name}" (already running)`,
 			);
-		} else {
-			// Execute normal file backup - performBackupInternal handles all progress updates
-			result = await performBackupInternal(
-				{
-					serverHost: settings.serverHost,
-					apiKey: settings.apiKey,
-					backupName: item.name,
-					files: item.paths,
-				},
-				store,
-				mainWindow,
-			);
+			// Reschedule anyway
+			scheduleNextBackup(item, store);
+			return;
 		}
 
-		if (result.success) {
-			// Update last backup time and schedule next
+		// Wait for task completion (the task manager handles execution)
+		const taskCompleted = new Promise((resolve) => {
+			const onComplete = ({ taskId }) => {
+				if (taskId === task.id) {
+					taskManager.removeListener("taskCompleted", onComplete);
+					taskManager.removeListener("taskFailed", onFailed);
+					resolve(true);
+				}
+			};
+			const onFailed = ({ taskId }) => {
+				if (taskId === task.id) {
+					taskManager.removeListener("taskCompleted", onComplete);
+					taskManager.removeListener("taskFailed", onFailed);
+					resolve(false);
+				}
+			};
+			taskManager.on("taskCompleted", onComplete);
+			taskManager.on("taskFailed", onFailed);
+		});
+
+		const success = await taskCompleted;
+
+		if (success) {
+			// Update last backup time
 			const updatedItem = {
 				...item,
 				lastBackup: new Date().toISOString(),
@@ -274,10 +324,8 @@ async function executeScheduledBackup(item, store, mainWindow) {
 
 			console.log(`Backup "${item.name}" completed successfully`);
 
-			// The final progress update is already sent by backup-manager,
-			// but we can send an additional completion notification
+			// Final completion notification
 			if (mainWindow && !mainWindow.isDestroyed()) {
-				// Small delay to ensure the 100% progress from backup-manager is shown first
 				setTimeout(() => {
 					mainWindow.webContents.send("backup-progress", {
 						message: `Scheduled backup "${item.name}" completed successfully!`,
@@ -286,21 +334,21 @@ async function executeScheduledBackup(item, store, mainWindow) {
 				}, 500);
 			}
 
-			// Schedule the next backup based on the new lastBackup time
+			// Schedule the next backup
 			scheduleNextBackup(updatedItem, store);
 		} else {
-			console.error(`Backup "${item.name}" failed:`, result.error);
+			console.error(`Backup "${item.name}" failed after retries`);
 
-			// Send error notification to UI
+			// Send error notification
 			if (mainWindow && !mainWindow.isDestroyed()) {
 				mainWindow.webContents.send("backup-progress", {
-					message: `Scheduled backup "${item.name}" failed: ${result.error}`,
+					message: `Scheduled backup "${item.name}" failed after retries`,
 					percent: 0,
 					error: true,
 				});
 			}
 
-			// Reschedule for later
+			// Reschedule for next interval
 			scheduleNextBackup(item, store);
 		}
 	} catch (error) {
@@ -309,7 +357,7 @@ async function executeScheduledBackup(item, store, mainWindow) {
 			error,
 		);
 
-		// Send error notification to UI
+		// Send error notification
 		if (mainWindow && !mainWindow.isDestroyed()) {
 			mainWindow.webContents.send("backup-progress", {
 				message: `Scheduled backup "${item.name}" error: ${error.message}`,
@@ -318,7 +366,7 @@ async function executeScheduledBackup(item, store, mainWindow) {
 			});
 		}
 
-		// Reschedule for later
+		// Reschedule
 		scheduleNextBackup(item, store);
 	}
 }
@@ -376,13 +424,17 @@ function initializeScheduler(store, mainWindow) {
 	console.log(`[SCHEDULER] Initializing scheduler...`);
 	console.log(`[SCHEDULER] ========================================`);
 
-	// Set the scheduler context
+	// Set the scheduler context and initialize task manager
 	setSchedulerContext(store, mainWindow);
 
-	// Load all sync items and schedule enabled ones
+	// Load all sync items
 	const items = store.get("syncItems", []);
 
 	console.log(`[SCHEDULER] Found ${items.length} sync items in store`);
+
+	// Check for overdue backups and schedule them
+	const now = new Date();
+	const overdueItems = [];
 
 	for (const item of items) {
 		console.log(`[SCHEDULER] Processing item: "${item.name}" (ID: ${item.id})`);
@@ -392,6 +444,21 @@ function initializeScheduler(store, mainWindow) {
 		console.log(`[SCHEDULER]   - nextBackup: ${item.nextBackup || "not set"}`);
 
 		if (item.enabled && item.interval && item.interval !== "manual") {
+			// Check if backup is overdue
+			if (item.nextBackup) {
+				const nextBackupTime = new Date(item.nextBackup);
+				const timeDiff = nextBackupTime.getTime() - now.getTime();
+
+				// If overdue by more than 1 minute, add to overdue list
+				if (timeDiff < -60000) {
+					console.log(
+						`[SCHEDULER]   -> Backup is OVERDUE by ${Math.abs(Math.round(timeDiff / 60000))} minutes`,
+					);
+					overdueItems.push(item);
+				}
+			}
+
+			// Schedule the item normally
 			console.log(`[SCHEDULER]   -> Scheduling this item`);
 			scheduleBackup(item);
 		} else {
@@ -399,9 +466,27 @@ function initializeScheduler(store, mainWindow) {
 		}
 	}
 
+	// Execute overdue backups immediately (one attempt each)
+	if (overdueItems.length > 0) {
+		console.log(
+			`[SCHEDULER] Found ${overdueItems.length} overdue backups, executing immediately...`,
+		);
+
+		for (const item of overdueItems) {
+			// Execute with current context (non-blocking)
+			executeScheduledBackup(item, store, mainWindow).catch((error) => {
+				console.error(
+					`Error in overdue backup execution for "${item.name}":`,
+					error,
+				);
+			});
+		}
+	}
+
 	console.log(`[SCHEDULER] ========================================`);
 	console.log(`[SCHEDULER] Scheduler initialization complete`);
 	console.log(`[SCHEDULER] Active timers: ${backupTimers.size}`);
+	console.log(`[SCHEDULER] Overdue backups executed: ${overdueItems.length}`);
 	console.log(`[SCHEDULER] ========================================`);
 }
 
@@ -414,6 +499,11 @@ function clearAllScheduledBackups() {
 		clearTimeout(timerId);
 	}
 	backupTimers.clear();
+
+	// Shutdown task manager
+	if (taskManager) {
+		taskManager.shutdown();
+	}
 }
 
 /**
@@ -436,4 +526,5 @@ module.exports = {
 	clearScheduledBackup,
 	setSchedulerContext,
 	getSchedulerContext,
+	getTaskManager,
 };

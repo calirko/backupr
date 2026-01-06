@@ -114,9 +114,17 @@ export function Backup() {
 
 	// Effect to handle global pause communication with Electron
 	useEffect(() => {
-		if (window.electron?.setGlobalPause) {
-			window.electron.setGlobalPause(isGloballyPaused);
-		}
+		const handleGlobalPause = async () => {
+			if (window.electron) {
+				if (isGloballyPaused) {
+					await window.electron.pauseAllBackups();
+				} else {
+					await window.electron.resumeAllBackups();
+				}
+			}
+		};
+
+		handleGlobalPause();
 	}, [isGloballyPaused]);
 
 	const handleSaveItem = async () => {
