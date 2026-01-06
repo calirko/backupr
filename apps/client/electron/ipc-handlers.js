@@ -5,7 +5,7 @@ const {
 	pauseBackup,
 	resumeBackup,
 } = require("./backup-manager");
-const { scheduleBackup } = require("./scheduler");
+const { scheduleBackup, getTaskManager } = require("./scheduler");
 const { checkForUpdatesManually } = require("./auto-updater");
 
 /**
@@ -163,6 +163,42 @@ function setupIpcHandlers(mainWindow, store, autoLauncher) {
 				percent: 0,
 				paused: false,
 			});
+		}
+		return { success: true };
+	});
+
+	// Global pause/resume handlers
+	ipcMain.handle("pause-all-backups", async () => {
+		const taskManager = getTaskManager();
+		if (taskManager) {
+			taskManager.pauseAll();
+		}
+		return { success: true };
+	});
+
+	ipcMain.handle("resume-all-backups", async () => {
+		const taskManager = getTaskManager();
+		if (taskManager) {
+			taskManager.resumeAll();
+		}
+		return { success: true };
+	});
+
+	// Task manager handlers
+	ipcMain.handle("get-active-tasks", async () => {
+		const taskManager = getTaskManager();
+		return taskManager ? taskManager.getActiveTasks() : [];
+	});
+
+	ipcMain.handle("get-task-manager-stats", async () => {
+		const taskManager = getTaskManager();
+		return taskManager ? taskManager.getStats() : null;
+	});
+
+	ipcMain.handle("cancel-task", async (_event, taskId) => {
+		const taskManager = getTaskManager();
+		if (taskManager) {
+			taskManager.cancelTask(taskId);
 		}
 		return { success: true };
 	});
