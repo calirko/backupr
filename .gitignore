@@ -141,6 +141,10 @@ vite.config.ts.timestamp-*
 # Electron build output
 apps/client/dist
 apps/client/out
+apps/client/build
+
+# Test files
+apps/client/test-*.js
 
 # Bun
 apps/server/dist

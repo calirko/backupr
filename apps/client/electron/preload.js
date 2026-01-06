@@ -25,6 +25,15 @@ contextBridge.exposeInMainWorld("electron", {
 	onTriggerBackup: (callback) => {
 		ipcRenderer.on("trigger-backup", () => callback());
 	},
+	// Task manager
+	pauseAllBackups: () => ipcRenderer.invoke("pause-all-backups"),
+	resumeAllBackups: () => ipcRenderer.invoke("resume-all-backups"),
+	getActiveTasks: () => ipcRenderer.invoke("get-active-tasks"),
+	getTaskManagerStats: () => ipcRenderer.invoke("get-task-manager-stats"),
+	cancelTask: (taskId) => ipcRenderer.invoke("cancel-task", taskId),
+	onTaskStatusUpdate: (callback) => {
+		ipcRenderer.on("task-status-update", (_event, data) => callback(data));
+	},
 	// Window controls
 	minimizeWindow: () => ipcRenderer.invoke("minimize-window"),
 	closeWindow: () => ipcRenderer.invoke("close-window"),
