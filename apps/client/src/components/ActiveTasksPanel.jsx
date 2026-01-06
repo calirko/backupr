@@ -6,6 +6,7 @@ import {
 	Loader2,
 	Pause,
 	Play,
+	RefreshCw,
 	X,
 } from "lucide-react";
 import { Button } from "./ui/button";
@@ -48,7 +49,7 @@ export function ActiveTasksPanel() {
 		}
 	};
 
-	const getStatusIcon = (status) => {
+	const getStatusIcon = (status, retryCount) => {
 		switch (status) {
 			case "running":
 				return <Loader2 className="h-4 w-4 animate-spin text-blue-600" />;
@@ -59,6 +60,9 @@ export function ActiveTasksPanel() {
 			case "completed":
 				return <CheckCircle className="h-4 w-4 text-green-600" />;
 			case "failed":
+				if (retryCount > 0) {
+					return <RefreshCw className="h-4 w-4 text-orange-600 animate-pulse" />;
+				}
 				return <AlertCircle className="h-4 w-4 text-red-600" />;
 			default:
 				return null;
@@ -106,16 +110,16 @@ export function ActiveTasksPanel() {
 					>
 						<div className="flex justify-between items-start">
 							<div className="flex items-center gap-2">
-								{getStatusIcon(task.status)}
+								{getStatusIcon(task.status, task.retryCount)}
 								<div>
 									<div className="font-medium">{task.itemName}</div>
 									<div className="text-xs text-muted-foreground">
 										{task.status === "running" && task.message && (
 											<span>{task.message}</span>
 										)}
-										{task.retryCount > 0 && (
-											<span className="text-orange-600">
-												Retry attempt {task.retryCount}/{task.maxRetries}
+										{task.retryCount > 0 && task.status === "failed" && (
+											<span className="text-orange-600 font-medium">
+												Retrying... (attempt {task.retryCount}/{task.maxRetries})
 											</span>
 										)}
 									</div>
@@ -123,7 +127,9 @@ export function ActiveTasksPanel() {
 							</div>
 							<div className="flex items-center gap-2">
 								{getStatusBadge(task.status)}
-								{(task.status === "running" || task.status === "paused") && (
+								{(task.status === "running" ||
+									task.status === "paused" ||
+									task.status === "pending") && (
 									<Button
 										variant="ghost"
 										size="sm"
@@ -145,7 +151,7 @@ export function ActiveTasksPanel() {
 							</div>
 						)}
 
-						{task.error && (
+						{task.error && task.retryCount === 0 && (
 							<div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded">
 								{task.error}
 							</div>
