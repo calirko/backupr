@@ -153,12 +153,13 @@ async function performBackupInternal(params, store, mainWindow) {
 		let version = null;
 
 		// Helper to send progress updates
-		const sendProgress = (message, percent) => {
+		const sendProgress = (message, percent, stage = null) => {
 			if (mainWindow && !mainWindow.isDestroyed()) {
 				mainWindow.webContents.send("backup-progress", {
 					message,
 					percent,
 					paused: backupState.isPaused,
+					stage: stage || (percent < 80 ? "compressing" : "uploading"),
 				});
 			}
 		};
@@ -234,9 +235,13 @@ async function performBackupInternal(params, store, mainWindow) {
 						(progress.entries.processed / totalFiles) * 70,
 						70,
 					);
+					const compressionPercent = totalFiles > 0 
+						? Math.round((progress.entries.processed / totalFiles) * 100)
+						: 0;
 					sendProgress(
-						`Compressing: ${progress.entries.processed}/${totalFiles} files (${Math.round(compressionProgress)}%)`,
+						`Compressing: ${progress.entries.processed}/${totalFiles} files (${compressionPercent}%)`,
 						compressionProgress,
+						"compressing",
 					);
 				});
 
@@ -451,9 +456,13 @@ async function performBackupInternal(params, store, mainWindow) {
 						(progress.entries.processed / totalFiles) * 80,
 						80,
 					);
+					const compressionPercent = totalFiles > 0 
+						? Math.round((progress.entries.processed / totalFiles) * 100)
+						: 0;
 					sendProgress(
-						`Compressing: ${progress.entries.processed}/${totalFiles} files (${Math.round(compressionProgress)}%)`,
+						`Compressing: ${progress.entries.processed}/${totalFiles} files (${compressionPercent}%)`,
 						compressionProgress,
+						"compressing",
 					);
 				});
 
@@ -685,12 +694,13 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 		backupState.canPause = true;
 
 		// Send initial progress
-		const sendProgress = (message, percent) => {
+		const sendProgress = (message, percent, stage = null) => {
 			if (mainWindow && !mainWindow.isDestroyed()) {
 				mainWindow.webContents.send("backup-progress", {
 					message,
 					percent,
 					paused: backupState.isPaused,
+					stage: stage || (percent < 70 ? "preparing" : "uploading"),
 				});
 			}
 		};
@@ -959,9 +969,11 @@ async function performFirebirdBackupInternal(params, store, mainWindow) {
 					70 + (compressedBytes / backupStats.size) * 20,
 					90,
 				);
+				const compressionPercent = Math.round((compressedBytes / backupStats.size) * 100);
 				sendProgress(
-					`Compressing: ${Math.round(compressionProgress - 70)}%`,
+					`Compressing database: ${compressionPercent}%`,
 					compressionProgress,
+					"compressing",
 				);
 			});
 
