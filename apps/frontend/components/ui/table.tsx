@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 
 import { cn } from "@/lib/utils"
 
@@ -104,6 +105,23 @@ function TableCaption({
   )
 }
 
+function TableLink({
+  className,
+  href,
+  children,
+  ...props
+}: React.ComponentProps<typeof Link>) {
+  return (
+    <Link
+      href={href}
+      className={cn("text-primary hover:underline", className)}
+      {...props}
+    >
+      {children}
+    </Link>
+  )
+}
+
 export {
   Table,
   TableHeader,
@@ -113,4 +131,5 @@ export {
   TableRow,
   TableCell,
   TableCaption,
+  TableLink,
 }
