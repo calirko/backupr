@@ -1,33 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import type { Hono } from "hono";
-import { Token } from "../lib/token";
 import { randomBytes } from "node:crypto";
+import { validateToken } from "../lib/auth-middleware";
 
 const prisma = new PrismaClient();
-
-// Middleware to validate JWT token
-async function validateToken(c: any, next: any) {
-	try {
-		const authHeader = c.req.header("Authorization");
-
-		if (!authHeader || !authHeader.startsWith("Bearer ")) {
-			return c.json({ error: "No token provided" }, 401);
-		}
-
-		const token = authHeader.substring(7);
-		const payload = await Token.decrypt(token);
-
-		if (!payload) {
-			return c.json({ error: "Invalid or expired token" }, 401);
-		}
-
-		c.set("user", payload);
-		await next();
-	} catch (error) {
-		console.error("Token validation error:", error);
-		return c.json({ error: "Unauthorized" }, 401);
-	}
-}
 
 export function setupClientsRoutes(app: Hono) {
 	// Get all clients (with pagination, filters, ordering)
