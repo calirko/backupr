@@ -104,6 +104,13 @@ export function Backup() {
 			});
 		}
 
+		// Listen for sync items updates from scheduler
+		if (window.electron?.onSyncItemsUpdated) {
+			window.electron.onSyncItemsUpdated(() => {
+				loadSyncItems();
+			});
+		}
+
 		// Auto-update next backup times every 10 seconds
 		const interval = setInterval(() => {
 			setUpdateTrigger((prev) => prev + 1);

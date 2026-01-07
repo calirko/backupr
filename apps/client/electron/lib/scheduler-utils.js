@@ -11,10 +11,13 @@
  * Calculate next backup time based on interval
  * @param {string} interval - The backup interval type (manual, hourly, daily, weekly, custom)
  * @param {string|number} customHours - Hours for custom interval
- * @param {string} dailyTime - Time for daily backups (HH:MM format)
+ * @param {string} dailyTime - Time for daily backups (HH:MM format, in local time)
  * @param {string|number} weeklyDay - Day of week for weekly backups (0-6, Sunday=0)
- * @param {string} weeklyTime - Time for weekly backups (HH:MM format)
+ * @param {string} weeklyTime - Time for weekly backups (HH:MM format, in local time)
  * @returns {Date|null} Next backup time or null if manual
+ *
+ * Note: All times are calculated in local timezone. The dailyTime and weeklyTime
+ * parameters should be in 24-hour format (HH:MM) as provided by HTML time input.
  */
 function calculateNextBackup(
 	interval,
@@ -36,8 +39,8 @@ function calculateNextBackup(
 			const next = new Date(now);
 			next.setHours(hours, minutes, 0, 0);
 
-			// If the time today has passed, schedule for tomorrow
-			if (next < now) {
+			// If the time today has passed or is now, schedule for tomorrow
+			if (next <= now) {
 				next.setDate(next.getDate() + 1);
 			}
 			return next;

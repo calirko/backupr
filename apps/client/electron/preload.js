@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld("electron", {
 	onBackupProgress: (callback) => {
 		ipcRenderer.on("backup-progress", (_event, data) => callback(data));
 	},
+	onSyncItemsUpdated: (callback) => {
+		ipcRenderer.on("sync-items-updated", () => callback());
+	},
 	onTriggerBackup: (callback) => {
 		ipcRenderer.on("trigger-backup", () => callback());
 	},
