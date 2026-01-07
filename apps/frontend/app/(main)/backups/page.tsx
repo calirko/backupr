@@ -8,7 +8,7 @@ import DataHeader, {
 } from "@/components/layout/data/dataHeader";
 import DataTableWrapper from "@/components/layout/dataTableWrapper";
 import StatusBadge from "@/components/layout/statusBadge";
-import RelativeDate from "@/components/ui/relativeDate";
+import RelativeDate from "@/components/ui/relative-date";
 import { TableLink } from "@/components/ui/table";
 import { useData } from "@/hooks/use-data";
 import Api from "@/lib/api";

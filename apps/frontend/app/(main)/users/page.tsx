@@ -9,7 +9,7 @@ import DataHeader, {
 } from "@/components/layout/data/dataHeader";
 import DataTableWrapper from "@/components/layout/dataTableWrapper";
 import { Button } from "@/components/ui/button";
-import RelativeDate from "@/components/ui/relativeDate";
+import RelativeDate from "@/components/ui/relative-date";
 import { useData } from "@/hooks/use-data";
 import Api from "@/lib/api";
 import Cookies from "js-cookie";

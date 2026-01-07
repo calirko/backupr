@@ -8,7 +8,7 @@ import FormPanel from "@/components/layout/formPanel";
 import ErrorMessage from "@/components/layout/errorMessage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import InputPassword from "@/components/ui/inputPassword";
+import InputPassword from "@/components/ui/input-password";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import Api from "@/lib/api";
