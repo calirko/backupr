@@ -38,6 +38,12 @@ app.get("/", (c) => {
 });
 
 const validateApiKey = async (c: any, next: any) => {
+	// Skip API key validation for auth routes
+	if (c.req.path.startsWith("/api/auth")) {
+		await next();
+		return;
+	}
+
 	const apiKey = c.req.header("X-API-Key");
 
 	if (!apiKey) {

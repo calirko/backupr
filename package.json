@@ -1,18 +1,21 @@
 {
-  "name": "backupr",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Simple file backup tool",
-  "workspaces": [
-    "apps/*"
-  ],
-  "scripts": {
-    "dev:client": "yarn workspace @backupr/client dev",
-    "dev:server": "yarn workspace @backupr/server dev",
-    "build:client": "yarn workspace @backupr/client build",
-    "build:server": "yarn workspace @backupr/server build",
-    "start:client": "yarn workspace @backupr/client start",
-    "start:server": "yarn workspace @backupr/server start"
-  },
-  "packageManager": "yarn@1.22.22"
+	"name": "backupr",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Simple file backup tool",
+	"workspaces": [
+		"apps/*"
+	],
+	"scripts": {
+		"dev:client": "yarn workspace @backupr/client dev",
+		"dev:server": "yarn workspace @backupr/server dev",
+		"dev:frontend": "yarn workspace @backupr/frontend dev",
+		"build:client": "yarn workspace @backupr/client build",
+		"build:server": "yarn workspace @backupr/server build",
+		"build:frontend": "yarn workspace @backupr/frontend build",
+		"start:client": "yarn workspace @backupr/client start",
+		"start:server": "yarn workspace @backupr/server start",
+		"start:frontend": "yarn workspace @backupr/frontend start"
+	},
+	"packageManager": "yarn@1.22.22"
 }

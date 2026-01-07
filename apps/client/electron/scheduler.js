@@ -48,7 +48,10 @@ function initializeTaskManager() {
 		});
 
 		taskManager.on("taskRetry", ({ taskId, attempt, error }) => {
-			console.log(`[SCHEDULER] Task ${taskId} retry attempt ${attempt}:`, error);
+			console.log(
+				`[SCHEDULER] Task ${taskId} retry attempt ${attempt}:`,
+				error,
+			);
 		});
 
 		console.log("[SCHEDULER] Task manager initialized");
@@ -274,7 +277,12 @@ async function executeScheduledBackup(item, store, mainWindow) {
 		}
 
 		// Create and execute task using task manager
-		const task = await taskManager.createTask(item, settings, store, mainWindow);
+		const task = await taskManager.createTask(
+			item,
+			settings,
+			store,
+			mainWindow,
+		);
 
 		if (!task) {
 			console.log(
@@ -320,6 +328,11 @@ async function executeScheduledBackup(item, store, mainWindow) {
 			if (index !== -1) {
 				items[index] = updatedItem;
 				store.set("syncItems", items);
+
+				// Notify UI that sync items were updated
+				if (mainWindow && !mainWindow.isDestroyed()) {
+					mainWindow.webContents.send("sync-items-updated");
+				}
 			}
 
 			console.log(`Backup "${item.name}" completed successfully`);
@@ -401,6 +414,12 @@ function scheduleNextBackup(item, store) {
 			store.set("syncItems", items);
 
 			console.log(`[SCHEDULER] Updated nextBackup in store for "${item.name}"`);
+
+			// Notify UI that sync items were updated
+			const { mainWindow } = schedulerContext;
+			if (mainWindow && !mainWindow.isDestroyed()) {
+				mainWindow.webContents.send("sync-items-updated");
+			}
 
 			// Schedule the backup
 			scheduleBackup(items[index]);

@@ -73,6 +73,11 @@ function setupIpcHandlers(mainWindow, store, autoLauncher) {
 		store.set("syncItems", items);
 		console.log(`[IPC] Saved to store. Total items: ${items.length}`);
 
+		// Notify UI that sync items were updated
+		if (mainWindow && !mainWindow.isDestroyed()) {
+			mainWindow.webContents.send("sync-items-updated");
+		}
+
 		// Update scheduler for this item
 		console.log(`[IPC] Calling scheduleBackup for "${item.name}"`);
 		scheduleBackup(item);
@@ -88,6 +93,11 @@ function setupIpcHandlers(mainWindow, store, autoLauncher) {
 			`[IPC] Items before: ${items.length}, after: ${filtered.length}`,
 		);
 		store.set("syncItems", filtered);
+
+		// Notify UI that sync items were updated
+		if (mainWindow && !mainWindow.isDestroyed()) {
+			mainWindow.webContents.send("sync-items-updated");
+		}
 
 		// Clear the timer for only this specific item
 		const { clearScheduledBackup } = require("./scheduler");

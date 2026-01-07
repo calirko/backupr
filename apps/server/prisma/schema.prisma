@@ -24,8 +24,9 @@ model Client {
 model User {
    id        String   @id @default(uuid())
    apiKey    String   @unique
-   name      String?
-   email     String?  @unique
+   name      String
+   email     String   @unique
+   password  String
    createdAt DateTime @default(now())
    backups   Backup[]
 }
