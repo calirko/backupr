@@ -1,6 +1,5 @@
 "use client";
 
-import CompanyCombobox from "@/components/comboBoxes/companyCombobox";
 import BulkData from "@/components/layout/data/bulkData";
 import Data from "@/components/layout/data/data";
 import { TableAction } from "@/components/layout/data/dataActions";
@@ -8,154 +7,84 @@ import DataFooter from "@/components/layout/data/dataFooter";
 import DataHeader, {
 	type SearchField,
 } from "@/components/layout/data/dataHeader";
-import ExportData from "@/components/layout/data/exportData";
 import DataTableWrapper from "@/components/layout/dataTableWrapper";
-import StatusBadge from "@/components/layout/statusBadge";
 import { Button } from "@/components/ui/button";
 import RelativeDate from "@/components/ui/relativeDate";
-import { TableLink } from "@/components/ui/table";
 import { useData } from "@/hooks/use-data";
 import Api from "@/lib/api";
-import { userRoleDict } from "@controlegas/shared/enum/user";
-import { Token } from "@controlegas/shared/public/token";
 import Cookies from "js-cookie";
-import { Pencil, Shield, Trash, Truck, User, UserPlus } from "lucide-react";
+import { Pencil, Trash, Building2, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-export default function UsersPage() {
+export default function ClientsPage() {
 	const [loading, setLoading] = useState(true);
 	const [data, setData] = useState({ items: [], total: 0 });
-	const { skip, take, filters, orderBy } = useData("users");
-	const payload = Token.payload(Cookies.get("token") || "");
-	const isAdmin = payload?.user?.role === "ADMIN";
+	const { skip, take, filters, orderBy } = useData("clients");
 
 	const columns = [
-		{ key: "id", label: "Código" },
-		{ key: "name", label: "Nome" },
+		{ key: "name", label: "Name" },
 		{ key: "email", label: "Email" },
-		{ key: "role_label", label: "Cargo", orderByKey: "role" },
-		{ key: "createdAt", label: "Criado em" },
-		{ key: "updatedAt", label: "Atualizado em" },
-		{ key: "company", label: "Empresa", orderByKey: "company.name" },
+		{ key: "folderPath", label: "Folder Path" },
+		{ key: "backupCount", label: "Backups" },
+		{ key: "createdAt", label: "Created" },
+		{ key: "updatedAt", label: "Updated" },
 	];
 
 	const filterFields = [
+		{
+			name: "name",
+			label: "Name",
+			type: "string",
+			matching: "contains",
+		},
 		{
 			name: "email",
 			label: "Email",
 			type: "string",
 			matching: "contains",
 		},
-		{ name: "id", label: "Código", type: "number" },
-		{
-			name: "name",
-			label: "Nome",
-			type: "string",
-			matching: "contains",
-		},
-		{
-			name: "role",
-			label: "Cargo",
-			type: "select",
-			matching: "equals",
-			options: Object.entries(userRoleDict).map(([value, label]) => ({
-				value,
-				label,
-			})),
-		},
-		{
-			name: "createdAt",
-			label: "Data de Criação",
-			type: "date",
-			matching: "between",
-		},
-		{
-			name: "company_id",
-			label: "Empresa",
-			type: "combobox",
-			matching: "equals",
-			children: <CompanyCombobox />,
-		},
 	] as SearchField[];
 
 	const dataActions: TableAction[] = [
 		{
-			label: "Ações Gerais",
+			label: "Actions",
 			id: "general",
 		},
 		{
 			id: "edit",
-			label: "Editar",
+			label: "Edit",
 			icon: <Pencil />,
-			href: (row) => `/users/${row.id}/edit`,
-			disabled: (row) =>
-				payload?.user?.id === row.id ||
-				(payload?.user?.role !== "ADMIN" && row.role !== "DELIVERYMAN"),
+			href: (row) => `/clients/${row.id}/edit`,
 		},
 		{
 			id: "delete",
-			label: "Excluir",
+			label: "Delete",
 			icon: <Trash />,
-			disabled: (row) =>
-				payload?.user?.id === row.id ||
-				(payload?.user?.role !== "ADMIN" && row.role !== "DELIVERYMAN"),
 			onClick: async (row) => {
 				try {
 					await Api.del(
-						`/users`,
+						`/api/clients`,
 						{ ids: [row.id] },
 						{ token: Cookies.get("token") },
 					);
-					toast.success("Usuário excluído com sucesso");
+					toast.success("Client deleted successfully");
 					fetchData();
 				} catch (error: any) {
 					console.error(error);
-
-					let message = error?.message;
-
-					switch (message) {
-						case "You cannot delete your own user account":
-							message = "Você não pode excluir sua própria conta de usuário";
-							break;
-						case "These users cannot be deleted because they have associated data in the system":
-							message =
-								"Este usuário não pode ser excluído porque possui dados associados no sistema";
-							break;
-						default:
-							message = error?.message || "Erro ao excluir usuário";
-							break;
-					}
-
-					toast.error(message);
+					toast.error(error?.message || "Error deleting client");
 				}
 			},
 			onBulkClick: async (rows) => {
 				const ids = rows.map((r) => r.id);
 				try {
-					await Api.del(`/users`, { ids }, { token: Cookies.get("token") });
-					toast.success("Usuários excluídos com sucesso");
+					await Api.del(`/api/clients`, { ids }, { token: Cookies.get("token") });
+					toast.success("Clients deleted successfully");
 					fetchData();
 				} catch (error: any) {
 					console.error(error);
-
-					let message = error?.message;
-
-					switch (message) {
-						case "You cannot delete your own user account":
-							message = "Você não pode excluir sua própria conta de usuário";
-							break;
-						case "These users cannot be deleted because they have associated data in the system":
-							message =
-								"Um ou mais usuários não podem ser excluídos porque possuem dados associados no sistema";
-							break;
-						default:
-							message = error?.message || "Erro ao excluir usuário";
-							break;
-					}
-
-					toast.error(message);
+					toast.error(error?.message || "Error deleting clients");
 				}
 			},
 			requireConfirmation: true,
@@ -172,56 +101,19 @@ export default function UsersPage() {
 		});
 
 		try {
-			const response: any = await Api.get(`/users?${urlParams.toString()}`, {
+			const response: any = await Api.get(`/api/clients?${urlParams.toString()}`, {
 				token: Cookies.get("token"),
 			});
 			const prettyData = response.data.map((e: any) => ({
 				...e,
-				role_label: (() => {
-					const roleLabel =
-						userRoleDict[e.role as keyof typeof userRoleDict] || e.role;
-
-					switch (e.role) {
-						case "ADMIN":
-							return (
-								<StatusBadge
-									label={roleLabel}
-									variant="success"
-									icon={<Shield size={16} />}
-								/>
-							);
-						case "USER":
-							return (
-								<StatusBadge
-									label={roleLabel}
-									variant="neutral"
-									icon={<User size={16} />}
-								/>
-							);
-						case "DELIVERYMAN":
-							return (
-								<StatusBadge
-									label={roleLabel}
-									variant="neutral"
-									icon={<Truck size={16} />}
-								/>
-							);
-						default:
-							return roleLabel;
-					}
-				})(),
-				company: (
-					<TableLink href={`/companies/${e.company.id}/edit`}>
-						{e.company.name || "Sem Empresa"}
-					</TableLink>
-				),
+				backupCount: e._count?.backups || 0,
 				updatedAt: <RelativeDate date={new Date(e.updatedAt)} />,
 				createdAt: <RelativeDate date={new Date(e.createdAt)} />,
 			}));
 			setData({ items: prettyData, total: response.total });
 		} catch (error) {
 			console.error(error);
-			toast.error("Erro ao buscar usuários");
+			toast.error("Error fetching clients");
 		} finally {
 			setLoading(false);
 		}
@@ -234,33 +126,24 @@ export default function UsersPage() {
 
 	return (
 		<div className="flex flex-col gap-3 md:gap-4 h-full">
-			<DataHeader filterFields={filterFields} name="users">
+			<DataHeader filterFields={filterFields} name="clients">
 				<BulkData
 					actions={dataActions}
 					total={data.total}
 					disabled={loading}
-					name="users"
+					name="clients"
 				>
-					<Link href={"/users/new"}>
+					<Link href={"/clients/new"}>
 						<Button>
-							<UserPlus />
-							Novo Usuário
+							<Plus />
+							New Client
 						</Button>
 					</Link>
-					<ExportData
-						name="users"
-						disabled={loading}
-						endpoints={{
-							pdf: "/users/reports/pdf",
-							excel: "/users/reports/excel",
-						}}
-						fileName="usuarios"
-					/>
 				</BulkData>
 			</DataHeader>
 			<DataTableWrapper>
 				<Data
-					name="users"
+					name="clients"
 					columns={columns}
 					data={data.items}
 					loading={loading}
@@ -268,7 +151,7 @@ export default function UsersPage() {
 					showOrderBy
 				/>
 			</DataTableWrapper>
-			<DataFooter total={data.total} loading={loading} name="users" />
+			<DataFooter total={data.total} loading={loading} name="clients" />
 		</div>
 	);
 }

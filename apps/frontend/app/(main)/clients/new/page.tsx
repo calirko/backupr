@@ -1,15 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import UserEntry from "../userEntry";
+import ClientEntry from "../clientEntry";
 
-export default function NewUserPage() {
+export default function NewClientPage() {
 	const router = useRouter();
 
 	return (
-		<UserEntry
-			onCancel={() => router.push("/users")}
-			onFinish={() => router.push("/users")}
+		<ClientEntry
+			onCancel={() => router.push("/clients")}
+			onFinish={() => router.push("/clients")}
 		/>
 	);
 }
