@@ -1,17 +1,17 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import UserEntry from "../../userEntry";
+import ClientEntry from "../../clientEntry";
 
-export default function EditUserPage() {
+export default function EditClientPage() {
 	const router = useRouter();
 	const params = useParams<{ id: string }>();
 
 	return (
-		<UserEntry
-			user_id={params.id}
-			onCancel={() => router.push("/users")}
-			onFinish={() => router.push("/users")}
+		<ClientEntry
+			client_id={params.id}
+			onCancel={() => router.push("/clients")}
+			onFinish={() => router.push("/clients")}
 		/>
 	);
 }
