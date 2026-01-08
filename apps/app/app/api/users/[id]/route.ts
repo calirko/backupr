@@ -4,7 +4,7 @@ import { getPrismaClient, validateToken, errorResponse } from "@/lib/server/api-
 
 export async function GET(
 	request: NextRequest,
-	{ params }: { params: { id: string } }
+	{ params }: { params: Promise<{ id: string }> }
 ) {
 	try {
 		const validation = await validateToken(request);
@@ -16,7 +16,7 @@ export async function GET(
 		}
 
 		const prisma = getPrismaClient();
-		const { id } = params;
+		const { id } = await params;
 
 		const user = await prisma.user.findUnique({
 			where: { id },
@@ -41,7 +41,7 @@ export async function GET(
 
 export async function PATCH(
 	request: NextRequest,
-	{ params }: { params: { id: string } }
+	{ params }: { params: Promise<{ id: string }> }
 ) {
 	try {
 		const validation = await validateToken(request);
@@ -53,7 +53,7 @@ export async function PATCH(
 		}
 
 		const prisma = getPrismaClient();
-		const { id } = params;
+		const { id } = await params;
 		const { name, email, password } = await request.json();
 
 		// Check if user exists
