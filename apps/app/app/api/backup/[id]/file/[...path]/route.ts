@@ -6,7 +6,7 @@ import { getPrismaClient, validateApiKey, getBackupStorageDir, errorResponse } f
 
 export async function GET(
 	request: NextRequest,
-	{ params }: { params: { id: string; path: string[] } }
+	{ params }: { params: Promise<{ id: string; path: string[] }> }
 ) {
 	try {
 		const validation = await validateApiKey(request);
@@ -19,7 +19,7 @@ export async function GET(
 
 		const { client } = validation;
 		const prisma = getPrismaClient();
-		const { id: backupId, path } = params;
+		const { id: backupId, path } = await params;
 		const filePath = path.join("/");
 
 		const backup = await prisma.backup.findFirst({
