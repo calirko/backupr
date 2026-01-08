@@ -12,18 +12,18 @@ This is a Yarn workspaces monorepo with the following apps:
   - SQLite database (via Prisma) for storing sync history and settings
   - File selection and backup period configuration
 
-- **apps/server** - Bun server with Hono framework
-  - REST API for backup operations
+- **apps/app** - Next.js web application (unified client and server)
+  - REST API for backup operations (Next.js API routes)
   - PostgreSQL database (via Prisma) to keep history of syncs
   - API key authentication
   - Backup and restore endpoints
+  - Web interface for managing users, clients, backups, and logs
 
 ## Prerequisites
 
 - Node.js 20+
 - Yarn 1.22+
-- Bun 1.0+
-- PostgreSQL 12+ (for server database)
+- PostgreSQL 12+ (for app database)
 
 ## Installation
 
@@ -33,7 +33,7 @@ yarn install
 
 # Generate Prisma clients
 cd apps/client && npx prisma generate
-cd ../server && npx prisma generate
+cd ../app && yarn prisma:generate
 cd ../..
 ```
 
@@ -42,8 +42,8 @@ cd ../..
 ### Client Database (Automatic)
 The client uses SQLite, which is automatically created in the application's user data folder. No setup required!
 
-### Server Database (Manual Setup Required)
-The server uses PostgreSQL. Follow these steps:
+### App Database (Manual Setup Required)
+The Next.js app uses PostgreSQL. Follow these steps:
 
 1. Install PostgreSQL
 2. Create database and user:
@@ -53,28 +53,25 @@ The server uses PostgreSQL. Follow these steps:
    GRANT ALL PRIVILEGES ON DATABASE backupr TO backupr_user;
    ```
 
-3. Configure `.env` in `apps/server/`:
+3. Configure `.env` in `apps/app/`:
    ```bash
-   cp apps/server/.env.example apps/server/.env
-   # Edit DATABASE_URL in .env
+   cp apps/app/.env.example apps/app/.env
+   # Edit DATABASE_URL, SECRET_TOKEN, and BACKUP_STORAGE_DIR in .env
    ```
 
 4. Run migrations:
    ```bash
-   cd apps/server
-   npx prisma migrate dev
+   cd apps/app
+   yarn prisma:migrate
    ```
 
-5. Create a user (for API key):
+5. Start the app:
    ```bash
-   # Start the server first
-   yarn dev:server
-   
-   # Then create user
-   curl -X POST http://localhost:3000/api/users \
-     -H "Content-Type: application/json" \
-     -d '{"name":"Your Name","email":"you@example.com","apiKey":"your-secure-key"}'
+   yarn dev:app
    ```
+
+6. Create a user (for web interface access):
+   Open your browser and navigate to `http://localhost:3000/auth/signin` to create your first user account.
 
 See [docs/SERVER_SETUP.md](docs/SERVER_SETUP.md) for detailed instructions.
 
@@ -84,8 +81,8 @@ See [docs/SERVER_SETUP.md](docs/SERVER_SETUP.md) for detailed instructions.
 # Run client in development mode
 yarn dev:client
 
-# Run server in development mode
-yarn dev:server
+# Run web app in development mode (includes API server)
+yarn dev:app
 ```
 
 ## Build
@@ -94,8 +91,8 @@ yarn dev:server
 # Build client
 yarn build:client
 
-# Build server
-yarn build:server
+# Build web app
+yarn build:app
 ```
 
 ## Usage
@@ -108,18 +105,33 @@ The client is an Electron application that:
 - Allows selecting files/folders to backup and setting backup period
 - Uses SQLite to store sync times, history, and settings locally
 
-### Server
+### App
 
-The Bun server provides REST API endpoints:
-- `GET /` - Health check
-- `POST /api/users` - Create user (get API key)
-- `POST /api/backup` - Submit backup (requires API key)
-- `GET /api/backup/history` - Get backup history (requires API key)
-- `GET /api/backup/:id` - Get backup details (requires API key)
-- `POST /api/restore` - Restore from backup (requires API key)
-- `GET /api/logs` - Get sync logs (requires API key)
+The Next.js web application provides:
+- Web interface for managing users, clients, backups, and logs
+- REST API endpoints for backup operations:
+  - `GET /api` - Health check
+  - `POST /api/auth/signin` - User authentication
+  - `GET /api/auth/verify` - Token verification
+  - `POST /api/users` - Create user (requires JWT token)
+  - `GET /api/users` - List users (requires JWT token)
+  - `POST /api/clients` - Create client (requires JWT token)
+  - `GET /api/clients` - List clients (requires JWT token)
+  - `GET /api/ping` - Connection test (requires API key)
+  - `POST /api/backup/upload` - Upload backup (requires API key)
+  - `POST /api/backup/upload/start` - Start chunked upload (requires API key)
+  - `POST /api/backup/upload/chunk` - Upload chunk (requires API key)
+  - `POST /api/backup/upload/complete` - Complete chunked upload (requires API key)
+  - `POST /api/backup/finalize` - Finalize backup (requires API key)
+  - `GET /api/backup/history` - Get backup history (requires API key)
+  - `GET /api/backup/names` - Get backup names (requires API key)
+  - `GET /api/backup/:id` - Get backup details (requires API key)
+  - `GET /api/backup/:id/file/*` - Download file from backup (requires API key)
+  - `GET /api/backups` - List all backups (requires JWT token)
+  - `GET /api/logs` - Get sync logs (requires JWT token)
 
-All backup/restore endpoints require `X-API-Key` header for authentication.
+All backup operations require `X-API-Key` header for authentication.
+Web interface operations require JWT token authentication.
 
 ## Documentation
 
@@ -149,8 +161,11 @@ See [AUTO_UPDATE.md](AUTO_UPDATE.md) for detailed documentation on how to publis
 - shadcn/ui components
 - Prisma (SQLite)
 
-**Server:**
-- Bun 1.x
-- Hono framework
+**App (Web):**
+- Next.js 16
+- React 19
+- Tailwind CSS 4
+- shadcn/ui components
 - Prisma (PostgreSQL)
 - TypeScript
+- Next.js API Routes (replacing Hono server)

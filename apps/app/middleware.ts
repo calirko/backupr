@@ -2,10 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { Token } from "./lib/token";
 
 export const config = {
-	matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+	matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
 };
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
 	const token = request.cookies.get("token")?.value;
 	const payload = await Token.decrypt(token || "");
 
