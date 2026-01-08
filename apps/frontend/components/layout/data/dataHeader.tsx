@@ -335,11 +335,7 @@ export default function DataHeader({
 				</div>
 			</div>
 			{advancedExpanded && (
-				<FormPanel
-					title="Pesquisa Avançada"
-					className="grid-cols-2"
-					foldable={false}
-				>
+				<FormPanel title="Advanced Filters" className="grid-cols-2">
 					{filterFields.slice(1, filterFields.length).map((field) => (
 						<div key={field.name}>
 							<Label>{field.label}</Label>

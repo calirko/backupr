@@ -1,15 +1,14 @@
 "use client";
 
-import BreadcrumbHeader from "@/components/layout/breadcrumb";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UserMenu } from "@/components/layout/user-menu";
 import { Button } from "@/components/ui/button";
-import { Database, FileText, Users, Building2 } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Token } from "@/lib/token";
 import { cn } from "@/lib/utils";
 import Cookies from "js-cookie";
-import { Token } from "@/lib/token";
+import { Building2, Database, FileText, Users } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function MainLayout({
@@ -44,25 +43,33 @@ export default function MainLayout({
 			className="w-full flex flex-col min-h-0 h-screen overflow-x-hidden"
 			id="main-page-container"
 		>
-			<div className="flex justify-between border-b h-12 bg-background px-4">
-				<div className="h-12 flex items-center gap-2 flex-shrink-0">
-					{navItems.map((item) => (
-						<Link key={item.href} href={item.href}>
-							<Button
-								variant={pathname.startsWith(item.href) ? "default" : "ghost"}
-								size="sm"
-								className={cn(
-									"gap-2",
-									pathname.startsWith(item.href) && "bg-primary text-primary-foreground",
-								)}
-							>
-								<item.icon className="h-4 w-4" />
-								{item.label}
-							</Button>
-						</Link>
-					))}
+			<div className="flex justify-between border-b h-12 bg-background">
+				<div className="flex">
+					<div className="h-full border-r">
+						<img src={"/logo.svg"} className="h-full p-2" />
+					</div>
+					<div className="h-12 flex items-center shrink-0">
+						{navItems.map((item) => (
+							<Link key={item.href} href={item.href} className="h-full">
+								<Button
+									variant={"ghost"}
+									size="sm"
+									className={cn(
+										"gap-2 border-r h-full",
+
+										!pathname.startsWith(item.href) && "text-muted-foreground",
+									)}
+								>
+									<span className="px-2 flex items-center gap-2">
+										<item.icon className="h-4 w-4" />
+										{item.label}
+									</span>
+								</Button>
+							</Link>
+						))}
+					</div>
 				</div>
-				<div className="flex items-center gap-2">
+				<div className="flex items-center">
 					<ThemeToggle />
 					<UserMenu email={user?.email} name={user?.name} />
 				</div>

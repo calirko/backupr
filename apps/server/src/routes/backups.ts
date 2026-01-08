@@ -6,6 +6,15 @@ import { validateToken } from "../lib/auth-middleware";
 
 const prisma = new PrismaClient();
 
+// Helper function to convert BigInt to string for JSON serialization
+function serializeBigInt<T>(obj: T): T {
+	return JSON.parse(
+		JSON.stringify(obj, (_, value) =>
+			typeof value === "bigint" ? value.toString() : value,
+		),
+	);
+}
+
 export function setupBackupsRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {
 	// Get all backups (with pagination, filters, ordering)
 	app.get("/api/backups", validateToken, async (c) => {
@@ -16,8 +25,12 @@ export function setupBackupsRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {
 			const orderByParam = c.req.query("orderBy");
 
 			// Parse filters and orderBy if provided
-			const filters = filtersParam ? JSON.parse(decodeURIComponent(filtersParam)) : {};
-			const orderBy = orderByParam ? JSON.parse(decodeURIComponent(orderByParam)) : { timestamp: "desc" };
+			const filters = filtersParam
+				? JSON.parse(decodeURIComponent(filtersParam))
+				: {};
+			const orderBy = orderByParam
+				? JSON.parse(decodeURIComponent(orderByParam))
+				: { timestamp: "desc" };
 
 			// Build where clause from filters
 			const where: any = {};
@@ -25,7 +38,10 @@ export function setupBackupsRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {
 				where.status = filters.status;
 			}
 			if (filters.backupName) {
-				where.backupName = { contains: filters.backupName, mode: "insensitive" };
+				where.backupName = {
+					contains: filters.backupName,
+					mode: "insensitive",
+				};
 			}
 
 			const [backups, total] = await Promise.all([
@@ -59,7 +75,7 @@ export function setupBackupsRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {
 				prisma.backup.count({ where }),
 			]);
 
-			return c.json({ data: backups, total });
+			return c.json(serializeBigInt({ data: backups, total }));
 		} catch (error) {
 			console.error("Error fetching backups:", error);
 			return c.json({ error: "Failed to fetch backups" }, 500);
@@ -96,7 +112,7 @@ export function setupBackupsRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {
 				return c.json({ error: "Backup not found" }, 404);
 			}
 
-			return c.json({ backup });
+			return c.json(serializeBigInt({ backup }));
 		} catch (error) {
 			console.error("Error fetching backup:", error);
 			return c.json({ error: "Failed to fetch backup" }, 500);
@@ -138,7 +154,7 @@ export function setupBackupsRoutes(app: Hono, BACKUP_STORAGE_DIR: string) {
 
 			// Stream the file
 			const stream = createReadStream(filePath);
-			
+
 			return new Response(stream as any, {
 				headers: {
 					"Content-Type": "application/octet-stream",

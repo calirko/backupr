@@ -1,9 +1,6 @@
 "use client";
 
-import * as React from "react";
-import { LogOut, User } from "lucide-react";
-import Cookies from "js-cookie";
-import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -12,8 +9,10 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
+import crypto from "crypto";
+import Cookies from "js-cookie";
+import { LogOut, User } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface UserMenuProps {
 	email?: string;
@@ -30,26 +29,23 @@ export function UserMenu({ email, name }: UserMenuProps) {
 
 	// Generate Gravatar URL
 	const getGravatarUrl = (email: string) => {
-		const hash = email
-			.trim()
-			.toLowerCase()
-			.split("")
-			.reduce((acc, char) => {
-				return ((acc << 5) - acc + char.charCodeAt(0)) | 0;
-			}, 0);
-		// Simple hash for demo - in production use MD5
-		return `https://www.gravatar.com/avatar/${Math.abs(hash)}?d=mp&s=32`;
+		const trimmedEmail = email.trim().toLowerCase();
+		const hash = crypto.createHash("sha256").update(trimmedEmail).digest("hex");
+		return `https://www.gravatar.com/avatar/${hash}?d=mp&s=32`;
 	};
 
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" className="relative h-8 w-8 rounded-full">
+				<Button
+					variant="ghost"
+					className="relative aspect-square h-full border-l p-0"
+				>
 					{email ? (
 						<img
 							src={getGravatarUrl(email)}
 							alt={name || email}
-							className="h-8 w-8 rounded-full"
+							className="h-full aspect-square object-cover p-2"
 							onError={(e) => {
 								// Fallback to icon on error
 								const target = e.target as HTMLImageElement;
@@ -82,7 +78,7 @@ export function UserMenu({ email, name }: UserMenuProps) {
 				</DropdownMenuLabel>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem onClick={handleLogout}>
-					<LogOut className="mr-2 h-4 w-4" />
+					<LogOut />
 					<span>Log out</span>
 				</DropdownMenuItem>
 			</DropdownMenuContent>

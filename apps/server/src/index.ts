@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { join } from "node:path";
+import { Token } from "./lib/token";
 import { setupAllRoutes } from "./routes";
 
 const app = new Hono();
@@ -23,7 +24,7 @@ app.use(
 	cors({
 		origin: "*",
 		allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-		allowHeaders: ["Content-Type", "X-API-Key"],
+		allowHeaders: ["Content-Type", "X-API-Key", "Authorization"],
 		exposeHeaders: ["Content-Length", "Content-Type"],
 		maxAge: 86400,
 	}),
@@ -37,33 +38,32 @@ app.get("/", (c) => {
 	});
 });
 
-const validateApiKey = async (c: any, next: any) => {
-	// Skip API key validation for auth routes
+const validateJwt = async (c: any, next: any) => {
+	// Skip JWT validation for auth routes
 	if (c.req.path.startsWith("/api/auth")) {
 		await next();
 		return;
 	}
 
-	const apiKey = c.req.header("X-API-Key");
+	const authHeader = c.req.header("Authorization");
+	const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
-	if (!apiKey) {
-		return c.json({ error: "API key required" }, 401);
+	if (!token) {
+		return c.json({ error: "Authentication token required" }, 401);
 	}
 
-	const client = await prisma.client.findUnique({
-		where: { apiKey },
-	});
+	const user = await Token.decrypt(token);
 
-	if (!client) {
-		return c.json({ error: "Invalid API key" }, 401);
+	if (!user) {
+		return c.json({ error: "Invalid or expired token" }, 401);
 	}
 
-	c.set("client", client);
+	c.set("user", user);
 	await next();
 };
 
-// Apply API key validation middleware to all API routes
-app.use("/api/*", validateApiKey);
+// Apply JWT validation middleware to all API routes
+app.use("/api/*", validateJwt);
 
 // Setup all routes
 setupAllRoutes(app, BACKUP_STORAGE_DIR);
