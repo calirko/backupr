@@ -13,6 +13,9 @@ export function getPrismaClient(): PrismaClient {
 }
 
 // Global type for upload sessions
+// NOTE: In-memory storage is used for simplicity in development.
+// For production deployments, consider using Redis or database storage
+// to ensure session persistence across serverless function invocations.
 declare global {
 	var uploadSessions: Map<string, any>;
 }
