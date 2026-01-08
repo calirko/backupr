@@ -1,16 +1,6 @@
-import { PrismaClient } from "@prisma/client";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-
-// Using a shared Prisma instance to avoid creating multiple connections
-let prisma: PrismaClient;
-
-function getPrismaClient(): PrismaClient {
-	if (!prisma) {
-		prisma = new PrismaClient();
-	}
-	return prisma;
-}
+import { getPrismaClient } from "./api-helpers";
 
 const MAX_BACKUPS_PER_ENTRY = 20;
 

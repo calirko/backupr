@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPrismaClient, validateApiKey, errorResponse } from "@/lib/server/api-helpers";
+import { getPrismaClient, validateApiKey } from "@/lib/server/api-helpers";
 
 export async function GET(request: NextRequest) {
 	try {
