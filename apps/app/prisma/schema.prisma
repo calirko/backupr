@@ -1,0 +1,80 @@
+// This is your Prisma schema file for the server PostgreSQL database
+
+generator client {
+   provider = "prisma-client-js"
+}
+
+datasource db {
+   provider = "postgresql"
+   url      = env("DATABASE_URL")
+}
+
+model Client {
+   id         String    @id @default(uuid())
+   name       String    @unique
+   email      String?
+   apiKey     String    @unique
+   folderPath String
+   createdAt  DateTime  @default(now())
+   updatedAt  DateTime  @updatedAt
+   backups    Backup[]
+   syncLogs   SyncLog[]
+}
+
+model User {
+   id        String   @id @default(uuid())
+   apiKey    String   @unique
+   name      String
+   email     String   @unique
+   password  String
+   createdAt DateTime @default(now())
+   backups   Backup[]
+}
+
+model Backup {
+   id         String       @id @default(uuid())
+   clientId   String?
+   client     Client?      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+   userId     String?
+   user       User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+   backupName String? // Name of the backup set (e.g., "My Documents")
+   version    Int          @default(1)
+   timestamp  DateTime     @default(now())
+   status     String // completed, failed, in_progress
+   filesCount Int          @default(0)
+   totalSize  BigInt       @default(0)
+   metadata   Json?
+   files      BackupFile[]
+
+   @@index([clientId, timestamp])
+   @@index([userId, timestamp])
+   @@index([clientId, backupName, version])
+}
+
+model BackupFile {
+   id         String   @id @default(uuid())
+   backupId   String
+   backup     Backup   @relation(fields: [backupId], references: [id], onDelete: Cascade)
+   filePath   String
+   fileSize   Int
+   checksum   String?
+   status     String // uploaded, failed
+   uploadedAt DateTime @default(now())
+
+   @@index([backupId])
+}
+
+model SyncLog {
+   id        String   @id @default(uuid())
+   clientId  String?
+   client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+   userId    String?
+   action    String // backup, restore
+   status    String // success, failed
+   message   String?
+   timestamp DateTime @default(now())
+   metadata  Json?
+
+   @@index([clientId, timestamp])
+   @@index([userId, timestamp])
+}
