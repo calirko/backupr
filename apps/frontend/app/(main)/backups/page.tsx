@@ -13,7 +13,7 @@ import { TableLink } from "@/components/ui/table";
 import { useData } from "@/hooks/use-data";
 import Api from "@/lib/api";
 import Cookies from "js-cookie";
-import { Download, Trash, HardDrive, CheckCircle, XCircle, Clock } from "lucide-react";
+import { CheckCircle, Clock, HardDrive, Trash, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -29,7 +29,7 @@ export default function BackupsPage() {
 		{ key: "status_badge", label: "Status", orderByKey: "status" },
 		{ key: "filesCount", label: "Files" },
 		{ key: "totalSize", label: "Size" },
-		{ key: "timestamp", label: "Date" },
+		{ key: "createdAt", label: "Date" },
 	];
 
 	const filterFields = [
@@ -86,7 +86,11 @@ export default function BackupsPage() {
 			onBulkClick: async (rows) => {
 				const ids = rows.map((r) => r.id);
 				try {
-					await Api.del(`/api/backups`, { ids }, { token: Cookies.get("token") });
+					await Api.del(
+						`/api/backups`,
+						{ ids },
+						{ token: Cookies.get("token") },
+					);
 					toast.success("Backups deleted successfully");
 					fetchData();
 				} catch (error: any) {
@@ -108,9 +112,12 @@ export default function BackupsPage() {
 		});
 
 		try {
-			const response: any = await Api.get(`/api/backups?${urlParams.toString()}`, {
-				token: Cookies.get("token"),
-			});
+			const response: any = await Api.get(
+				`/api/backups?${urlParams.toString()}`,
+				{
+					token: Cookies.get("token"),
+				},
+			);
 			const prettyData = response.data.map((e: any) => ({
 				...e,
 				client_name: e.client ? (
@@ -118,9 +125,7 @@ export default function BackupsPage() {
 						{e.client.name}
 					</TableLink>
 				) : e.user ? (
-					<TableLink href={`/users/${e.user.id}/edit`}>
-						{e.user.name}
-					</TableLink>
+					<TableLink href={`/users/${e.user.id}/edit`}>{e.user.name}</TableLink>
 				) : (
 					"N/A"
 				),
@@ -155,7 +160,7 @@ export default function BackupsPage() {
 					}
 				})(),
 				totalSize: formatBytes(e.totalSize),
-				timestamp: <RelativeDate date={new Date(e.timestamp)} />,
+				createdAt: <RelativeDate date={new Date(e.createdAt)} />,
 			}));
 			setData({ items: prettyData, total: response.total });
 		} catch (error) {
@@ -167,12 +172,12 @@ export default function BackupsPage() {
 	}
 
 	function formatBytes(bytes: number | bigint): string {
-		const b = typeof bytes === 'bigint' ? Number(bytes) : bytes;
-		if (b === 0) return '0 Bytes';
+		const b = typeof bytes === "bigint" ? Number(bytes) : bytes;
+		if (b === 0) return "0 Bytes";
 		const k = 1024;
-		const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+		const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
 		const i = Math.floor(Math.log(b) / Math.log(k));
-		return Math.round(b / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+		return `${Math.round((b / k ** i) * 100) / 100} ${sizes[i]}`;
 	}
 
 	useEffect(() => {
@@ -182,13 +187,10 @@ export default function BackupsPage() {
 
 	return (
 		<div className="flex flex-col gap-3 md:gap-4 h-full">
-			<DataHeader filterFields={filterFields} name="backups">
-				<div className="text-sm text-muted-foreground">
-					View and manage all backups
-				</div>
-			</DataHeader>
+			<DataHeader filterFields={filterFields} name="backups"></DataHeader>
 			<DataTableWrapper>
 				<Data
+					bulkSelect={false}
 					name="backups"
 					columns={columns}
 					data={data.items}

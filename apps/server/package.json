@@ -10,6 +10,7 @@
 		"cli": "bun run src/cli.ts",
 		"prisma:generate": "prisma generate",
 		"prisma:migrate": "prisma migrate dev",
+		"prisma:seed": "bun run prisma/seed.ts",
 		"prisma:studio": "prisma studio"
 	},
 	"dependencies": {

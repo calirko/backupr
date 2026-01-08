@@ -23,10 +23,10 @@ model Client {
 
 model User {
    id        String   @id @default(uuid())
-   apiKey    String   @unique
    name      String
    email     String   @unique
    password  String
+   apiKey    String   @unique
    createdAt DateTime @default(now())
    backups   Backup[]
 }
@@ -45,6 +45,7 @@ model Backup {
    totalSize  BigInt       @default(0)
    metadata   Json?
    files      BackupFile[]
+   createdAt  DateTime     @default(now())
 
    @@index([clientId, timestamp])
    @@index([userId, timestamp])
@@ -60,6 +61,7 @@ model BackupFile {
    checksum   String?
    status     String // uploaded, failed
    uploadedAt DateTime @default(now())
+   createdAt  DateTime @default(now())
 
    @@index([backupId])
 }
@@ -74,6 +76,7 @@ model SyncLog {
    message   String?
    timestamp DateTime @default(now())
    metadata  Json?
+   createdAt DateTime @default(now())
 
    @@index([clientId, timestamp])
    @@index([userId, timestamp])

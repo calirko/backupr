@@ -10,11 +10,11 @@ export default function FormPanel({
 	className?: string;
 }) {
 	return (
-		<div className={cn("border rounded-lg p-4 bg-background", className)}>
+		<div className={cn("border rounded-lg bg-background", className)}>
 			{title && (
-				<h3 className="text-lg font-semibold mb-4 border-b pb-2">{title}</h3>
+				<p className="font-semibold mb-4 border-b px-4 py-2">{title}</p>
 			)}
-			<div className="flex flex-col gap-4">{children}</div>
+			<div className="flex flex-col gap-4 p-4 pt-0">{children}</div>
 		</div>
 	);
 }

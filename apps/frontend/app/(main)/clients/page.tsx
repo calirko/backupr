@@ -13,7 +13,7 @@ import RelativeDate from "@/components/ui/relative-date";
 import { useData } from "@/hooks/use-data";
 import Api from "@/lib/api";
 import Cookies from "js-cookie";
-import { Pencil, Trash, Building2, Plus } from "lucide-react";
+import { Pencil, Plus, Trash } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -29,7 +29,6 @@ export default function ClientsPage() {
 		{ key: "folderPath", label: "Folder Path" },
 		{ key: "backupCount", label: "Backups" },
 		{ key: "createdAt", label: "Created" },
-		{ key: "updatedAt", label: "Updated" },
 	];
 
 	const filterFields = [
@@ -79,7 +78,11 @@ export default function ClientsPage() {
 			onBulkClick: async (rows) => {
 				const ids = rows.map((r) => r.id);
 				try {
-					await Api.del(`/api/clients`, { ids }, { token: Cookies.get("token") });
+					await Api.del(
+						`/api/clients`,
+						{ ids },
+						{ token: Cookies.get("token") },
+					);
 					toast.success("Clients deleted successfully");
 					fetchData();
 				} catch (error: any) {
@@ -101,9 +104,12 @@ export default function ClientsPage() {
 		});
 
 		try {
-			const response: any = await Api.get(`/api/clients?${urlParams.toString()}`, {
-				token: Cookies.get("token"),
-			});
+			const response: any = await Api.get(
+				`/api/clients?${urlParams.toString()}`,
+				{
+					token: Cookies.get("token"),
+				},
+			);
 			const prettyData = response.data.map((e: any) => ({
 				...e,
 				backupCount: e._count?.backups || 0,

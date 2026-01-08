@@ -2,12 +2,12 @@
 
 import React, {
 	createContext,
-	useContext,
-	useState,
-	useRef,
-	useCallback,
 	type ReactNode,
+	useCallback,
+	useContext,
 	useEffect,
+	useRef,
+	useState,
 } from "react";
 
 // Types for the data context
@@ -46,7 +46,7 @@ const getDefaultFilters = (): Filters => {
 
 const defaultSkip = 0;
 const defaultTake = 35;
-const defaultOrderBy: OrderBy = { updatedAt: "desc" };
+const defaultOrderBy: OrderBy = { createdAt: "desc" };
 const defaultSelectedRows: any[] = [];
 
 const getDefaultPageState = (
