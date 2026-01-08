@@ -1099,7 +1099,11 @@
 
 "@radix-ui/react-select@^2.0.0", "@radix-ui/react-select@^2.2.6":
   version "2.2.6"
+<<<<<<< HEAD
   resolved "https://registry.npmjs.org/@radix-ui/react-select/-/react-select-2.2.6.tgz"
+=======
+  resolved "https://registry.yarnpkg.com/@radix-ui/react-select/-/react-select-2.2.6.tgz#022cf8dab16bf05d0d1b4df9e53e4bea1b744fd9"
+>>>>>>> dc7d8b0a014ae14b9e93c9b95beb63caa1de06f7
   integrity sha512-I30RydO+bnn2PQztvo25tswPH+wFBjehVGtmagkU78yMdwTwVf12wnAOF+AeP8S2N8xD+5UPbGhkUfPyvT+mwQ==
   dependencies:
     "@radix-ui/number" "1.1.1"
