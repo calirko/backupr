@@ -81,6 +81,8 @@ export function Settings() {
 
 			const data = await response.json();
 
+			console.log("Test Connection Response:", data);
+
 			if (response.ok) {
 				toast({
 					title: "Connection Successful",

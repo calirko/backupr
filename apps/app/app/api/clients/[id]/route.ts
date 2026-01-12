@@ -1,16 +1,20 @@
+import {
+	errorResponse,
+	getPrismaClient,
+	validateToken,
+} from "@/lib/server/api-helpers";
 import { NextRequest, NextResponse } from "next/server";
-import { getPrismaClient, validateToken, errorResponse } from "@/lib/server/api-helpers";
 
 export async function GET(
 	request: NextRequest,
-	{ params }: { params: Promise<{ id: string }> }
+	{ params }: { params: Promise<{ id: string }> },
 ) {
 	try {
 		const validation = await validateToken(request);
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
@@ -41,20 +45,20 @@ export async function GET(
 
 export async function PATCH(
 	request: NextRequest,
-	{ params }: { params: Promise<{ id: string }> }
+	{ params }: { params: Promise<{ id: string }> },
 ) {
 	try {
 		const validation = await validateToken(request);
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
 		const prisma = getPrismaClient();
 		const { id } = await params;
-		const { name, email, folderPath } = await request.json();
+		const { name, email } = await request.json();
 
 		// Check if client exists
 		const existingClient = await prisma.client.findUnique({
@@ -74,16 +78,25 @@ export async function PATCH(
 			if (nameTaken) {
 				return NextResponse.json(
 					{ error: "A client with this name already exists" },
-					{ status: 400 }
+					{ status: 400 },
 				);
 			}
 		}
 
 		// Prepare update data
 		const updateData: any = {};
-		if (name) updateData.name = name;
+		if (name) {
+			updateData.name = name;
+			// Auto-generate new folder path when name changes
+			const BACKUP_STORAGE_DIR = process.env.BACKUP_STORAGE_DIR || "/bkp";
+			const sanitizedName = name
+				.toLowerCase()
+				.replace(/[^a-z0-9]/g, "-")
+				.replace(/-+/g, "-")
+				.replace(/^-|-$/g, "");
+			updateData.folderPath = `${BACKUP_STORAGE_DIR}/${sanitizedName}`;
+		}
 		if (email !== undefined) updateData.email = email;
-		if (folderPath) updateData.folderPath = folderPath;
 
 		// Update client
 		const client = await prisma.client.update({

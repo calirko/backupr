@@ -1,54 +1,99 @@
-"use client";
-
-import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Check, X } from "lucide-react";
+import { Button } from "../ui/button";
 import {
 	Dialog,
+	DialogClose,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-
-interface ConfirmActionDialogProps {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	onConfirm: () => void;
-	title?: string;
-	description?: string;
-	confirmText?: string;
-	cancelText?: string;
-}
+} from "../ui/dialog";
+import {
+	Drawer,
+	DrawerClose,
+	DrawerContent,
+	DrawerDescription,
+	DrawerFooter,
+	DrawerHeader,
+	DrawerTitle,
+} from "../ui/drawer";
 
 export default function ConfirmActionDialog({
 	open,
-	onOpenChange,
+	onClose,
 	onConfirm,
-	title = "Confirm Action",
-	description = "Are you sure you want to perform this action?",
-	confirmText = "Confirm",
-	cancelText = "Cancel",
-}: ConfirmActionDialogProps) {
+}: {
+	open: boolean;
+	onClose: (result: boolean) => void;
+	onConfirm: () => void;
+}): React.JSX.Element {
+	const isMobile = useIsMobile();
+
+	if (isMobile) {
+		return (
+			<Drawer open={open} onOpenChange={onClose}>
+				<DrawerContent>
+					<DrawerHeader>
+						<DrawerTitle>Confirmar Ação</DrawerTitle>
+						<DrawerDescription>
+							Tem certeza de que quer realizar esta ação? Não será possível
+							desfazê-la.
+						</DrawerDescription>
+					</DrawerHeader>
+					<DrawerFooter>
+						<DrawerClose asChild>
+							<Button variant="outline">
+								<X />
+								Cancelar
+							</Button>
+						</DrawerClose>
+						<DrawerClose asChild>
+							<Button
+								variant="destructive"
+								onClick={() => {
+									onConfirm();
+								}}
+							>
+								<Check />
+								Confirmar
+							</Button>
+						</DrawerClose>
+					</DrawerFooter>
+				</DrawerContent>
+			</Drawer>
+		);
+	}
+
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={onClose}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>{title}</DialogTitle>
-					<DialogDescription>{description}</DialogDescription>
+					<DialogTitle>Confirmar Ação</DialogTitle>
+					<DialogDescription>
+						Tem certeza de que quer realizar esta ação? Não será possível
+						desfazê-la.
+					</DialogDescription>
 				</DialogHeader>
 				<DialogFooter>
-					<Button variant="outline" onClick={() => onOpenChange(false)}>
-						{cancelText}
-					</Button>
-					<Button
-						variant="destructive"
-						onClick={() => {
-							onConfirm();
-							onOpenChange(false);
-						}}
-					>
-						{confirmText}
-					</Button>
+					<DialogClose asChild>
+						<Button variant="outline">
+							<X />
+							Cancelar
+						</Button>
+					</DialogClose>
+					<DialogClose asChild>
+						<Button
+							variant="destructive"
+							onClick={() => {
+								onConfirm();
+							}}
+						>
+							<Check />
+							Confirmar
+						</Button>
+					</DialogClose>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

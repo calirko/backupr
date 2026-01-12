@@ -1,13 +1,13 @@
 "use client";
 
-import * as React from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ButtonProps, buttonVariants } from "@/components/ui/button";
+import type { VariantProps } from "class-variance-authority";
+import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import * as React from "react";
 
 const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
 	<nav
-		role="navigation"
 		aria-label="pagination"
 		className={cn("mx-auto flex w-full justify-center", className)}
 		{...props}
@@ -37,7 +37,7 @@ PaginationItem.displayName = "PaginationItem";
 
 type PaginationLinkProps = {
 	isActive?: boolean;
-} & Pick<ButtonProps, "size"> &
+} & Pick<VariantProps<typeof buttonVariants>, "size"> &
 	React.ComponentProps<"a">;
 
 const PaginationLink = ({
