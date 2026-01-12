@@ -1,6 +1,10 @@
-import { randomBytes } from "node:crypto";
+import {
+	errorResponse,
+	getPrismaClient,
+	validateToken,
+} from "@/lib/server/api-helpers";
 import { NextRequest, NextResponse } from "next/server";
-import { getPrismaClient, validateToken, errorResponse } from "@/lib/server/api-helpers";
+import { randomBytes } from "node:crypto";
 
 export async function GET(request: NextRequest) {
 	try {
@@ -8,21 +12,25 @@ export async function GET(request: NextRequest) {
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
 		const prisma = getPrismaClient();
 		const { searchParams } = new URL(request.url);
-		
+
 		const skip = parseInt(searchParams.get("skip") || "0", 10);
 		const take = parseInt(searchParams.get("take") || "30", 10);
 		const filtersParam = searchParams.get("filters");
 		const orderByParam = searchParams.get("orderBy");
 
 		// Parse filters and orderBy if provided
-		const filters = filtersParam ? JSON.parse(decodeURIComponent(filtersParam)) : {};
-		const orderBy = orderByParam ? JSON.parse(decodeURIComponent(orderByParam)) : { createdAt: "desc" };
+		const filters = filtersParam
+			? JSON.parse(decodeURIComponent(filtersParam))
+			: {};
+		const orderBy = orderByParam
+			? JSON.parse(decodeURIComponent(orderByParam))
+			: { createdAt: "desc" };
 
 		// Build where clause from filters
 		const where: any = {};
@@ -68,19 +76,16 @@ export async function POST(request: NextRequest) {
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
 		const prisma = getPrismaClient();
-		const { name, email, folderPath } = await request.json();
+		const { name, email } = await request.json();
 
 		// Validate required fields
-		if (!name || !folderPath) {
-			return NextResponse.json(
-				{ error: "Name and folder path are required" },
-				{ status: 400 }
-			);
+		if (!name) {
+			return NextResponse.json({ error: "Name is required" }, { status: 400 });
 		}
 
 		// Check if client with name already exists
@@ -91,12 +96,21 @@ export async function POST(request: NextRequest) {
 		if (existingClient) {
 			return NextResponse.json(
 				{ error: "A client with this name already exists" },
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
 		// Generate API key
 		const apiKey = randomBytes(32).toString("hex");
+
+		// Auto-generate folder path based on client name
+		const BACKUP_STORAGE_DIR = process.env.BACKUP_STORAGE_DIR || "/bkp";
+		const sanitizedName = name
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, "-")
+			.replace(/-+/g, "-")
+			.replace(/^-|-$/g, "");
+		const folderPath = `${BACKUP_STORAGE_DIR}/${sanitizedName}`;
 
 		// Create client
 		const client = await prisma.client.create({
@@ -129,7 +143,7 @@ export async function DELETE(request: NextRequest) {
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
@@ -137,7 +151,10 @@ export async function DELETE(request: NextRequest) {
 		const { ids } = await request.json();
 
 		if (!ids || !Array.isArray(ids) || ids.length === 0) {
-			return NextResponse.json({ error: "Client IDs are required" }, { status: 400 });
+			return NextResponse.json(
+				{ error: "Client IDs are required" },
+				{ status: 400 },
+			);
 		}
 
 		// Check if clients have associated data
@@ -149,7 +166,9 @@ export async function DELETE(request: NextRequest) {
 			},
 		});
 
-		const clientsWithData = clientsWithBackups.filter((c) => c.backups.length > 0);
+		const clientsWithData = clientsWithBackups.filter(
+			(c) => c.backups.length > 0,
+		);
 
 		if (clientsWithData.length > 0) {
 			return NextResponse.json(
@@ -157,7 +176,7 @@ export async function DELETE(request: NextRequest) {
 					error:
 						"These clients cannot be deleted because they have associated data in the system",
 				},
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 

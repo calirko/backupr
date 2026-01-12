@@ -1,15 +1,7 @@
 "use client";
 
-import Cookies from "js-cookie";
-import { Plus, Save, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import FormPanel from "@/components/layout/formPanel";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
-import Api from "@/lib/api";
 import {
 	Dialog,
 	DialogContent,
@@ -17,6 +9,14 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import Api from "@/lib/api";
+import Cookies from "js-cookie";
+import { Plus, Save, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 export default function ClientEntry({
 	client_id,
@@ -31,7 +31,6 @@ export default function ClientEntry({
 	const [form, setForm] = useState<Record<string, string | undefined>>({
 		name: "",
 		email: "",
-		folderPath: "",
 	});
 	const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 	const [apiKeyDialog, setApiKeyDialog] = useState<{
@@ -44,12 +43,10 @@ export default function ClientEntry({
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 		if (!form.name) errors.name = "Name is required";
-		
+
 		if (form.email && !emailRegex.test(form.email)) {
 			errors.email = "Invalid email";
 		}
-
-		if (!form.folderPath) errors.folderPath = "Folder path is required";
 
 		setFormErrors(errors);
 		return Object.keys(errors).length === 0;
@@ -61,7 +58,6 @@ export default function ClientEntry({
 		const data = {
 			name: form.name,
 			email: form.email || undefined,
-			folderPath: form.folderPath,
 		};
 
 		if (client_id) {
@@ -105,7 +101,7 @@ export default function ClientEntry({
 			});
 
 			toast.success("Client created successfully");
-			
+
 			// Show API key dialog
 			if (response.client?.apiKey) {
 				setApiKeyDialog({ open: true, apiKey: response.client.apiKey });
@@ -140,7 +136,6 @@ export default function ClientEntry({
 			setForm({
 				name: response.client.name,
 				email: response.client.email || "",
-				folderPath: response.client.folderPath,
 			});
 		} catch (error) {
 			console.error(error);
@@ -204,19 +199,6 @@ export default function ClientEntry({
 									setFormErrors({ ...formErrors, email: "" });
 								}}
 								error={formErrors.email}
-							/>
-						</div>
-						<div>
-							<Label required>Folder Path</Label>
-							<Input
-								type="text"
-								value={form.folderPath}
-								placeholder="/path/to/backup"
-								onChange={(e) => {
-									setForm({ ...form, folderPath: e.target.value });
-									setFormErrors({ ...formErrors, folderPath: "" });
-								}}
-								error={formErrors.folderPath}
 							/>
 						</div>
 					</FormPanel>

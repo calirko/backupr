@@ -1,0 +1,49 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Monitor, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
+
+export function ThemeToggle() {
+	const { setTheme, theme } = useTheme();
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="ghost"
+					className="p-0 border-l h-full w-12 flex items-center"
+					size="icon"
+				>
+					{theme === "light" ? (
+						<Sun />
+					) : theme === "dark" ? (
+						<Moon />
+					) : (
+						<Monitor />
+					)}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem onClick={() => setTheme("light")}>
+					<Sun className="h-4 w-4" />
+					<span>Light</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem onClick={() => setTheme("dark")}>
+					<Moon className="h-4 w-4" />
+					<span>Dark</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem onClick={() => setTheme("system")}>
+					<Monitor className="h-4 w-4" />
+					<span>System</span>
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}

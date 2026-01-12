@@ -12,12 +12,12 @@ import { Button } from "@/components/ui/button";
 import RelativeDate from "@/components/ui/relative-date";
 import { useData } from "@/hooks/use-data";
 import Api from "@/lib/api";
+import { Token } from "@/lib/token";
 import Cookies from "js-cookie";
 import { Pencil, Trash, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Token } from "@/lib/token";
 
 export default function UsersPage() {
 	const [loading, setLoading] = useState(true);
@@ -64,13 +64,13 @@ export default function UsersPage() {
 		{
 			id: "edit",
 			label: "Edit",
-			icon: <Pencil />,
+			icon: <Pencil className="w-4 h-4" />,
 			href: (row) => `/users/${row.id}/edit`,
 		},
 		{
 			id: "delete",
 			label: "Delete",
-			icon: <Trash />,
+			icon: <Trash className="h-4 w-4" />,
 			disabled: (row) => row.id === currentUserId,
 			onClick: async (row) => {
 				try {
@@ -111,9 +111,12 @@ export default function UsersPage() {
 		});
 
 		try {
-			const response: any = await Api.get(`/api/users?${urlParams.toString()}`, {
-				token: Cookies.get("token"),
-			});
+			const response: any = await Api.get(
+				`/api/users?${urlParams.toString()}`,
+				{
+					token: Cookies.get("token"),
+				},
+			);
 			const prettyData = response.data.map((e: any) => ({
 				...e,
 				createdAt: <RelativeDate date={new Date(e.createdAt)} />,
@@ -151,6 +154,7 @@ export default function UsersPage() {
 			</DataHeader>
 			<DataTableWrapper>
 				<Data
+					bulkSelect={false}
 					name="users"
 					columns={columns}
 					data={data.items}

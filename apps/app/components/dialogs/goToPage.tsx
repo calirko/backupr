@@ -1,74 +1,151 @@
-"use client";
-
-import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { ArrowRight, X } from "lucide-react";
+import { useState } from "react";
+import { Button } from "../ui/button";
 import {
 	Dialog,
+	DialogClose,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useState } from "react";
-
-interface GoToPageDialogProps {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	onGoToPage: (page: number) => void;
-	maxPage: number;
-}
+} from "../ui/dialog";
+import {
+	Drawer,
+	DrawerContent,
+	DrawerDescription,
+	DrawerFooter,
+	DrawerHeader,
+	DrawerTitle,
+} from "../ui/drawer";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 
 export default function GoToPageDialog({
 	open,
-	onOpenChange,
-	onGoToPage,
-	maxPage,
-}: GoToPageDialogProps) {
+	onClose,
+	onConfirm,
+	min,
+	max,
+}: {
+	open: boolean;
+	onClose: (result: boolean) => void;
+	onConfirm: (page: number) => void;
+	min: number;
+	max: number;
+}): React.JSX.Element {
 	const [page, setPage] = useState("");
+	const [error, setError] = useState("");
+	const isMobile = useIsMobile();
 
-	const handleSubmit = () => {
-		const pageNumber = parseInt(page, 10);
-		if (!isNaN(pageNumber) && pageNumber > 0 && pageNumber <= maxPage) {
-			onGoToPage(pageNumber);
-			onOpenChange(false);
-			setPage("");
+	function validate() {
+		const pageNum = Number(page);
+
+		if (!page) {
+			setError("Número da página é obrigatório");
+			return false;
 		}
-	};
+
+		if (isNaN(pageNum)) {
+			setError("Número inválido");
+			return false;
+		}
+
+		if (pageNum < min) {
+			setError(`Página deve ser maior ou igual a ${min}`);
+			return false;
+		}
+
+		if (pageNum > max) {
+			setError(`Página deve ser menor ou igual a ${max}`);
+			return false;
+		}
+
+		setError("");
+		return true;
+	}
+
+	const content = (
+		<div className="px-4 sm:px-0">
+			<Label>Página</Label>
+			<Input
+				type="number"
+				value={page}
+				onChange={(e) => {
+					setPage(e.target.value);
+					setError("");
+				}}
+				placeholder={`Número entre ${min} e ${max}`}
+				error={error}
+				min={min}
+				max={max}
+			/>
+		</div>
+	);
+
+	if (isMobile)
+		return (
+			<Drawer open={open} onOpenChange={onClose}>
+				<DrawerContent>
+					<DrawerHeader>
+						<DrawerTitle>Ir para Página</DrawerTitle>
+						<DrawerDescription>
+							Digite o número da página que deseja ir (entre {min} e {max}).
+						</DrawerDescription>
+					</DrawerHeader>
+					{content}
+					<DrawerFooter>
+						<DialogClose asChild>
+							<Button variant="outline">
+								<X />
+								Cancelar
+							</Button>
+						</DialogClose>
+						<Button
+							onClick={() => {
+								if (!validate()) return;
+
+								onConfirm(Number(page));
+								onClose(false);
+							}}
+						>
+							<ArrowRight />
+							Ir
+						</Button>
+					</DrawerFooter>
+				</DrawerContent>
+			</Drawer>
+		);
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={onClose}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Go to Page</DialogTitle>
+					<DialogTitle>Ir para Página</DialogTitle>
 					<DialogDescription>
-						Enter a page number between 1 and {maxPage}
+						Digite o número da página que deseja ir (entre {min} e {max}).
 					</DialogDescription>
 				</DialogHeader>
-				<div className="space-y-4">
-					<div>
-						<Label htmlFor="page">Page Number</Label>
-						<Input
-							id="page"
-							type="number"
-							min={1}
-							max={maxPage}
-							value={page}
-							onChange={(e) => setPage(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") {
-									handleSubmit();
-								}
-							}}
-						/>
-					</div>
-				</div>
+				{content}
 				<DialogFooter>
-					<Button variant="outline" onClick={() => onOpenChange(false)}>
-						Cancel
+					<DialogClose asChild>
+						<Button variant="outline">
+							<X />
+							Cancelar
+						</Button>
+					</DialogClose>
+					<Button
+						onClick={() => {
+							if (!validate()) return;
+
+							onConfirm(Number(page));
+							onClose(false);
+						}}
+					>
+						<ArrowRight />
+						Ir
 					</Button>
-					<Button onClick={handleSubmit}>Go</Button>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

@@ -149,6 +149,7 @@ export default function ClientsPage() {
 			</DataHeader>
 			<DataTableWrapper>
 				<Data
+					bulkSelect={false}
 					name="clients"
 					columns={columns}
 					data={data.items}

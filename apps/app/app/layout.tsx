@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 	title: "Backupr",
 	description: "Aplicativo para empresa de controle de backups",
 	icons: {
-		icon: "/branding/logo.svg",
+		icon: "/logo.svg",
 	},
 };
 

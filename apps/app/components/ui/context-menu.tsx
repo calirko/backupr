@@ -1,8 +1,8 @@
 "use client";
 
-import * as React from "react";
-import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
 import { cn } from "@/lib/utils";
+import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
+import * as React from "react";
 
 const ContextMenu = ContextMenuPrimitive.Root;
 
@@ -34,8 +34,7 @@ const ContextMenuSubTrigger = React.forwardRef<
 		{children}
 	</ContextMenuPrimitive.SubTrigger>
 ));
-ContextMenuSubTrigger.displayName =
-	ContextMenuPrimitive.SubTrigger.displayName;
+ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName;
 
 const ContextMenuSubContent = React.forwardRef<
 	React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
@@ -44,14 +43,13 @@ const ContextMenuSubContent = React.forwardRef<
 	<ContextMenuPrimitive.SubContent
 		ref={ref}
 		className={cn(
-			"z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg",
+			"z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground",
 			className,
 		)}
 		{...props}
 	/>
 ));
-ContextMenuSubContent.displayName =
-	ContextMenuPrimitive.SubContent.displayName;
+ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName;
 
 const ContextMenuContent = React.forwardRef<
 	React.ElementRef<typeof ContextMenuPrimitive.Content>,
@@ -61,7 +59,7 @@ const ContextMenuContent = React.forwardRef<
 		<ContextMenuPrimitive.Content
 			ref={ref}
 			className={cn(
-				"z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
+				"z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground",
 				className,
 			)}
 			{...props}
@@ -79,7 +77,7 @@ const ContextMenuItem = React.forwardRef<
 	<ContextMenuPrimitive.Item
 		ref={ref}
 		className={cn(
-			"relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+			"relative flex cursor-default select-none gap-2 items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
 			inset && "pl-8",
 			className,
 		)}
@@ -172,18 +170,18 @@ ContextMenuShortcut.displayName = "ContextMenuShortcut";
 
 export {
 	ContextMenu,
-	ContextMenuTrigger,
-	ContextMenuContent,
-	ContextMenuItem,
 	ContextMenuCheckboxItem,
-	ContextMenuRadioItem,
+	ContextMenuContent,
+	ContextMenuGroup,
+	ContextMenuItem,
 	ContextMenuLabel,
+	ContextMenuPortal,
+	ContextMenuRadioGroup,
+	ContextMenuRadioItem,
 	ContextMenuSeparator,
 	ContextMenuShortcut,
-	ContextMenuGroup,
-	ContextMenuPortal,
 	ContextMenuSub,
 	ContextMenuSubContent,
 	ContextMenuSubTrigger,
-	ContextMenuRadioGroup,
+	ContextMenuTrigger,
 };

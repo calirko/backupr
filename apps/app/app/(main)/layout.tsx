@@ -43,7 +43,7 @@ export default function MainLayout({
 			className="w-full flex flex-col min-h-0 h-screen overflow-x-hidden"
 			id="main-page-container"
 		>
-			<div className="flex justify-between border-b h-12 bg-background">
+			<div className="flex justify-between border-b h-12 bg-background sticky top-0 z-10">
 				<div className="flex">
 					<div className="h-full border-r">
 						<img src={"/logo.svg"} className="h-full p-2" />
@@ -74,7 +74,14 @@ export default function MainLayout({
 					<UserMenu email={user?.email} name={user?.name} />
 				</div>
 			</div>
-			<div className="p-2 pt-3 md:px-12 md:py-4 grow">{children}</div>
+			<div
+				className="h-fit border-b"
+				style={{ paddingLeft: "47px", paddingRight: "46px" }}
+			>
+				<div className="border-l border-r px-8 md:py-4 pt-3 min-h-full">
+					{children}
+				</div>
+			</div>
 		</main>
 	);
 }

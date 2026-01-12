@@ -5,7 +5,7 @@ export const config = {
 	matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
 };
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
 	const token = request.cookies.get("token")?.value;
 	const payload = await Token.decrypt(token || "");
 

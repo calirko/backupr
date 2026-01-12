@@ -153,7 +153,6 @@ export function RowActionsWrapper({
 							onClick={() => {
 								functionExecute({ action, row, router, openDialog });
 							}}
-							variant={action.variant}
 						>
 							{action.icon}
 							{action.label}
@@ -209,7 +208,6 @@ export function RowDataActions({
 							onClick={() => {
 								functionExecute({ action, row, router, openDialog });
 							}}
-							variant={action.variant}
 						>
 							{action.icon}
 							{action.label}
@@ -275,7 +273,6 @@ export function RowDataActionsBulk({
 										},
 									});
 								}}
-								variant={action.variant}
 							>
 								{action.icon}
 								{action.label}
