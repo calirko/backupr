@@ -3,7 +3,10 @@ FROM node:20 AS builder
 
 WORKDIR /app
 
-RUN apt install bash openssl
+# Install required packages
+RUN apt-get update && \
+   apt-get install -y bash openssl && \
+   apt-get clean
 
 # Copy package files
 COPY package.json yarn.lock* ./
@@ -28,7 +31,7 @@ RUN ls ./prisma/
 RUN yarn prisma generate
 RUN yarn prisma migrate deploy
 
-# Run seed script using tsx (faster and more reliable than ts-node)
+# Run seed script using tsx
 RUN npx tsx prisma/seed.ts
 
 # Build Next.js application
@@ -39,12 +42,11 @@ FROM node:20 AS runner
 
 WORKDIR /app
 
-# Set environment to production
 ENV NODE_ENV=production
 
 # Create non-root user for security
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
+RUN addgroup --system nodejs && \
+   adduser --system --ingroup nodejs nextjs
 
 # Copy built application from builder stage
 COPY --from=builder /app/public ./public
@@ -55,15 +57,11 @@ COPY --from=builder /app/prisma ./prisma
 # Change ownership to nextjs user
 RUN chown -R nextjs:nodejs /app
 
-# Switch to non-root user
 USER nextjs
 
-# Expose port
 EXPOSE 3000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
    CMD node -e "require('http').get('http://localhost:3000/api/ping', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
-# Start application
 CMD ["node", "server.js"]
