@@ -58,7 +58,3 @@ tsconfig.tsbuildinfo
 .lint-staged
 CONTRIBUTING.md
 LICENSE
-
-# Prisma
-prisma/migrations/
-prisma/seed.ts
