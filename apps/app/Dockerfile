@@ -22,10 +22,8 @@ RUN yarn install --frozen-lockfile
 # Copy application files
 COPY . .
 
-# Build Prisma client and run migrations/seed
-RUN yarn prisma generate && \
-   yarn prisma migrate deploy && \
-   npx tsx prisma/seed.ts
+# Generate Prisma client only (no migrations/seed during build)
+RUN yarn prisma generate
 
 # Build Next.js application
 RUN yarn build
@@ -36,4 +34,9 @@ ENV PORT=3000
 
 EXPOSE 3000
 
+# Make entrypoint executable
+RUN chmod +x docker-entrypoint.sh
+
+# Use entrypoint to run migrations/seed at runtime, then start the server
+ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", ".next/standalone/server.js"]
