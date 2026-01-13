@@ -2,10 +2,10 @@
 set -e
 
 echo "🔄 Running Prisma migrations..."
-node /app/node_modules/.bin/prisma migrate deploy --skip-generate
+npx prisma migrate deploy --skip-generate
 
 echo "🌱 Seeding database..."
-node /app/prisma/seed.js
+npx tsx prisma/seed.ts || echo "⚠️  Seed already exists or failed, continuing..."
 
 echo "✅ Database setup completed"
 
