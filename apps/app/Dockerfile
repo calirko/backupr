@@ -9,6 +9,8 @@ ARG DATABASE_URL
 # Set environment variables from build args
 ENV SECRET_TOKEN=${SECRET_TOKEN}
 ENV DATABASE_URL=${DATABASE_URL}
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
 # Install required packages
 RUN apt-get update && \
