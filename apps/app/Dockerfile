@@ -25,7 +25,11 @@ COPY . .
 # Generate Prisma client
 RUN yarn prisma generate
 RUN yarn prisma migrate deploy
-RUN yarn ts-node prisma/seed.ts
+
+# Run seed script
+WORKDIR /app/prisma
+RUN yarn ts-node --project ../tsconfig.json seed.ts
+WORKDIR /app
 
 # Build Next.js application
 RUN yarn build
