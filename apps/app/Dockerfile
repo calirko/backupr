@@ -22,6 +22,8 @@ ENV DATABASE_URL=${DATABASE_URL}
 # Copy application files
 COPY . .
 
+RUN ls ./prisma/
+
 # Generate Prisma client
 RUN yarn prisma generate
 RUN yarn prisma migrate deploy
