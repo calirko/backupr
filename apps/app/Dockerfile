@@ -35,6 +35,12 @@ EXPOSE 3000
 # Make entrypoint executable
 RUN chmod +x docker-entrypoint.sh
 
+# Copy public and static files to the standalone directory
+# This is required for Next.js standalone mode
+RUN mkdir -p .next/standalone/.next && \
+    cp -r public .next/standalone/public 2>/dev/null || true && \
+    cp -r .next/static .next/standalone/.next/static
+
 # Use entrypoint to run migrations/seed at runtime, then start the server
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", ".next/standalone/server.js"]
