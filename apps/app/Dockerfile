@@ -37,4 +37,4 @@ RUN chmod +x docker-entrypoint.sh
 
 # Use entrypoint to run migrations/seed at runtime, then start the server
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["yarn", "start"]
+CMD ["yarn", "start", "-H", "0.0.0.0", "-p", "3000"]
