@@ -26,10 +26,8 @@ COPY . .
 RUN yarn prisma generate
 RUN yarn prisma migrate deploy
 
-# Run seed script
-WORKDIR /app/prisma
-RUN yarn ts-node --project ../tsconfig.json seed.ts
-WORKDIR /app
+# Run seed script using tsx (faster and more reliable than ts-node)
+RUN npx tsx prisma/seed.ts
 
 # Build Next.js application
 RUN yarn build
