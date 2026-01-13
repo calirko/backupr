@@ -1,9 +1,9 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:20 AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache bash openssl
+RUN apt install bash openssl
 
 # Copy package files
 COPY package.json yarn.lock* ./
@@ -35,7 +35,7 @@ RUN npx tsx prisma/seed.ts
 RUN yarn build
 
 # Production stage
-FROM node:20-alpine AS runner
+FROM node:20 AS runner
 
 WORKDIR /app
 
