@@ -76,7 +76,7 @@ export default function MainLayout({
 			</div>
 			<div
 				className="h-fit border-b"
-				style={{ paddingLeft: "47px", paddingRight: "46px" }}
+				style={{ paddingLeft: "47px", paddingRight: "48px" }}
 			>
 				<div className="border-l border-r px-8 md:py-4 pt-3 min-h-full">
 					{children}
