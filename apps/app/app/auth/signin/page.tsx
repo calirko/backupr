@@ -108,7 +108,16 @@ export default function SignInPage() {
 
 	return (
 		<div className="h-full w-full">
-			<div className="w-full h-full flex items-center justify-center bg-striped">
+			<div className="flex-col gap-10 w-full h-full flex items-center justify-center ">
+				<div className="flex items-center gap-4">
+					<div>
+						<img src={"/logo.svg"} className="h-full p-2 h-30 w-30" />
+					</div>
+					<div>
+						<h1 className="font-bold text-5xl">Backupr</h1>
+					</div>
+				</div>
+
 				<Card className="w-[450px]">
 					<CardHeader>
 						<CardTitle>Entrar</CardTitle>
