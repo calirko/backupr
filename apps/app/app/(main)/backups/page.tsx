@@ -90,7 +90,7 @@ export default function BackupsPage() {
 		total: 0,
 	});
 	const { skip, take, filters, orderBy } = useData("backups");
-	const [tab, setTab] = useState("all");
+	const [tab, setTab] = useState("blocks");
 
 	// Blocks view state
 	const [clients, setClients] = useState<Client[]>([]);
