@@ -2,7 +2,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { getPrismaClient } from "./api-helpers";
 
-const MAX_BACKUPS_PER_ENTRY = 20;
+const MAX_BACKUPS_PER_ENTRY = 21;
 
 export async function cleanupOldBackups(
 	clientId: string,

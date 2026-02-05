@@ -429,7 +429,14 @@ export default function BackupsPage() {
 																<span className="text-muted-foreground">
 																	Último Backup:
 																</span>
-																<span className="font-semibold">
+																<span
+																	className={`font-semibold ${
+																		new Date(client.lastBackupDate).getTime() <
+																		Date.now() - 2 * 24 * 60 * 60 * 1000
+																			? "text-orange-300"
+																			: ""
+																	}`}
+																>
 																	{new Date(
 																		client.lastBackupDate,
 																	).toLocaleString()}
@@ -483,9 +490,20 @@ export default function BackupsPage() {
 													{backup.latestBackup && (
 														<CardDescription>
 															Último backup:{" "}
-															{new Date(
-																backup.latestBackup.createdAt,
-															).toLocaleString()}
+															<span
+																className={`${
+																	new Date(
+																		backup.latestBackup.createdAt,
+																	).getTime() <
+																	Date.now() - 2 * 24 * 60 * 60 * 1000
+																		? "text-orange-300"
+																		: ""
+																}`}
+															>
+																{new Date(
+																	backup.latestBackup.createdAt,
+																).toLocaleString()}
+															</span>
 														</CardDescription>
 													)}
 												</CardHeader>
