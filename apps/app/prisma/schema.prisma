@@ -58,7 +58,7 @@ model BackupFile {
    backupId   String
    backup     Backup   @relation(fields: [backupId], references: [id], onDelete: Cascade)
    filePath   String
-   fileSize   Int
+   fileSize   BigInt
    checksum   String?
    status     String // uploaded, failed
    uploadedAt DateTime @default(now())

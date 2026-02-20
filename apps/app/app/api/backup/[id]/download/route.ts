@@ -2,7 +2,7 @@ import { getPrismaClient, validateToken } from "@/lib/server/api-helpers";
 import archiver from "archiver";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 // GET /api/backup/[id]/download - Download backup files (single file or zipped archive)
@@ -61,7 +61,6 @@ export async function GET(
 			backup.backupName || "default",
 		);
 
-		// If there's only one file, return it directly (it's already a zip)
 		if (backup.files.length === 1) {
 			const backupFile = backup.files[0];
 			const filePath = join(baseDir, backupFile.filePath);
@@ -73,11 +72,10 @@ export async function GET(
 				);
 			}
 
-			// Stream the single file
+			const stat = statSync(filePath);
 			const stream = createReadStream(filePath);
 			const filename = backupFile.filePath.split("/").pop() || "backup.zip";
 
-			// Convert Node.js stream to Web ReadableStream
 			const readableStream = new ReadableStream({
 				start(controller) {
 					stream.on("data", (chunk: string | Buffer) => {
@@ -103,13 +101,14 @@ export async function GET(
 				headers: {
 					"Content-Type": "application/zip",
 					"Content-Disposition": `attachment; filename="${filename}"`,
+					"Content-Length": stat.size.toString(),
 				},
 			});
 		}
 
 		// Multiple files: create a zip archive
 		const archive = archiver("zip", {
-			zlib: { level: 9 }, // Maximum compression
+			zlib: { level: 9 },
 		});
 
 		// Check all files exist before starting
@@ -130,33 +129,23 @@ export async function GET(
 			archive.file(filePath, { name: filename });
 		}
 
-		// Finalize the archive
-		archive.finalize();
-
-		// Convert archiver stream to Web ReadableStream
-		const readableStream = new ReadableStream({
-			start(controller) {
-				archive.on("data", (chunk: Buffer) => {
-					controller.enqueue(new Uint8Array(chunk));
-				});
-				archive.on("end", () => {
-					controller.close();
-				});
-				archive.on("error", (error) => {
-					controller.error(error);
-				});
-			},
-			cancel() {
-				archive.destroy();
-			},
+		// Buffer the entire archive to get Content-Length
+		const chunks: Buffer[] = [];
+		await new Promise<void>((resolve, reject) => {
+			archive.on("data", (chunk: Buffer) => chunks.push(chunk));
+			archive.on("end", () => resolve());
+			archive.on("error", (err) => reject(err));
+			archive.finalize();
 		});
 
+		const archiveBuffer = Buffer.concat(chunks);
 		const downloadFilename = `${backup.backupName || "backup"}_${backup.version || 1}.zip`;
 
-		return new Response(readableStream, {
+		return new Response(archiveBuffer, {
 			headers: {
 				"Content-Type": "application/zip",
 				"Content-Disposition": `attachment; filename="${downloadFilename}"`,
+				"Content-Length": archiveBuffer.byteLength.toString(),
 			},
 		});
 	} catch (error) {

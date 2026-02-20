@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
 					name: true,
 					email: true,
 					folderPath: true,
+					apiKey: true,
 					createdAt: true,
 					updatedAt: true,
 					_count: {

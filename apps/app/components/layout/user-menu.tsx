@@ -39,7 +39,7 @@ export function UserMenu({ email, name }: UserMenuProps) {
 			<DropdownMenuTrigger asChild>
 				<Button
 					variant="ghost"
-					className="relative aspect-square h-full border-l p-0"
+					className="relative aspect-square w-[49px] h-full border-l p-0"
 				>
 					{email ? (
 						<img

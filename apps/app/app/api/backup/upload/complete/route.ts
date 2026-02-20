@@ -1,9 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { appendFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { getPrismaClient, validateApiKey, getBackupStorageDir, errorResponse } from "@/lib/server/api-helpers";
+import {
+	errorResponse,
+	getBackupStorageDir,
+	getPrismaClient,
+	validateApiKey,
+} from "@/lib/server/api-helpers";
 import { cleanupOldBackups } from "@/lib/server/backup-cleanup";
-import { calculateChecksum } from "@/lib/server/backup-helpers";
+import { calculateChecksumFromFile } from "@/lib/server/backup-helpers";
+import { NextRequest, NextResponse } from "next/server";
+import {
+	appendFile,
+	mkdir,
+	readFile,
+	stat,
+	unlink,
+	writeFile,
+} from "node:fs/promises";
+import { join } from "node:path";
 
 export async function POST(request: NextRequest) {
 	try {
@@ -11,7 +23,7 @@ export async function POST(request: NextRequest) {
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
@@ -21,14 +33,20 @@ export async function POST(request: NextRequest) {
 		const { sessionId } = body;
 
 		if (!sessionId) {
-			return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
+			return NextResponse.json(
+				{ error: "sessionId is required" },
+				{ status: 400 },
+			);
 		}
 
 		global.uploadSessions = global.uploadSessions || new Map();
 		const session = global.uploadSessions.get(sessionId);
 
 		if (!session) {
-			return NextResponse.json({ error: "Invalid session ID" }, { status: 404 });
+			return NextResponse.json(
+				{ error: "Invalid session ID" },
+				{ status: 404 },
+			);
 		}
 
 		// Verify all chunks are uploaded
@@ -39,13 +57,17 @@ export async function POST(request: NextRequest) {
 					uploadedChunks: session.uploadedChunks,
 					totalChunks: session.totalChunks,
 				},
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
 		// Create backup folder
 		const BACKUP_STORAGE_DIR = getBackupStorageDir();
-		const backupFolder = join(BACKUP_STORAGE_DIR, client.name, session.backupName);
+		const backupFolder = join(
+			BACKUP_STORAGE_DIR,
+			client.name,
+			session.backupName,
+		);
 		await mkdir(backupFolder, { recursive: true });
 
 		// Assemble chunks into final file with normalized filename
@@ -68,10 +90,11 @@ export async function POST(request: NextRequest) {
 			await unlink(chunkPath);
 		}
 
-		// Calculate checksum of final file
-		const finalBuffer = await readFile(finalFilePath);
-		const checksum = calculateChecksum(finalBuffer);
-		const fileSize = finalBuffer.length;
+		// Calculate checksum and size of final file without loading it into memory
+		const [checksum, { size: fileSize }] = await Promise.all([
+			calculateChecksumFromFile(finalFilePath),
+			stat(finalFilePath),
+		]);
 
 		// Create or update backup record
 		let backup = await prisma.backup.findFirst({
@@ -101,7 +124,7 @@ export async function POST(request: NextRequest) {
 			data: {
 				backupId: backup.id,
 				filePath: prefixedFileName,
-				fileSize: fileSize,
+				fileSize: BigInt(fileSize),
 				checksum,
 				status: "uploaded",
 			},
@@ -130,7 +153,7 @@ export async function POST(request: NextRequest) {
 			session.clientId,
 			session.backupName,
 			BACKUP_STORAGE_DIR,
-			client.name
+			client.name,
 		);
 
 		// Clean up session

@@ -1,16 +1,20 @@
+import {
+	errorResponse,
+	getPrismaClient,
+	validateApiKey,
+} from "@/lib/server/api-helpers";
 import { NextRequest, NextResponse } from "next/server";
-import { getPrismaClient, validateApiKey, errorResponse } from "@/lib/server/api-helpers";
 
 export async function GET(
 	request: NextRequest,
-	{ params }: { params: Promise<{ id: string }> }
+	{ params }: { params: Promise<{ id: string }> },
 ) {
 	try {
 		const validation = await validateApiKey(request);
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
@@ -44,7 +48,7 @@ export async function GET(
 			files: backup.files.map((f) => ({
 				id: f.id,
 				path: f.filePath,
-				size: f.fileSize,
+				size: f.fileSize.toString(),
 				checksum: f.checksum,
 				status: f.status,
 				uploadedAt: f.uploadedAt,

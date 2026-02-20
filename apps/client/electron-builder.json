@@ -3,11 +3,16 @@
 	"productName": "Backupr",
 	"electronVersion": "22.3.27",
 	"directories": {
-		"buildResources": "build",
+		"buildResources": "src/public/icons",
 		"output": "out"
 	},
-	"files": ["dist/**/*", "electron/**/*", "package.json", "build/**/*"],
-	"asarUnpack": ["build/**/*"],
+	"files": [
+		"src/electron/**/*",
+		"src/main.js",
+		"package.json",
+		"src/public/icons/**/*"
+	],
+	"asarUnpack": ["src/public/icons/**/*"],
 	"publish": {
 		"provider": "github",
 		"owner": "calirko",
@@ -15,34 +20,26 @@
 	},
 	"extraResources": [
 		{
-			"from": "build/tray-icon.ico",
-			"to": "tray-icon.ico"
+			"from": "src/public/icons/icon.ico",
+			"to": "icons/icon.ico"
 		},
 		{
-			"from": "build/tray.png",
-			"to": "tray.png"
+			"from": "src/public/icons/icon.icns",
+			"to": "icons/icon.icns"
 		},
 		{
-			"from": "build/icon.ico",
-			"to": "icon.ico"
-		},
-		{
-			"from": "build/icon.icns",
-			"to": "icon.icns"
-		},
-		{
-			"from": "build/icon.png",
-			"to": "icon.png"
+			"from": "src/public/icons/icon.png",
+			"to": "icons/icon.png"
 		}
 	],
 	"mac": {
 		"category": "public.app-category.utilities",
 		"target": ["dmg", "zip"],
-		"icon": "build/icon.icns"
+		"icon": "src/public/icons/icon.icns"
 	},
 	"win": {
 		"target": ["nsis", "portable"],
-		"icon": "build/icon.ico"
+		"icon": "src/public/icons/icon.ico"
 	},
 	"nsis": {
 		"oneClick": false,

@@ -1,10 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { getPrismaClient, validateApiKey, getBackupStorageDir, errorResponse } from "@/lib/server/api-helpers";
+import {
+	getBackupStorageDir,
+	getPrismaClient,
+	validateApiKey,
+} from "@/lib/server/api-helpers";
 import { cleanupOldBackups } from "@/lib/server/backup-cleanup";
-import { formatIsoDate } from "@/lib/server/formatter";
 import { calculateChecksum, getNextVersion } from "@/lib/server/backup-helpers";
+import { formatIsoDate } from "@/lib/server/formatter";
+import { NextRequest, NextResponse } from "next/server";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { streamToDiskWithChecksum } from "./upload-helper";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
 	let client: any = null;
@@ -14,7 +22,7 @@ export async function POST(request: NextRequest) {
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
@@ -28,7 +36,10 @@ export async function POST(request: NextRequest) {
 			: {};
 
 		if (!backupName) {
-			return NextResponse.json({ error: "backupName is required" }, { status: 400 });
+			return NextResponse.json(
+				{ error: "backupName is required" },
+				{ status: 400 },
+			);
 		}
 
 		const version = await getNextVersion(client.id, backupName);
@@ -66,7 +77,10 @@ export async function POST(request: NextRequest) {
 				let normalizedFileName = file.name.replace(/\\/g, "/");
 
 				// If filename looks like a Windows short name (contains ~), try to extract a meaningful name
-				if (normalizedFileName.includes("~") && normalizedFileName.length <= 12) {
+				if (
+					normalizedFileName.includes("~") &&
+					normalizedFileName.length <= 12
+				) {
 					// Extract extension and create a more readable name
 					const ext = normalizedFileName.split(".").pop();
 					const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -77,7 +91,7 @@ export async function POST(request: NextRequest) {
 				const filePath = join(backupFolder, prefixedFileName);
 				const fileDir = join(
 					backupFolder,
-					prefixedFileName.split("/").slice(0, -1).join("/")
+					prefixedFileName.split("/").slice(0, -1).join("/"),
 				);
 				if (fileDir !== backupFolder) {
 					await mkdir(fileDir, { recursive: true });
@@ -88,7 +102,7 @@ export async function POST(request: NextRequest) {
 					data: {
 						backupId: backup.id,
 						filePath: prefixedFileName,
-						fileSize: buffer.length,
+						fileSize: BigInt(buffer.length),
 						checksum,
 						status: "uploaded",
 					},
@@ -113,7 +127,7 @@ export async function POST(request: NextRequest) {
 			client.id,
 			backupName,
 			BACKUP_STORAGE_DIR,
-			client.name
+			client.name,
 		);
 
 		await prisma.syncLog.create({
@@ -141,7 +155,8 @@ export async function POST(request: NextRequest) {
 
 		if (client) {
 			const prisma = getPrismaClient();
-			const errorMessage = error instanceof Error ? error.message : "Unknown error";
+			const errorMessage =
+				error instanceof Error ? error.message : "Unknown error";
 			await prisma.syncLog.create({
 				data: {
 					clientId: client.id,
@@ -152,10 +167,177 @@ export async function POST(request: NextRequest) {
 			});
 		}
 
-		const errorMessage = error instanceof Error ? error.message : "Unknown error";
+		const errorMessage =
+			error instanceof Error ? error.message : "Unknown error";
 		return NextResponse.json(
 			{ error: "Backup failed", details: errorMessage },
-			{ status: 500 }
+			{ status: 500 },
+		);
+	}
+}
+
+export async function PUT(request: NextRequest) {
+	let client: any = null;
+	let filePath: string | null = null;
+	let backupId: string | null = null;
+
+	try {
+		const validation = await validateApiKey(request);
+		if ("error" in validation) {
+			return NextResponse.json(
+				{ error: validation.error },
+				{ status: validation.status },
+			);
+		}
+
+		client = validation.client;
+		const prisma = getPrismaClient();
+
+		// Get metadata from headers
+		const backupName = request.headers.get("X-Backup-Name");
+		const fileName = request.headers.get("X-File-Name");
+		const contentLength = request.headers.get("Content-Length");
+
+		if (!backupName || !fileName || !contentLength) {
+			return NextResponse.json(
+				{
+					error:
+						"Missing required headers: X-Backup-Name, X-File-Name, Content-Length",
+				},
+				{ status: 400 },
+			);
+		}
+
+		const version = await getNextVersion(client.id, backupName);
+		const timestamp = new Date();
+		const isoDate = formatIsoDate(timestamp);
+
+		// Create backup folder
+		const BACKUP_STORAGE_DIR = getBackupStorageDir();
+		const backupFolder = join(BACKUP_STORAGE_DIR, client.name, backupName);
+		await mkdir(backupFolder, { recursive: true });
+
+		// Create backup record
+		const backup = await prisma.backup.create({
+			data: {
+				clientId: client.id,
+				backupName,
+				version,
+				status: "in_progress",
+				filesCount: 0,
+				totalSize: BigInt(0),
+				metadata: { isoDate },
+			},
+		});
+		backupId = backup.id;
+
+		// Build file path
+		const prefixedFileName = `${isoDate}_${fileName}`;
+		filePath = join(backupFolder, prefixedFileName);
+
+		// ── Stream body directly to disk + compute checksum in one pass ──
+		const body = request.body;
+		if (!body) {
+			return NextResponse.json(
+				{ error: "Request body is empty" },
+				{ status: 400 },
+			);
+		}
+
+		const { fileSize, checksum } = await streamToDiskWithChecksum(
+			body,
+			filePath,
+		);
+
+		// Create file record
+		await prisma.backupFile.create({
+			data: {
+				backupId: backup.id,
+				filePath: prefixedFileName,
+				fileSize: BigInt(fileSize),
+				checksum,
+				status: "uploaded",
+			},
+		});
+
+		// Update backup status
+		await prisma.backup.update({
+			where: { id: backup.id },
+			data: {
+				status: "completed",
+				filesCount: 1,
+				totalSize: BigInt(fileSize),
+			},
+		});
+
+		// Clean up old backups if limit exceeded
+		await cleanupOldBackups(
+			client.id,
+			backupName,
+			BACKUP_STORAGE_DIR,
+			client.name,
+		);
+
+		await prisma.syncLog.create({
+			data: {
+				clientId: client.id,
+				action: "backup",
+				status: "success",
+				message: `Backed up file (v${version})`,
+				metadata: { backupId: backup.id, backupName, version },
+			},
+		});
+
+		return NextResponse.json({
+			success: true,
+			message: "Backup completed",
+			backupId: backup.id,
+			backupName,
+			version,
+			timestamp: backup.timestamp,
+			filesCount: 1,
+			totalSize: fileSize,
+		});
+	} catch (error) {
+		console.error("Backup error:", error);
+
+		// Clean up partial file on failure
+		if (filePath) {
+			try {
+				await unlink(filePath);
+			} catch {}
+		}
+
+		// Mark backup as failed
+		if (backupId) {
+			const prisma = getPrismaClient();
+			try {
+				await prisma.backup.update({
+					where: { id: backupId },
+					data: { status: "failed" },
+				});
+			} catch {}
+		}
+
+		if (client) {
+			const prisma = getPrismaClient();
+			const errorMessage =
+				error instanceof Error ? error.message : "Unknown error";
+			await prisma.syncLog.create({
+				data: {
+					clientId: client.id,
+					action: "backup",
+					status: "failed",
+					message: errorMessage,
+				},
+			});
+		}
+
+		const errorMessage =
+			error instanceof Error ? error.message : "Unknown error";
+		return NextResponse.json(
+			{ error: "Backup failed", details: errorMessage },
+			{ status: 500 },
 		);
 	}
 }

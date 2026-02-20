@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import { Token } from "./lib/token";
 
 export const config = {
-	matcher: ["/((?!_next/static|_next/image|favicon.ico|api|logo.svg).*)"],
+	matcher: [
+		"/((?!_next/static|_next/image|favicon.ico|api|logo.svg|icon.png).*)",
+	],
 };
 
 export async function proxy(request: NextRequest) {

@@ -16,8 +16,14 @@ export async function GET(request: NextRequest) {
 
 		const prisma = getPrismaClient();
 
+		const { searchParams } = new URL(request.url);
+		const search = searchParams.get("search") || undefined;
+
 		// Get all clients with their backup statistics
 		const clients = await prisma.client.findMany({
+			where: search
+				? { name: { contains: search, mode: "insensitive" } }
+				: undefined,
 			select: {
 				id: true,
 				name: true,
