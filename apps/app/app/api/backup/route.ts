@@ -88,6 +88,10 @@ export async function GET(request: NextRequest) {
 			...backup,
 			filesCount: backup._count.files,
 			totalSize: backup.totalSize ? backup.totalSize.toString() : "0",
+			files: backup.files.map((f) => ({
+				...f,
+				fileSize: f.fileSize.toString(),
+			})),
 		}));
 
 		return NextResponse.json({ data: backupsWithCount, total });

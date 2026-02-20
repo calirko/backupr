@@ -26,6 +26,7 @@ export default function ClientsPage() {
 	const columns = [
 		{ key: "name", label: "Name" },
 		{ key: "email", label: "Email" },
+		{ key: "apiKey", label: "API Key" },
 		{ key: "folderPath", label: "Folder Path" },
 		{ key: "backupCount", label: "Backups" },
 		{ key: "createdAt", label: "Created" },

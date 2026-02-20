@@ -8,7 +8,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Checkbox, CheckboxWrapper } from "@/components/ui/checkbox";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import InputPassword from "@/components/ui/input-password";
 import { Label } from "@/components/ui/label";
@@ -111,14 +111,15 @@ export default function SignInPage() {
 			<div className="flex-col gap-10 w-full h-full flex items-center justify-center ">
 				<div className="flex items-center gap-4">
 					<div>
-						<img src={"/logo.svg"} className="h-full p-2 h-30 w-30" />
+						<img src={"/icon.png"} className="h-full p-2 h-30 w-30" />
 					</div>
-					<div>
-						<h1 className="font-bold text-5xl">Backupr</h1>
+					<div className="space-y-2">
+						<h1 className="font-black text-5xl">Backupr</h1>
+						<p className="text-muted-foreground">Simple file backup tool.</p>
 					</div>
 				</div>
 
-				<Card className="w-[450px]">
+				<Card className="w-112.5">
 					<CardHeader>
 						<CardTitle>Entrar</CardTitle>
 						<CardDescription>
@@ -153,28 +154,28 @@ export default function SignInPage() {
 											error={formErrors.password}
 										/>
 									</div>
-									<div className="flex items-center gap-2 w-full">
-										<CheckboxWrapper className="w-full">
-											<Checkbox
-												id="rememberMe"
-												checked={form.rememberMe}
-												onCheckedChange={(e) =>
-													setForm({
-														...form,
-														rememberMe: e as boolean,
-													})
-												}
-											/>
-											<Label htmlFor="rememberMe" className="mb-0">
-												Lembrar-me
-											</Label>
-										</CheckboxWrapper>
-									</div>
 								</div>
-								<Button className="w-full" disabled={loading}>
-									<DoorOpen />
-									Entrar
-								</Button>
+								<div className="flex items-center gap-2 w-full">
+									<div className="flex gap-2 grow">
+										<Checkbox
+											id="rememberMe"
+											checked={form.rememberMe}
+											onCheckedChange={(e) =>
+												setForm({
+													...form,
+													rememberMe: e as boolean,
+												})
+											}
+										/>
+										<Label htmlFor="rememberMe" className="mb-0">
+											Lembrar-me
+										</Label>
+									</div>
+									<Button disabled={loading} className="h-9">
+										<DoorOpen />
+										Entrar
+									</Button>
+								</div>
 							</div>
 						</form>
 					</CardContent>

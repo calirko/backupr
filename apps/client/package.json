@@ -1,8 +1,8 @@
 {
 	"name": "@backupr/client",
-	"version": "1.1.2",
+	"version": "1.2.0",
 	"description": "Backupr Electron Client",
-	"main": "electron/main.js",
+	"main": "src/main.js",
 	"author": {
 		"email": "me@calirko.com",
 		"name": "calirko",
@@ -16,14 +16,16 @@
 		"package": "electron-builder --config electron-builder.json"
 	},
 	"dependencies": {
-		"@prisma/client": "^5.7.1",
 		"@radix-ui/react-toast": "^1.2.15",
 		"archiver": "^7.0.1",
 		"auto-launch": "^5.0.6",
-		"electron-store": "^8.1.0",
+		"cron-parser": "^5.5.0",
+		"electron-store": "8",
 		"electron-updater": "^6.6.2",
 		"form-data": "^4.0.0",
-		"node-fetch": "^2.7.0"
+		"node-cron": "^4.2.1",
+		"node-fetch": "^2.7.0",
+		"ws": "^8.18.0"
 	},
 	"devDependencies": {
 		"@radix-ui/react-dialog": "^1.0.5",
@@ -31,8 +33,8 @@
 		"@radix-ui/react-select": "^2.0.0",
 		"@radix-ui/react-slot": "^1.0.2",
 		"@radix-ui/react-tabs": "^1.0.4",
-		"@types/react": "^18.2.43",
-		"@types/react-dom": "^18.2.17",
+		"@types/react": "^19",
+		"@types/react-dom": "^19",
 		"@vitejs/plugin-react": "^4.2.1",
 		"autoprefixer": "^10.4.16",
 		"class-variance-authority": "^0.7.0",
@@ -43,9 +45,8 @@
 		"electron-builder": "^24.9.1",
 		"lucide-react": "^0.298.0",
 		"postcss": "^8.4.32",
-		"prisma": "^5.7.1",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0",
+		"react": "^19",
+		"react-dom": "^19",
 		"tailwind-merge": "^2.1.0",
 		"tailwindcss": "^3.3.6",
 		"tailwindcss-animate": "^1.0.7",

@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
 		const prisma = getPrismaClient();
 		const { searchParams } = new URL(request.url);
 		const clientId = searchParams.get("clientId");
+		const backupNameFilter = searchParams.get("backupName") || undefined;
+		const statusFilter = searchParams.get("status") || undefined;
 
 		if (!clientId) {
 			return NextResponse.json(
@@ -29,6 +31,14 @@ export async function GET(request: NextRequest) {
 		const backupNames = await prisma.backup.findMany({
 			where: {
 				clientId,
+				...(backupNameFilter
+					? {
+							backupName: {
+								contains: backupNameFilter,
+								mode: "insensitive" as const,
+							},
+						}
+					: {}),
 			},
 			distinct: ["backupName"],
 			select: {
@@ -46,6 +56,7 @@ export async function GET(request: NextRequest) {
 					where: {
 						clientId,
 						backupName,
+						...(statusFilter ? { status: statusFilter } : {}),
 					},
 					orderBy: {
 						createdAt: "desc",

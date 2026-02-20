@@ -35,6 +35,9 @@ EXPOSE 3000
 # Make entrypoint executable
 RUN chmod +x docker-entrypoint.sh
 
-# Use entrypoint to run migrations/seed at runtime, then start the server
+# Run migrations/seed at start-up, then launch the Next.js server.
+# The WebSocket endpoint (/client-ws) is initialised inside pages/api/ws on the
+# first request – no custom server wrapper needed.
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["yarn", "start", "-H", "0.0.0.0", "-p", "3000"]
+CMD ["yarn", "start"]
+CMD ["node", "server.js"]

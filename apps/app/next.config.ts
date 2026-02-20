@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
 	reactCompiler: true,
 	basePath: "",
 	assetPrefix: "",
+	experimental: {
+		serverActions: {
+			bodySizeLimit: undefined,
+		},
+	},
 };
 
 export default nextConfig;

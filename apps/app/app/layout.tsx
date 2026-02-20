@@ -8,7 +8,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 const inter = Inter({
-	variable: "--font-geist-sans",
+	variable: "--font-inter",
 	subsets: ["latin"],
 });
 
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 	title: "Backupr",
 	description: "Aplicativo para empresa de controle de backups",
 	icons: {
-		icon: "/logo.svg",
+		icon: "/icons/icon.png",
 	},
 };
 
@@ -28,7 +28,7 @@ export default function RootLayout({
 	return (
 		<html lang="pt-BR" suppressHydrationWarning className="overflow-y-hidden">
 			<body
-				className={`${inter.variable} antialiased h-[100dvh]`}
+				className={`${inter.variable} antialiased h-dvh`}
 				suppressHydrationWarning
 			>
 				<ThemeProvider

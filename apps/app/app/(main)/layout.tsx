@@ -46,7 +46,7 @@ export default function MainLayout({
 			<div className="flex justify-between border-b h-12 bg-background sticky top-0 z-10">
 				<div className="flex">
 					<div className="h-full border-r">
-						<img src={"/logo.svg"} className="h-full p-2" />
+						<img src={"/icon.png"} className="h-full p-2" />
 					</div>
 					<div className="h-12 flex items-center shrink-0">
 						{navItems.map((item) => (
@@ -57,7 +57,7 @@ export default function MainLayout({
 									className={cn(
 										"gap-2 border-r h-full",
 
-										!pathname.startsWith(item.href) && "text-muted-foreground",
+										!pathname?.startsWith(item.href) && "text-muted-foreground",
 									)}
 								>
 									<span className="px-2 flex items-center gap-2">
@@ -75,7 +75,7 @@ export default function MainLayout({
 				</div>
 			</div>
 			<div
-				className="h-fit border-b"
+				className="grow"
 				style={{ paddingLeft: "47px", paddingRight: "48px" }}
 			>
 				<div className="border-l border-r px-8 md:py-4 pt-3 min-h-full">
