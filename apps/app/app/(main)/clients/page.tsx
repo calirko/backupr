@@ -1,5 +1,6 @@
 "use client";
 
+import ViewApiKeyDialog from "@/components/dialogs/viewApiKey";
 import BulkData from "@/components/layout/data/bulkData";
 import Data from "@/components/layout/data/data";
 import { TableAction } from "@/components/layout/data/dataActions";
@@ -11,9 +12,10 @@ import DataTableWrapper from "@/components/layout/dataTableWrapper";
 import { Button } from "@/components/ui/button";
 import RelativeDate from "@/components/ui/relative-date";
 import { useData } from "@/hooks/use-data";
+import { useDialog } from "@/hooks/use-dialog";
 import Api from "@/lib/api";
 import Cookies from "js-cookie";
-import { Pencil, Plus, Trash } from "lucide-react";
+import { Key, Pencil, Plus, Trash } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -22,11 +24,12 @@ export default function ClientsPage() {
 	const [loading, setLoading] = useState(true);
 	const [data, setData] = useState({ items: [], total: 0 });
 	const { skip, take, filters, orderBy } = useData("clients");
+	const { openDialog } = useDialog();
 
 	const columns = [
 		{ key: "name", label: "Name" },
 		{ key: "email", label: "Email" },
-		{ key: "apiKey", label: "API Key" },
+		{ key: "apiKeyLabel", label: "API Key", orderable: false },
 		{ key: "folderPath", label: "Folder Path" },
 		{ key: "backupCount", label: "Backups" },
 		{ key: "createdAt", label: "Created" },
@@ -53,15 +56,24 @@ export default function ClientsPage() {
 			id: "general",
 		},
 		{
+			id: "view_key",
+			label: "View API Key",
+			icon: <Key className="w-4 h-4" />,
+			onClick: (row) => {
+				openDialog(ViewApiKeyDialog, { apiKey: row.apiKey });
+			},
+		},
+		{
 			id: "edit",
 			label: "Edit",
-			icon: <Pencil />,
+			icon: <Pencil className="w-4 h-4" />,
 			href: (row) => `/clients/${row.id}/edit`,
 		},
 		{
 			id: "delete",
 			label: "Delete",
-			icon: <Trash />,
+
+			icon: <Trash className="w-4 h-4" />,
 			onClick: async (row) => {
 				try {
 					await Api.del(
@@ -116,6 +128,7 @@ export default function ClientsPage() {
 				backupCount: e._count?.backups || 0,
 				updatedAt: <RelativeDate date={new Date(e.updatedAt)} />,
 				createdAt: <RelativeDate date={new Date(e.createdAt)} />,
+				apiKeyLabel: "•".repeat(e.apiKey.length),
 			}));
 			setData({ items: prettyData, total: response.total });
 		} catch (error) {

@@ -242,7 +242,7 @@ export function AddBackupDialog({ visible, onClose, isEdit }) {
 								</Button>
 							</div>
 						</div>
-						<div className="space-y-2 min-h-[100px] max-h-[150px] overflow-auto border rounded-md p-3">
+						<div className="space-y-2 min-h-[100px] max-h-[150px] overflow-auto border p-3">
 							{paths.length === 0 ? (
 								<div className="flex items-center justify-center h-20">
 									<p className="text-sm text-muted-foreground text-center">
@@ -253,7 +253,7 @@ export function AddBackupDialog({ visible, onClose, isEdit }) {
 								paths.map((filePath) => (
 									<div
 										key={filePath}
-										className="flex items-center justify-between p-2 bg-secondary rounded-md"
+										className="flex items-center justify-between p-2 bg-secondary"
 									>
 										<span className="text-xs truncate flex-1" title={filePath}>
 											{filePath}

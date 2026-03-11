@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
 			...backup,
 			filesCount: backup._count.files,
 			totalSize: backup.totalSize ? backup.totalSize.toString() : "0",
+			zipName: `${backup.backupName}-${backup.createdAt.toISOString()}.zip`,
 		}));
 
 		return NextResponse.json({ data: backupsWithCount });

@@ -36,8 +36,5 @@ EXPOSE 3000
 RUN chmod +x docker-entrypoint.sh
 
 # Run migrations/seed at start-up, then launch the Next.js server.
-# The WebSocket endpoint (/client-ws) is initialised inside pages/api/ws on the
-# first request – no custom server wrapper needed.
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["yarn", "start"]
-CMD ["node", "server.js"]

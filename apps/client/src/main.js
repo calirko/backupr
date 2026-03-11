@@ -126,9 +126,11 @@ function createWindow() {
 		win.webContents.openDevTools();
 	}
 
-	// Show window when ready
+	// Show window when ready (dev only - production starts in system tray)
 	win.once("ready-to-show", () => {
-		win.show();
+		if (process.env.ELECTRON_START_URL) {
+			win.show();
+		}
 	});
 
 	// Handle window close - hide instead of close

@@ -4,10 +4,45 @@ const archiver = require("archiver");
 
 const TEMP_DIR = path.join(process.cwd(), ".temp");
 
+function validateFilePaths(filePaths) {
+	const invalidFiles = [];
+
+	for (const filePath of filePaths) {
+		try {
+			if (!fs.existsSync(filePath)) {
+				invalidFiles.push({ path: filePath, reason: "File does not exist" });
+				continue;
+			}
+
+			const stats = fs.statSync(filePath);
+			if (!stats.isFile()) {
+				invalidFiles.push({ path: filePath, reason: "Path is not a file" });
+			}
+		} catch (error) {
+			invalidFiles.push({
+				path: filePath,
+				reason: `Error checking file: ${error.message}`,
+			});
+		}
+	}
+
+	if (invalidFiles.length > 0) {
+		const errorMessage = invalidFiles
+			.map((file) => `${file.path} - ${file.reason}`)
+			.join("\n");
+		throw new Error(
+			`The following files are invalid and cannot be backed up:\n${errorMessage}`,
+		);
+	}
+}
+
 async function generateZip({ paths, backupName, onProgress }) {
 	let zipPath;
 
 	try {
+		// Validate all files before proceeding
+		validateFilePaths(paths);
+
 		if (!fs.existsSync(TEMP_DIR)) {
 			fs.mkdirSync(TEMP_DIR, { recursive: true });
 		}

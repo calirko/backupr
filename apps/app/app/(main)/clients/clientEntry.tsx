@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import Api from "@/lib/api";
 import Cookies from "js-cookie";
-import { Plus, Save, X } from "lucide-react";
+import { Clipboard, Plus, Save, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -170,7 +170,7 @@ export default function ClientEntry({
 					</Button>
 				</div>
 				{loading ? (
-					<div className="h-40 flex justify-center items-center bg-background rounded-lg border">
+					<div className="h-40 flex justify-center items-center bg-background border">
 						<Spinner />
 					</div>
 				) : (
@@ -224,22 +224,23 @@ export default function ClientEntry({
 					<div className="space-y-4">
 						<div>
 							<Label>API Key</Label>
-							<div className="relative">
+							<div className="flex items-center">
 								<Input
 									type="text"
 									value={apiKeyDialog.apiKey}
 									readOnly
-									className="font-mono text-sm"
+									className="font-mono text-sm grow"
 								/>
 								<Button
 									size="sm"
 									variant="outline"
-									className="absolute right-2 top-1/2 -translate-y-1/2"
+									className="h-9 border-l-0"
 									onClick={() => {
 										navigator.clipboard.writeText(apiKeyDialog.apiKey);
 										toast.success("API key copied to clipboard");
 									}}
 								>
+									<Clipboard />
 									Copy
 								</Button>
 							</div>

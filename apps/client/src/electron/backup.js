@@ -60,6 +60,7 @@ async function streamUploadFile({
 			let uploadedBytes = 0;
 			let lastProgressUpdate = 0;
 			const throttleMs = 500; // Update progress max once per 500ms
+			let done = false;
 
 			const req = protocol.request(options, (res) => {
 				let data = "";
@@ -69,6 +70,7 @@ async function streamUploadFile({
 				});
 
 				res.on("end", () => {
+					done = true;
 					if (res.statusCode >= 200 && res.statusCode < 300) {
 						if (onProgress) {
 							onProgress(100); // Upload complete
@@ -91,6 +93,7 @@ async function streamUploadFile({
 			});
 
 			req.on("error", (error) => {
+				done = true;
 				console.error(`Failed to upload backup for ${backupName}:`, error);
 				resolve(false);
 			});
@@ -99,6 +102,7 @@ async function streamUploadFile({
 
 			// Track upload progress
 			fileStream.on("data", (chunk) => {
+				if (done) return;
 				uploadedBytes += chunk.length;
 				const now = Date.now();
 				if (now - lastProgressUpdate >= throttleMs && onProgress) {
@@ -116,7 +120,7 @@ async function streamUploadFile({
 	});
 }
 
-async function runBackup(task, store) {
+async function runBackup(task, store, onStatus = null) {
 	const backupStartTime = new Date();
 	let zipPath;
 
@@ -137,15 +141,34 @@ async function runBackup(task, store) {
 			type: "error",
 			progress: 0,
 		});
+		if (onStatus)
+			onStatus({
+				title: "Backup failed",
+				description: `Missing server configuration for "${task.name}". Please set server host and API key in settings.`,
+				type: "error",
+				progress: 0,
+			});
 		return;
 	}
 
-	sendBackupStatus({
+	function _notify(status) {
+		sendBackupStatus(status);
+		if (onStatus) onStatus(status);
+	}
+
+	_notify({
 		title: "Creating backup",
 		description: `Preparing files for: ${task.name}`,
 		type: "creating",
 		progress: 0,
 	});
+	if (onStatus)
+		onStatus({
+			title: "Creating backup",
+			description: `Preparing files for: ${task.name}`,
+			type: "creating",
+			progress: 0,
+		});
 
 	try {
 		const zipResult = await generateZip({
@@ -154,23 +177,37 @@ async function runBackup(task, store) {
 			onProgress: (zipProgress) => {
 				// Map zip progress 0-100% to overall progress 0-50%
 				const progress = (zipProgress / 100) * 50;
-				sendBackupStatus({
+				_notify({
 					title: "Compressing files",
 					description: `Preparing files for: ${task.name} (${Math.round(zipProgress)}%)`,
 					type: "creating",
 					progress: Math.round(progress),
 				});
+				if (onStatus)
+					onStatus({
+						title: "Compressing files",
+						description: `Preparing files for: ${task.name} (${Math.round(zipProgress)}%)`,
+						type: "creating",
+						progress: Math.round(progress),
+					});
 			},
 		});
 
 		zipPath = zipResult;
 
-		sendBackupStatus({
+		_notify({
 			title: "Uploading backup",
 			description: `Uploading: ${task.name}`,
 			type: "uploading",
 			progress: 50,
 		});
+		if (onStatus)
+			onStatus({
+				title: "Uploading backup",
+				description: `Uploading: ${task.name}`,
+				type: "uploading",
+				progress: 50,
+			});
 
 		const uploadSuccess = await streamUploadFile({
 			zipPath,
@@ -180,12 +217,19 @@ async function runBackup(task, store) {
 			onProgress: (uploadProgress) => {
 				// Map upload progress 0-100% to overall progress 50-100%
 				const progress = 50 + (uploadProgress / 100) * 50;
-				sendBackupStatus({
+				_notify({
 					title: "Uploading backup",
 					description: `Uploading: ${task.name} (${Math.round(uploadProgress)}%)`,
 					type: "uploading",
 					progress: Math.round(progress),
 				});
+				if (onStatus)
+					onStatus({
+						title: "Uploading backup",
+						description: `Uploading: ${task.name} (${Math.round(uploadProgress)}%)`,
+						type: "uploading",
+						progress: Math.round(progress),
+					});
 			},
 		});
 
@@ -204,18 +248,32 @@ async function runBackup(task, store) {
 
 			store.set("tasks", updatedTasks);
 
-			sendBackupStatus({
+			_notify({
 				title: "Backup completed",
 				description: `Backup for "${task.name}" completed successfully`,
 				type: "success",
 				progress: 100,
 			});
+			if (onStatus)
+				onStatus({
+					title: "Backup completed",
+					description: `Backup for "${task.name}" completed successfully`,
+					type: "success",
+					progress: 100,
+				});
 
 			// Send desktop notification even if window is closed
 			notifyBackupSuccess(task.name);
 
 			console.log(`Backup completed successfully: ${task.name}`);
 		} else {
+			if (onStatus)
+				onStatus({
+					title: "Backup failed",
+					description: `Upload failed for "${task.name}". Please check your server connection and try again.`,
+					type: "error",
+					progress: 100,
+				});
 			throw new Error("Upload failed");
 		}
 	} catch (error) {
@@ -235,15 +293,18 @@ async function runBackup(task, store) {
 
 		store.set("tasks", updatedTasks);
 
-		sendBackupStatus({
+		_notify({
 			title: "Backup failed",
 			description: `Backup for "${task.name}" failed: ${error.message}`,
 			type: "error",
-			progress: 0,
+			progress: 100,
 		});
 
 		// Send desktop notification even if window is closed
 		notifyBackupError(task.name, error.message);
+
+		// Re-throw so callers (e.g. ws-client) know the backup failed
+		throw error;
 	} finally {
 		deleteZipTemp(zipPath);
 	}

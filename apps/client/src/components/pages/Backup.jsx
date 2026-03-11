@@ -74,7 +74,7 @@ export function BackupPage() {
 	}
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-4">
 			<Status
 				onStatusChange={(e) => {
 					if (e.type === "success") loadTasks();
@@ -96,7 +96,7 @@ export function BackupPage() {
 						variant="outline"
 					>
 						<Plus className="h-4" />
-						Add Sync Item
+						Add Item
 					</Button>
 				</div>
 			</div>

@@ -1,6 +1,7 @@
 const cron = require("node-cron");
 const cronParser = require("cron-parser");
 const { runBackup, setMainWindow, sendBackupStatus } = require("./backup");
+const { sendBackupProgress } = require("./ws-client");
 
 const cronJobs = new Map();
 const backupQueue = [];
@@ -94,7 +95,14 @@ async function processBackupQueue() {
 
 	try {
 		console.log(`Processing backup from queue: ${task.name}`);
-		await runBackup(task, store);
+		await runBackup(task, store, (status) => {
+			sendBackupProgress(
+				task.name,
+				status.type,
+				status.progress ?? 0,
+				status.description ?? status.title ?? "",
+			);
+		});
 	} catch (error) {
 		console.error(`Error processing backup queue for ${task.name}:`, error);
 	} finally {

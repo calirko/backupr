@@ -19,7 +19,9 @@ export default function StatusBadge({
 	};
 
 	return (
-		<span className={`flex gap-1.5 items-center ${variantClasses[variant]}`}>
+		<span
+			className={`flex gap-1.5 items-center text-xs ${variantClasses[variant]}`}
+		>
 			{icon}
 			{label}
 		</span>

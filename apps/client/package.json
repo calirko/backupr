@@ -9,7 +9,7 @@
 		"url": "https://calirko.com"
 	},
 	"scripts": {
-		"dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_START_URL=http://localhost:5173 electron .\"",
+		"dev": "concurrently \"vite\" \"wait-on tcp:localhost:5176 && cross-env ELECTRON_START_URL=http://localhost:5176 electron .\"",
 		"build": "vite build",
 		"build:win": "vite build && electron-builder --win --x64 --config electron-builder.json",
 		"start": "electron .",

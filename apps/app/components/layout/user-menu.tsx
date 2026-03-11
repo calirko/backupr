@@ -65,21 +65,49 @@ export function UserMenu({ email, name }: UserMenuProps) {
 					</div>
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
+			<DropdownMenuContent>
 				<DropdownMenuLabel>
-					<div className="flex flex-col space-y-1">
-						<p className="text-sm font-medium leading-none">{name || "User"}</p>
-						{email && (
-							<p className="text-xs leading-none text-muted-foreground">
-								{email}
+					<div className="flex items-center gap-3">
+						<div className="relative aspect-square w-[40px] h-full p-0">
+							{email ? (
+								<img
+									src={getGravatarUrl(email)}
+									alt={name || email}
+									className="h-full aspect-square object-cover"
+									onError={(e) => {
+										// Fallback to icon on error
+										const target = e.target as HTMLImageElement;
+										target.style.display = "none";
+										if (target.nextElementSibling) {
+											(target.nextElementSibling as HTMLElement).style.display =
+												"flex";
+										}
+									}}
+								/>
+							) : null}
+							<div
+								className="h-8 w-8 rounded-full bg-muted flex items-center justify-center"
+								style={{ display: email ? "none" : "flex" }}
+							>
+								<User className="h-4 w-4" />
+							</div>
+						</div>
+						<div className="flex flex-col space-y-1">
+							<p className="text-sm font-medium leading-none">
+								{name || "User"}
 							</p>
-						)}
+							{email && (
+								<p className="text-xs leading-none text-muted-foreground">
+									{email}
+								</p>
+							)}
+						</div>
 					</div>
 				</DropdownMenuLabel>
 				<DropdownMenuSeparator />
-				<DropdownMenuItem onClick={handleLogout}>
+				<DropdownMenuItem onClick={handleLogout} className="text-destructive">
 					<LogOut className="w-4 h-4" />
-					<span>Log out</span>
+					Log out
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

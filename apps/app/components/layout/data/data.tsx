@@ -223,7 +223,7 @@ export default function Data({
 				</div>
 			) : data.length === 0 ? (
 				<div className="flex justify-center items-center h-14 text-muted-foreground">
-					<p className="text-xs">Nenhum dado disponível.</p>
+					<p className="text-xs">No data to show</p>
 				</div>
 			) : (
 				<>
@@ -270,7 +270,7 @@ export default function Data({
 											col,
 											index === columns.length - 1 &&
 												(!actions || actions.length === 0),
-										)}`}
+										)} font-semibold`}
 									>
 										{showOrderBy && col.orderable !== false ? (
 											<Button
@@ -305,7 +305,7 @@ export default function Data({
 												})()}
 											</Button>
 										) : (
-											col.label
+											<span className="text-xs">{col.label}</span>
 										)}
 									</TableHead>
 								))}

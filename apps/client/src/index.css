@@ -128,64 +128,139 @@ img {
 }
 
 .bg-progress {
-	background-color: #2a2a2a;
-	overflow: hidden;
+   background-color: hsl(var(--muted));
+   overflow: hidden;
 }
 
 .bg-progress::after {
-	content: "";
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	background: linear-gradient(
-		90deg,
-		transparent 0%,
-		rgba(25, 38, 73, 0.6) 50%,
-		transparent 100%
-	);
-	animation: pulse-sweep 2s ease-in-out infinite;
+   content: "";
+   position: absolute;
+   top: 0;
+   left: 0;
+   width: 100%;
+   height: 100%;
+   background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(215, 228, 255, 0.6) 50%,
+      transparent 100%
+   );
+   animation: pulse-sweep 2s ease-in-out infinite;
+}
+
+.dark .bg-progress::after {
+   background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(25, 38, 73, 0.6) 50%,
+      transparent 100%
+   );
 }
 
 @keyframes pulse-sweep {
-	0% {
-		transform: translateX(-100%);
-		opacity: 0;
-	}
-	50% {
-		opacity: 1;
-	}
-	100% {
-		transform: translateX(100%);
-		opacity: 0;
-	}
+   0% {
+      transform: translateX(-100%);
+      opacity: 0;
+   }
+   50% {
+      opacity: 1;
+   }
+   100% {
+      transform: translateX(100%);
+      opacity: 0;
+   }
 }
 
+/* Light mode success */
 .bg-progress-success {
-	background-color: #2a2a2a;
-	animation: pulse-green 3s ease-in-out infinite;
+   background-color: hsl(var(--muted));
+   animation: pulse-green 3s ease-in-out infinite;
+}
+
+/* Light mode error */
+.bg-progress-error {
+   background-color: hsl(var(--muted));
+   animation: pulse-red 3s ease-in-out infinite;
+}
+
+/* Dark mode success */
+.dark .bg-progress-success {
+   animation: pulse-green-dark 3s ease-in-out infinite;
+}
+
+/* Dark mode error */
+.dark .bg-progress-error {
+   animation: pulse-red-dark 3s ease-in-out infinite;
+}
+
+@keyframes pulse-red {
+   0% {
+      background-color: hsl(var(--muted));
+   }
+   20% {
+      background-color: hsl(var(--muted));
+   }
+   50% {
+      background-color: rgba(247, 155, 155, 0.3);
+   }
+   80% {
+      background-color: rgba(247, 155, 155, 0.3);
+   }
+   100% {
+      background-color: hsl(var(--muted));
+   }
 }
 
 @keyframes pulse-green {
-	0% {
-		background-color: #2a2a2a;
-	}
-
+   0% {
+      background-color: hsl(var(--muted));
+   }
    20% {
-      background-color: #2a2a2a;
+      background-color: hsl(var(--muted));
    }
-
-	50% {
-		background-color: rgba(32, 58, 42, 0.8);
-	}
-
+   50% {
+      background-color: rgba(126, 209, 156, 0.3);
+   }
    80% {
-      		background-color: rgba(32, 58, 42, 0.8);
-
+      background-color: rgba(126, 209, 156, 0.3);
    }
+   100% {
+      background-color: hsl(var(--muted));
+   }
+}
 
-	100% {
-		background-color: #2a2a2a;
-	}
+@keyframes pulse-red-dark {
+   0% {
+      background-color: hsl(var(--muted));
+   }
+   20% {
+      background-color: hsl(var(--muted));
+   }
+   50% {
+      background-color: rgba(58, 32, 32, 0.8);
+   }
+   80% {
+      background-color: rgba(58, 32, 32, 0.8);
+   }
+   100% {
+      background-color: hsl(var(--muted));
+   }
+}
+
+@keyframes pulse-green-dark {
+   0% {
+      background-color: hsl(var(--muted));
+   }
+   20% {
+      background-color: hsl(var(--muted));
+   }
+   50% {
+      background-color: rgba(32, 58, 42, 0.8);
+   }
+   80% {
+      background-color: rgba(32, 58, 42, 0.8);
+   }
+   100% {
+      background-color: hsl(var(--muted));
+   }
 }

@@ -1,4 +1,4 @@
-import { Save, Server } from "lucide-react";
+import { Plug, RefreshCw, Save, Server, ServerOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "../../hooks/use-toast";
 import { Button } from "../ui/button";
@@ -17,20 +17,28 @@ export function SettingsPage() {
 	const [settings, setSettings] = useState({
 		serverHost: "",
 		apiKey: "",
+		wsServiceUrl: "",
 	});
 	const [startupBehavior, setStartupBehavior] = useState({
 		startInBackground: false,
 	});
+	const [wsStatus, setWsStatus] = useState("disconnected"); // "connected" | "connecting" | "disconnected"
+	const [reconnecting, setReconnecting] = useState(false);
 
 	// Load settings from store on mount
 	useEffect(() => {
 		const loadSettings = async () => {
 			try {
 				const savedSettings = (await window.store?.getAll()) || {};
-				if (savedSettings.serverHost || savedSettings.apiKey) {
+				if (
+					savedSettings.serverHost ||
+					savedSettings.apiKey ||
+					savedSettings.wsServiceUrl
+				) {
 					setSettings({
 						serverHost: savedSettings.serverHost || "",
 						apiKey: savedSettings.apiKey || "",
+						wsServiceUrl: savedSettings.wsServiceUrl || "",
 					});
 				}
 				if (savedSettings.startInBackground !== undefined) {
@@ -43,6 +51,14 @@ export function SettingsPage() {
 			}
 		};
 		loadSettings();
+
+		// Fetch initial WS status and subscribe to live updates
+		window.electron
+			?.getWsStatus()
+			.then(setWsStatus)
+			.catch(() => {});
+		const unsub = window.electron?.ipcRenderer.on("ws-status", setWsStatus);
+		return () => unsub?.();
 	}, []);
 
 	function updateSetting(key, value) {
@@ -57,6 +73,7 @@ export function SettingsPage() {
 			try {
 				await window.store?.set("serverHost", settings.serverHost);
 				await window.store?.set("apiKey", settings.apiKey);
+				await window.store?.set("wsServiceUrl", settings.wsServiceUrl);
 				await window.store?.set(
 					"startInBackground",
 					startupBehavior.startInBackground,
@@ -73,6 +90,9 @@ export function SettingsPage() {
 					title: "Settings saved!",
 					description: "Your settings have been updated successfully.",
 				});
+
+				// Force-reconnect with the new settings (guarded against active backups)
+				await _doReconnect({ silent: true });
 			} catch (e) {
 				console.error("Failed to save settings:", e);
 				toast({
@@ -83,6 +103,34 @@ export function SettingsPage() {
 			}
 		};
 		saveSettings();
+	}
+
+	async function _doReconnect({ silent = false } = {}) {
+		setReconnecting(true);
+		try {
+			const result = await window.electron?.wsReconnect();
+			if (!result?.ok && !silent) {
+				toast({
+					title: "Cannot reconnect",
+					description: result?.reason || "Unknown error",
+					variant: "destructive",
+				});
+			}
+		} catch (e) {
+			if (!silent) {
+				toast({
+					title: "Reconnect failed",
+					description: e.message,
+					variant: "destructive",
+				});
+			}
+		} finally {
+			setReconnecting(false);
+		}
+	}
+
+	function handleReconnect() {
+		_doReconnect();
 	}
 
 	async function handleTestConnection() {
@@ -116,7 +164,7 @@ export function SettingsPage() {
 	}
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-4">
 			<Card>
 				<CardHeader>
 					<CardTitle>Server Settings</CardTitle>
@@ -144,6 +192,15 @@ export function SettingsPage() {
 							onChange={(e) => updateSetting("apiKey", e.target.value)}
 						/>
 					</div>
+					<div className="space-y-2">
+						<Label htmlFor="wsServiceUrl">WebSocket Service URL</Label>
+						<Input
+							id="wsServiceUrl"
+							placeholder="http://localhost:4001 (leave blank to auto-derive from Server Host)"
+							value={settings.wsServiceUrl}
+							onChange={(e) => updateSetting("wsServiceUrl", e.target.value)}
+						/>
+					</div>
 				</CardContent>
 			</Card>
 
@@ -156,8 +213,52 @@ export function SettingsPage() {
 				</CardHeader>
 				<CardContent>
 					<Button onClick={handleTestConnection} className="w-full">
-						<Server className="h-4" />
+						<Plug className="h-4" />
 						Test Connection
+					</Button>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>Server Connection</CardTitle>
+					<CardDescription>
+						Live WebSocket connection status for real-time backup sync
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="flex items-center justify-between gap-4">
+					<div className="flex items-center gap-2">
+						{wsStatus === "connected" ? (
+							<Server className="h-5 w-5 text-green-500" />
+						) : (
+							<ServerOff className="h-5 w-5 text-muted-foreground" />
+						)}
+						<span
+							className={
+								wsStatus === "connected"
+									? "text-sm font-medium text-green-500"
+									: wsStatus === "connecting"
+										? "text-sm font-medium text-amber-500"
+										: "text-sm font-medium text-muted-foreground"
+							}
+						>
+							{wsStatus === "connected"
+								? "Connected"
+								: wsStatus === "connecting"
+									? "Connecting…"
+									: "Disconnected"}
+						</span>
+					</div>
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={reconnecting || wsStatus === "connected"}
+						onClick={handleReconnect}
+					>
+						<RefreshCw
+							className={`h-4 w-4 ${reconnecting ? "animate-spin" : ""}`}
+						/>
+						{reconnecting ? "Reconnecting…" : "Reconnect"}
 					</Button>
 				</CardContent>
 			</Card>
@@ -191,7 +292,7 @@ export function SettingsPage() {
 									startInBackground: e.target.checked,
 								}))
 							}
-							className="w-4 h-4 rounded"
+							className="w-4 h-4 rounded-0"
 						/>
 						<Label htmlFor="startInBackground" className="cursor-pointer">
 							Launch at system startup
@@ -202,22 +303,6 @@ export function SettingsPage() {
 						run in the background. The app will be minimized to the system tray
 						and you can click the tray icon to show or hide the window. This
 						ensures your scheduled backups run automatically.
-					</p>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>Local Data</CardTitle>
-					<CardDescription>
-						Electron data is automatically managed
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<p className="text-sm text-muted-foreground">
-						The local data is used to store sync history and backup
-						configurations. It's automatically created and managed by the
-						application.
 					</p>
 				</CardContent>
 			</Card>
