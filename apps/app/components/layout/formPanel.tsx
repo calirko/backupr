@@ -10,7 +10,7 @@ export default function FormPanel({
 	className?: string;
 }) {
 	return (
-		<div className={cn("border rounded-lg bg-background", className)}>
+		<div className={cn("border bg-background", className)}>
 			{title && (
 				<p className="font-semibold mb-4 border-b px-4 py-2">{title}</p>
 			)}

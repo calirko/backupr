@@ -201,3 +201,5 @@ yarn-error.log*
 next-env.d.ts
 
 apps/app/backups/*
+
+apps/client/out/*

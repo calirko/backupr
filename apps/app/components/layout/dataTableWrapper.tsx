@@ -7,9 +7,7 @@ export default function DataTableWrapper({
 }) {
 	return (
 		<div className={`grow min-h-0 flex`}>
-			<div
-				className={`border rounded-md overflow-hidden h-fit w-full ${classname || ""}`}
-			>
+			<div className={`border overflow-hidden h-fit w-full ${classname || ""}`}>
 				{children}
 			</div>
 		</div>

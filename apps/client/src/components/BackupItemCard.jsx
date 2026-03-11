@@ -19,7 +19,7 @@ export function BackupItemCard({ item, onEdit, onDelete, onBackup }) {
 	}
 
 	return (
-		<Card className={item.active ? "" : "opacity-60"}>
+		<Card className={`${item.active ? "" : "opacity-60"}`}>
 			<CardHeader className="pb-3">
 				<div className="flex justify-between items-start">
 					<div className="flex-1">

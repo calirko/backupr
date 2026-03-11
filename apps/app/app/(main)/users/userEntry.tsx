@@ -1,17 +1,17 @@
 "use client";
 
-import Cookies from "js-cookie";
-import { Plus, Save, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import FormPanel from "@/components/layout/formPanel";
 import ErrorMessage from "@/components/layout/errorMessage";
+import FormPanel from "@/components/layout/formPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import InputPassword from "@/components/ui/input-password";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import Api from "@/lib/api";
+import Cookies from "js-cookie";
+import { Plus, Save, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 export default function UserEntry({
 	user_id,
@@ -175,7 +175,7 @@ export default function UserEntry({
 				</Button>
 			</div>
 			{loading ? (
-				<div className="h-40 flex justify-center items-center bg-background rounded-lg border">
+				<div className="h-40 flex justify-center items-center bg-background border">
 					<Spinner />
 				</div>
 			) : (

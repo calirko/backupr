@@ -14,8 +14,8 @@ function App() {
 			<TitleBar />
 			<div className="flex-1 overflow-y-auto">
 				<div>
-					<div className="p-6 flex flex-col gap-6">
-						<div className="flex gap-4 items-center">
+					<div className="p-4 flex flex-col gap-4">
+						<div className="flex gap-4 items-center my-2">
 							<img
 								src="/icons/icon.png"
 								alt="Backupr Logo"

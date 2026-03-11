@@ -52,17 +52,17 @@ export default function Status({ onStatusChange }) {
 	if (status.type === "idle") return null;
 
 	return (
-		<div className="w-full border p-4 flex items-center relative">
+		<div className="w-full border p-3 flex items-center relative bg-background">
 			<div
 				style={{ zIndex: 1 }}
 				className="flex justify-between items-center w-full"
 			>
 				<div>
-					<p className="font-semibold text-xs">{status.title}</p>
+					<p className="font-semibold text-sm mb-0.5">{status.title}</p>
 					<p className="text-xs text-muted-foreground">{status.description}</p>
 				</div>
 				<div className="flex items-center gap-1.5">
-					{String(status?.progress) && (
+					{status?.progress !== 0 && status.type !== "error" && (
 						<p className="text-xs text-muted-foreground">{status.progress}%</p>
 					)}
 					<Button
@@ -75,7 +75,7 @@ export default function Status({ onStatusChange }) {
 				</div>
 			</div>
 			<div
-				className={`h-full absolute top-0 left-0 transition-all duration-300 ease-in-out ${status.type === "error" ? "bg-destructive/50" : status.type === "success" ? "bg-progress-success" : status.progress > 0 ? "bg-progress" : "bg-muted/50"}`}
+				className={`h-full absolute top-0 left-0 transition-all duration-300 ease-in-out ${status.type === "error" ? "bg-progress-error" : status.type === "success" ? "bg-progress-success" : status.progress > 0 ? "bg-progress" : "bg-muted/50"}`}
 				style={{ width: `${status.progress || 0}%`, zIndex: 0 }}
 			/>
 		</div>

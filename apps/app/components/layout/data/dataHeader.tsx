@@ -269,8 +269,8 @@ export default function DataHeader({
 							});
 						}}
 					>
-						<SelectTrigger className="w-full">
-							<SelectValue placeholder="Selecione uma Opção" />
+						<SelectTrigger className="w-full text-muted-foreground">
+							<SelectValue placeholder="Select an option" />
 						</SelectTrigger>
 						<SelectContent>
 							{field.options.map((option) => (

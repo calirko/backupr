@@ -117,7 +117,7 @@ export default function DataFooter({
 								>
 									<ChevronLeft />
 								</Button>
-								<div className="bg-sidebar flex rounded-md overflow-hidden items-center border">
+								<div className="bg-sidebar flex overflow-hidden items-center border">
 									{buttons}
 								</div>
 								<Button

@@ -1,6 +1,5 @@
 const WebSocket = require("ws");
-const http = require("node:http");
-const https = require("node:https");
+const { URL } = require("node:url");
 
 let ws = null;
 let reconnectTimer = null;
@@ -8,7 +7,6 @@ let storeRef = null;
 let mainWindowRef = null;
 
 let isShuttingDown = false;
-let triggerLock = false;
 let connectTimeoutTimer = null;
 let pingIntervalTimer = null;
 
@@ -48,6 +46,21 @@ function reconnect() {
 	_connect();
 }
 
+/** Returns the current connection state: "connected" | "connecting" | "disconnected" */
+function getStatus() {
+	if (!ws) return "disconnected";
+	if (ws.readyState === WebSocket.OPEN) return "connected";
+	if (ws.readyState === WebSocket.CONNECTING) return "connecting";
+	return "disconnected";
+}
+
+/** Push the current status to the renderer. */
+function broadcastWsStatus() {
+	if (mainWindowRef?.webContents) {
+		mainWindowRef.webContents.send("ws-status", getStatus());
+	}
+}
+
 function shutdown() {
 	isShuttingDown = true;
 	_clearConnectTimeout();
@@ -84,20 +97,6 @@ function _clearPingInterval() {
 	}
 }
 
-function _httpGet(url, timeoutMs = 8000) {
-	return new Promise((resolve, reject) => {
-		const mod = url.startsWith("https") ? https : http;
-		const req = mod.get(url, (res) => {
-			res.resume();
-			res.on("end", () => resolve(res.statusCode));
-		});
-		req.on("error", reject);
-		req.setTimeout(timeoutMs, () => {
-			req.destroy(new Error(`Request to ${url} timed out`));
-		});
-	});
-}
-
 function _scheduleReconnect(delayMs = 15000) {
 	if (isShuttingDown || reconnectTimer) return;
 	console.log(`[WS-CLIENT] Reconnecting in ${delayMs / 1000}s...`);
@@ -123,26 +122,39 @@ async function _connect() {
 	if (isShuttingDown) return;
 
 	const serverHost = storeRef ? storeRef.get("serverHost", "") : "";
+	const wsServiceUrl = storeRef ? storeRef.get("wsServiceUrl", "") : "";
 	const apiKey = storeRef ? storeRef.get("apiKey", "") : "";
 
-	if (!serverHost || !apiKey) {
-		console.log(
-			"[WS-CLIENT] Cannot connect: missing serverHost or apiKey. Retrying in 30s",
-		);
+	if (!apiKey) {
+		console.log("[WS-CLIENT] Cannot connect: missing apiKey. Retrying in 30s");
 		_scheduleReconnect(30000);
 		return;
 	}
 
-	try {
-		console.log("[WS-CLIENT] Priming WS server via GET /api/ws ...");
-		await _httpGet(`${serverHost}/api/ws`, 8000);
-	} catch (err) {
-		console.error("[WS-CLIENT] Failed to reach /api/ws:", err.message);
-		_scheduleReconnect();
-		return;
+	// Resolve the WS service base URL.
+	// Explicit wsServiceUrl takes priority; otherwise derive from serverHost
+	// by replacing the port with 4001 (the default WS service port).
+	let baseWsUrl = wsServiceUrl.trim();
+	if (!baseWsUrl) {
+		if (!serverHost) {
+			console.log(
+				"[WS-CLIENT] Cannot connect: missing serverHost or wsServiceUrl. Retrying in 30s",
+			);
+			_scheduleReconnect(30000);
+			return;
+		}
+		try {
+			const u = new URL(serverHost);
+			u.port = "4001";
+			baseWsUrl = u.origin;
+		} catch {
+			console.error("[WS-CLIENT] Invalid serverHost URL:", serverHost);
+			_scheduleReconnect();
+			return;
+		}
 	}
 
-	const wsUrl = `${serverHost.replace(/^http/, "ws")}/client-ws?apiKey=${encodeURIComponent(apiKey)}`;
+	const wsUrl = `${baseWsUrl.replace(/^http/, "ws")}/client-ws?apiKey=${encodeURIComponent(apiKey)}`;
 	console.log("[WS-CLIENT] Connecting to", wsUrl);
 
 	try {
@@ -167,6 +179,7 @@ async function _connect() {
 		_clearConnectTimeout();
 		_clearReconnectTimer();
 		_startPingInterval();
+		broadcastWsStatus();
 	});
 
 	ws.on("pong", () => {
@@ -197,6 +210,7 @@ async function _connect() {
 			`[WS-CLIENT] Disconnected (code=${code} reason="${reasonStr}") – reconnecting soon`,
 		);
 		ws = null;
+		broadcastWsStatus();
 		if (!isShuttingDown) {
 			_scheduleReconnect();
 		}
@@ -209,52 +223,49 @@ async function _connect() {
 	});
 }
 
-async function _handleTriggerBackup({ backupName, requestId }) {
-	if (triggerLock) {
-		_sendResult(
-			requestId,
-			false,
-			"A triggered backup is already in progress on this client",
+async function _handleTriggerBackup({ backupName }) {
+	const tasks = storeRef.get("tasks", []);
+	const item = tasks.find((i) => i.name === backupName);
+
+	if (!item) {
+		_sendProgress(
+			backupName,
+			"error",
+			0,
+			`No configured backup named "${backupName}" found on this client`,
 		);
 		return;
 	}
-	triggerLock = true;
+
+	console.log(`[WS-CLIENT] Triggering backup: ${backupName}`);
+	const { runBackup } = require("./backup");
 
 	try {
-		const store = storeRef;
-		const tasks = store.get("tasks", []);
-
-		const item = tasks.find((i) => i.name === backupName);
-		if (!item) {
-			_sendResult(
-				requestId,
-				false,
-				`No configured backup named "${backupName}" found on this client`,
+		await runBackup(item, storeRef, (status) => {
+			// Forward every status update to the server so it can broadcast to frontends
+			_sendProgress(
+				backupName,
+				status.type,
+				status.progress ?? 0,
+				status.description ?? status.title ?? "",
 			);
-			return;
-		}
-
-		console.log(`[WS-CLIENT] Triggering backup: ${backupName}`);
-		const { runBackup } = require("./backup");
-		await runBackup(item, store);
+		});
 
 		// Update syncItems with last backup time if it exists
-		const syncItems = store.get("syncItems", []);
+		const syncItems = storeRef.get("syncItems", []);
 		if (syncItems.length > 0) {
 			const updatedItems = syncItems.map((i) =>
 				i.id === item.id ? { ...i, lastBackup: new Date().toISOString() } : i,
 			);
-			store.set("syncItems", updatedItems);
+			storeRef.set("syncItems", updatedItems);
 
 			if (mainWindowRef && !mainWindowRef.isDestroyed()) {
 				mainWindowRef.webContents.send("sync-items-updated");
 			}
 		}
-
-		_sendResult(requestId, true);
 	} catch (err) {
 		console.error("[WS-CLIENT] Triggered backup error:", err);
-		_sendResult(requestId, false, err.message || "Unknown backup error");
+		// runBackup already sent the error status via onStatus; nothing extra needed
 	} finally {
 		if (mainWindowRef && !mainWindowRef.isDestroyed()) {
 			mainWindowRef.webContents.send("backup-progress", {
@@ -263,23 +274,30 @@ async function _handleTriggerBackup({ backupName, requestId }) {
 				percent: 0,
 			});
 		}
-		triggerLock = false;
 	}
 }
 
-function _sendResult(requestId, success, error = null) {
-	if (!ws || ws.readyState !== WebSocket.OPEN) {
-		console.warn("[WS-CLIENT] Cannot send result – not connected");
-		return;
-	}
+function _sendProgress(backupName, status, progress, description) {
+	console.log(
+		`[WS-CLIENT] Sending progress update for "${backupName}": status=${status} progress=${progress}% description="${description}"`,
+	);
+	if (!ws || ws.readyState !== WebSocket.OPEN) return;
 	ws.send(
 		JSON.stringify({
-			type: "backup-result",
-			requestId,
-			success,
-			error: error || undefined,
+			type: "backup-progress",
+			backupName,
+			status,
+			progress,
+			description,
 		}),
 	);
 }
 
-module.exports = { initWsClient, reconnect, shutdown, getBackupIdByName };
+module.exports = {
+	initWsClient,
+	reconnect,
+	shutdown,
+	getBackupIdByName,
+	getWsStatus: getStatus,
+	sendBackupProgress: _sendProgress,
+};

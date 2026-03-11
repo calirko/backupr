@@ -1,5 +1,6 @@
 const { ipcMain, dialog } = require("electron");
 const { setMainWindow } = require("./backup");
+const { reconnect: reconnectWs, getWsStatus } = require("./ws-client");
 const {
 	scheduleAll,
 	stopAllSchedules,
@@ -95,6 +96,19 @@ function initIPC(win, store) {
 
 	ipcMain.handle("schedule-get-status", () => {
 		return getProcessingStatus();
+	});
+
+	ipcMain.handle("ws-get-status", () => {
+		return getWsStatus();
+	});
+
+	ipcMain.handle("ws-reconnect", () => {
+		const { processing, queued } = getProcessingStatus();
+		if (processing.length > 0 || queued.length > 0) {
+			return { ok: false, reason: "A backup is currently in progress" };
+		}
+		reconnectWs();
+		return { ok: true };
 	});
 }
 

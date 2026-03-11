@@ -3,12 +3,17 @@ import { DialogProvider } from "@/hooks/use-dialog";
 import { MemoryProvider } from "@/hooks/use-memory";
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
-import { Inter } from "next/font/google";
+import { Inter, Montserrat } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
 const inter = Inter({
 	variable: "--font-inter",
+	subsets: ["latin"],
+});
+
+const montserrat = Montserrat({
+	variable: "--font-montserrat",
 	subsets: ["latin"],
 });
 
@@ -28,7 +33,7 @@ export default function RootLayout({
 	return (
 		<html lang="pt-BR" suppressHydrationWarning className="overflow-y-hidden">
 			<body
-				className={`${inter.variable} antialiased h-dvh`}
+				className={`${inter.variable} ${montserrat.variable} antialiased h-dvh`}
 				suppressHydrationWarning
 			>
 				<ThemeProvider

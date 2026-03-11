@@ -9,10 +9,12 @@
 	"scripts": {
 		"dev:client": "yarn workspace @backupr/client dev",
 		"dev:app": "yarn workspace @backupr/app dev",
+		"dev:ws": "yarn workspace @backupr/ws dev",
 		"build:client": "yarn workspace @backupr/client build",
 		"build:app": "yarn workspace @backupr/app build",
 		"start:client": "yarn workspace @backupr/client start",
-		"start:app": "yarn workspace @backupr/app start"
+		"start:app": "yarn workspace @backupr/app start",
+		"start:ws": "yarn workspace @backupr/ws start"
 	},
 	"packageManager": "yarn@1.22.22"
 }
