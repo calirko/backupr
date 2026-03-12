@@ -21,11 +21,7 @@ export function BackupPage() {
 		const unsubscribe = window.electron.ipcRenderer.on(
 			"backup-status",
 			(status) => {
-				console.log("Backup status received in Backup page:", status);
 				if (status.type === "success") {
-					console.log(
-						"Backup completed, reloading tasks to get updated next date...",
-					);
 					// Delay slightly to ensure store is updated
 					setTimeout(() => {
 						loadTasks();
@@ -41,7 +37,6 @@ export function BackupPage() {
 
 	const loadTasks = async () => {
 		const tasks = (await window.store.get("tasks")) || [];
-		console.log("Loaded tasks from store:", tasks);
 		setSyncItems(tasks);
 	};
 

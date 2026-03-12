@@ -1,6 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { ChevronDown, ChevronRight, Loader2, Zap } from "lucide-react";
+import {
+	ChevronDown,
+	ChevronRight,
+	Download,
+	Loader2,
+	PlugZap,
+} from "lucide-react";
 import { ClientTitle, formatBytes } from "./helpers";
 import type { ClientState, GroupedBackup } from "./types";
 
@@ -13,6 +19,7 @@ interface Props {
 	clientName: string;
 	onSelectBackup: (backupName: string) => void;
 	onTriggerBackup: (backupName: string) => void;
+	currentStatus: string | null;
 }
 
 export default function GroupedBackupsGrid({
@@ -24,6 +31,7 @@ export default function GroupedBackupsGrid({
 	onSelectBackup,
 	onTriggerBackup,
 	clientName,
+	currentStatus,
 }: Props) {
 	const wsState = clientStates.get(selectedClient);
 
@@ -33,10 +41,7 @@ export default function GroupedBackupsGrid({
 				<Button variant="outline" size="sm" onClick={onBack}>
 					<ChevronDown className="h-4 w-4 rotate-90" />
 				</Button>
-				<ClientTitle
-					connectionStatus={wsState?.connected || false}
-					name={clientName}
-				/>
+				<ClientTitle connectionStatus={currentStatus} name={clientName} />
 				<h2 className="font-semibold flex items-center gap-2">Backups</h2>
 			</div>
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -115,35 +120,47 @@ export default function GroupedBackupsGrid({
 								</div>
 								{/* Progress bar when this backup is actively running */}
 
-								{/* Backup Now button – stops card click propagation */}
-								<Button
-									variant="outline"
-									size="sm"
-									className={`mt-3 w-full relative ${isThisRunning && activeProgress !== null && "bg-background"}`}
-									disabled={anyRunning}
-									onClick={(e) => {
-										e.stopPropagation();
-										onTriggerBackup(backup.backupName);
-									}}
-								>
-									{isThisRunning && activeProgress !== null && (
-										<div
-											className="h-full absolute left-0 z-10 bg-card transition-all duration-300"
-											style={{ width: `${activeProgress}%` }}
-										/>
-									)}
-									{isThisRunning ? (
-										<>
-											<Loader2 className="h-4 w-4 mr-2 animate-spin z-20" />
-											<span className="z-20">Running...</span>
-										</>
-									) : (
-										<>
-											<Zap className="h-4 w-4 mr-2" />
-											Run Now
-										</>
-									)}
-								</Button>
+								<div className="flex gap-2">
+									{/* Backup Now button – stops card click propagation */}
+
+									<Button
+										variant="outline"
+										size="sm"
+										className={`mt-3 grow relative ${isThisRunning && activeProgress !== null && "bg-background"}`}
+										disabled={anyRunning}
+										onClick={(e) => {
+											e.stopPropagation();
+											onTriggerBackup(backup.backupName);
+										}}
+									>
+										{isThisRunning && activeProgress !== null && (
+											<div
+												className="h-full absolute left-0 z-10 bg-card transition-all duration-300"
+												style={{ width: `${activeProgress}%` }}
+											/>
+										)}
+										{isThisRunning ? (
+											<>
+												<Loader2 className="h-4 w-4 mr-2 animate-spin z-20" />
+												<span className="z-20">Running...</span>
+											</>
+										) : (
+											<>
+												<PlugZap className="h-4 w-4 mr-2" />
+												Run Now
+											</>
+										)}
+									</Button>
+									<Button
+										size="sm"
+										className="mt-3"
+										disabled={!backup.latestBackup || anyRunning}
+										onClick={() => {}}
+									>
+										<Download />
+										Download latest
+									</Button>
+								</div>
 							</CardContent>
 						</Card>
 					);

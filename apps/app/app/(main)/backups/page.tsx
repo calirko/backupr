@@ -39,6 +39,7 @@ export default function BackupsPage() {
 	const [selectedBackupName, setSelectedBackupName] = useState<string | null>(
 		null,
 	);
+	const [currentStatus, setCurrentStatus] = useState<string | null>(null);
 	const [backupDetails, setBackupDetails] = useState<BackupDetail[]>([]);
 	const [loadingBlocks, setLoadingBlocks] = useState(false);
 	const [clientStates, setClientStates] = useState<Map<string, ClientState>>(
@@ -160,17 +161,29 @@ export default function BackupsPage() {
 		}
 	}
 
-	// Silently refresh grouped backups (no loading spinner – used after WS status updates)
-	async function fetchGroupedBackupsQuietly(clientId: string) {
+	async function refreshCurrentView(clientId: string) {
 		try {
-			const params = new URLSearchParams({ clientId });
-			const response: { data: GroupedBackup[] } = await Api.get(
-				`/api/backup/grouped?${params.toString()}`,
-				{ token: Cookies.get("token") },
-			);
-			setGroupedBackups(response.data);
+			if (selectedBackupName) {
+				// On backup details screen — refresh the versions list
+				const response: { data: BackupDetail[] } = await Api.get(
+					`/api/backup/by-name?clientId=${clientId}&backupName=${encodeURIComponent(selectedBackupName)}`,
+					{ token: Cookies.get("token") },
+				);
+				setBackupDetails(response.data);
+			} else if (selectedClient) {
+				// On grouped backups screen — refresh the grouped list
+				const params = new URLSearchParams({ clientId });
+				const response: { data: GroupedBackup[] } = await Api.get(
+					`/api/backup/grouped?${params.toString()}`,
+					{ token: Cookies.get("token") },
+				);
+				setGroupedBackups(response.data);
+			} else {
+				// On clients screen — refresh clients
+				await fetchClients();
+			}
 		} catch (error) {
-			console.error("Silent grouped backup refresh failed:", error);
+			console.error("Silent refresh failed:", error);
 		}
 	}
 
@@ -287,9 +300,8 @@ export default function BackupsPage() {
 			};
 			try {
 				msg = JSON.parse(event.data);
-				console.log("[frontend-ws] received message:", msg);
+				console.log("[frontend-ws] received message");
 			} catch {
-				console.warn("[frontend-ws] received non-JSON message:", event.data);
 				return;
 			}
 
@@ -359,8 +371,16 @@ export default function BackupsPage() {
 			} else {
 				toast.success(`Backup "${prev}" finished`);
 			}
-			fetchGroupedBackupsQuietly(selectedClient);
+			refreshCurrentView(selectedClient);
 		}
+
+		setCurrentStatus(
+			state?.connected
+				? state?.activeBackup
+					? state.activeBackup.status
+					: "idle"
+				: "disconnected",
+		);
 
 		prevActiveBackupForClientRef.current = current;
 	}, [clientStates, selectedClient]);
@@ -418,6 +438,7 @@ export default function BackupsPage() {
 										clients.find((c) => c.id === selectedClient)?.name ??
 										"Unknown Client"
 									}
+									currentStatus={currentStatus}
 									groupedBackups={groupedBackups}
 									selectedClient={selectedClient}
 									clientStates={clientStates}
@@ -436,12 +457,13 @@ export default function BackupsPage() {
 							{/* Backup Details Grid */}
 							{selectedBackupName && backupDetails.length > 0 && (
 								<BackupDetailsGrid
-									selectedClient={selectedClient}
-									clientStates={clientStates}
+									currentStatus={currentStatus}
 									clientName={
 										clients.find((c) => c.id === selectedClient)?.name ??
 										"Unknown Client"
 									}
+									selectedClient={selectedClient || ""}
+									clientStates={clientStates}
 									backupDetails={backupDetails}
 									selectedBackupName={selectedBackupName}
 									onBack={() => {

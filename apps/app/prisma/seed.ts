@@ -33,7 +33,7 @@ async function main() {
 			},
 		});
 
-		console.log("✅ Admin user created successfully");
+		console.log("   Admin user created successfully");
 		console.log(`   Email: ${adminUser.email}`);
 		console.log(`   API Key: ${adminUser.apiKey}`);
 		console.log(`   Password: 123456`);

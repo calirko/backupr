@@ -53,16 +53,25 @@ export function renderStatusBadge(status: string) {
 	}
 }
 
-export function ClientTitle({
-	name,
+export function ConnectionIcon({
 	connectionStatus,
 }: {
-	name: string;
-	connectionStatus: boolean;
+	connectionStatus: string | null;
 }) {
-	return (
-		<div className="flex items-center gap-1.5 shrink-0 p-2 border gap-1 bg-background">
-			{connectionStatus ? (
+	switch (connectionStatus) {
+		case "creating":
+			return (
+				<Tooltip>
+					<TooltipTrigger>
+						<Server className="h-4 w-4 text-blue-300 text-blink-blue" />
+					</TooltipTrigger>
+					<TooltipContent>
+						<span>This client is creating a backup.</span>
+					</TooltipContent>
+				</Tooltip>
+			);
+		case "idle":
+			return (
 				<Tooltip>
 					<TooltipTrigger>
 						<Server className="h-4 w-4 text-green-200 text-blink-green" />
@@ -71,7 +80,9 @@ export function ClientTitle({
 						<span>This client is connected to Backupr services.</span>
 					</TooltipContent>
 				</Tooltip>
-			) : (
+			);
+		case "disconnected":
+			return (
 				<Tooltip>
 					<TooltipTrigger>
 						<ServerOff className="h-4 w-4 text-muted-foreground" />
@@ -84,7 +95,40 @@ export function ClientTitle({
 						</span>
 					</TooltipContent>
 				</Tooltip>
-			)}
+			);
+		case "uploading":
+			return (
+				<Tooltip>
+					<TooltipTrigger>
+						<Server className="h-4 w-4 text-blue-300 text-blink-blue" />
+					</TooltipTrigger>
+					<TooltipContent>
+						<span>This client is performing an upload.</span>
+					</TooltipContent>
+				</Tooltip>
+			);
+		default:
+			<Tooltip>
+				<TooltipTrigger>
+					<Server className="h-4 w-4 text-orange-300" />
+				</TooltipTrigger>
+				<TooltipContent>
+					<span>This client's status is unknown.</span>
+				</TooltipContent>
+			</Tooltip>;
+	}
+}
+
+export function ClientTitle({
+	name,
+	connectionStatus,
+}: {
+	name: string;
+	connectionStatus: string | null;
+}) {
+	return (
+		<div className="flex items-center shrink-0 p-2 border gap-2 bg-background">
+			<ConnectionIcon connectionStatus={connectionStatus} />
 			<span className="font-semibold">{name}</span>
 		</div>
 	);

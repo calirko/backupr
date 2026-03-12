@@ -1,14 +1,10 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-console.log("Preload script loaded");
-
 contextBridge.exposeInMainWorld("electron", {
 	minimizeWindow: () => {
-		console.log("IPC: minimize-window");
 		ipcRenderer.send("minimize-window");
 	},
 	closeWindow: () => {
-		console.log("IPC: close-window");
 		ipcRenderer.send("close-window");
 	},
 	openFileDialog: (options) => ipcRenderer.invoke("open-file-dialog", options),

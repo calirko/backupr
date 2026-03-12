@@ -17,7 +17,6 @@ export default function Status({ onStatusChange }) {
 		const unsubscribe = window.electron.ipcRenderer.on(
 			"backup-status",
 			(newStatus) => {
-				console.log("Received backup status:", newStatus);
 				setStatus(newStatus);
 				if (onStatusChange) onStatusChange(newStatus);
 

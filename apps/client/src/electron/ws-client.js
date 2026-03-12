@@ -19,10 +19,6 @@ let pongTimeout = null;
 function getBackupIdByName(backupName) {
 	if (!storeRef) return null;
 	const syncItems = storeRef.get("syncItems", []);
-	console.log(
-		`[WS-CLIENT] Looking up backup ID for name "${backupName}" in syncItems:`,
-		syncItems,
-	);
 	const item = syncItems.find((i) => i.name === backupName);
 	return item ? item.id : null;
 }
@@ -31,7 +27,6 @@ function initWsClient(store, mainWindow) {
 	storeRef = store;
 	mainWindowRef = mainWindow;
 	isShuttingDown = false;
-	console.log("[WS-CLIENT] Initializing WebSocket client");
 	_connect();
 }
 
@@ -99,7 +94,6 @@ function _clearPingInterval() {
 
 function _scheduleReconnect(delayMs = 15000) {
 	if (isShuttingDown || reconnectTimer) return;
-	console.log(`[WS-CLIENT] Reconnecting in ${delayMs / 1000}s...`);
 	reconnectTimer = setTimeout(() => {
 		reconnectTimer = null;
 		_connect();
@@ -126,7 +120,6 @@ async function _connect() {
 	const apiKey = storeRef ? storeRef.get("apiKey", "") : "";
 
 	if (!apiKey) {
-		console.log("[WS-CLIENT] Cannot connect: missing apiKey. Retrying in 30s");
 		_scheduleReconnect(30000);
 		return;
 	}
@@ -137,9 +130,6 @@ async function _connect() {
 	let baseWsUrl = wsServiceUrl.trim();
 	if (!baseWsUrl) {
 		if (!serverHost) {
-			console.log(
-				"[WS-CLIENT] Cannot connect: missing serverHost or wsServiceUrl. Retrying in 30s",
-			);
 			_scheduleReconnect(30000);
 			return;
 		}
@@ -155,7 +145,6 @@ async function _connect() {
 	}
 
 	const wsUrl = `${baseWsUrl.replace(/^http/, "ws")}/client-ws?apiKey=${encodeURIComponent(apiKey)}`;
-	console.log("[WS-CLIENT] Connecting to", wsUrl);
 
 	try {
 		ws = new WebSocket(wsUrl, { rejectUnauthorized: false });
@@ -168,14 +157,10 @@ async function _connect() {
 	connectTimeoutTimer = setTimeout(() => {
 		connectTimeoutTimer = null;
 		if (!ws || ws.readyState !== WebSocket.CONNECTING) return;
-		console.warn(
-			`[WS-CLIENT] Connect timeout after ${CONNECT_TIMEOUT_MS / 1000}s – terminating`,
-		);
 		ws.terminate();
 	}, CONNECT_TIMEOUT_MS);
 
 	ws.on("open", () => {
-		console.log("[WS-CLIENT] Connected");
 		_clearConnectTimeout();
 		_clearReconnectTimer();
 		_startPingInterval();
@@ -205,10 +190,8 @@ async function _connect() {
 	ws.on("close", (code, reason) => {
 		_clearConnectTimeout();
 		_clearPingInterval();
-		const reasonStr = reason?.toString() || "Unknown";
-		console.log(
-			`[WS-CLIENT] Disconnected (code=${code} reason="${reasonStr}") – reconnecting soon`,
-		);
+		// const reasonStr = reason?.toString() || "Unknown";
+
 		ws = null;
 		broadcastWsStatus();
 		if (!isShuttingDown) {
@@ -237,7 +220,6 @@ async function _handleTriggerBackup({ backupName }) {
 		return;
 	}
 
-	console.log(`[WS-CLIENT] Triggering backup: ${backupName}`);
 	const { runBackup } = require("./backup");
 
 	try {
@@ -278,9 +260,6 @@ async function _handleTriggerBackup({ backupName }) {
 }
 
 function _sendProgress(backupName, status, progress, description) {
-	console.log(
-		`[WS-CLIENT] Sending progress update for "${backupName}": status=${status} progress=${progress}% description="${description}"`,
-	);
 	if (!ws || ws.readyState !== WebSocket.OPEN) return;
 	ws.send(
 		JSON.stringify({
