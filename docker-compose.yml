@@ -12,6 +12,7 @@ services:
     networks:
       - backupr_net
     restart: unless-stopped
+    name: backupr_app
 
   ws:
     build:
@@ -23,6 +24,7 @@ services:
     networks:
       - backupr_net
     restart: unless-stopped
+    name: backupr_ws
 
 networks:
   backupr_net:

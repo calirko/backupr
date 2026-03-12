@@ -9,7 +9,7 @@ export default function EditUserPage() {
 
 	return (
 		<UserEntry
-			user_id={params.id}
+			user_id={params?.id}
 			onCancel={() => router.push("/users")}
 			onFinish={() => router.push("/users")}
 		/>
