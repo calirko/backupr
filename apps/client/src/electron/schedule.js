@@ -27,10 +27,6 @@ function updateNextRunDate(taskId, cronExpression) {
 		return;
 	}
 
-	console.log(
-		`[updateNextRunDate] Calculating next date for task ${taskId} with cron: ${cronExpression}`,
-	);
-
 	try {
 		// cron-parser v5+ uses parseExpression as a named export
 		// cron-parser v4 and below uses cronParser.parseExpression
@@ -56,9 +52,6 @@ function updateNextRunDate(taskId, cronExpression) {
 		if (taskIndex !== -1) {
 			tasks[taskIndex].next = nextDate;
 			store.set("tasks", tasks);
-			console.log(
-				`[updateNextRunDate] Next run for "${tasks[taskIndex].name}": ${nextDate}`,
-			);
 		} else {
 			console.error(`[updateNextRunDate] Task ${taskId} not found in store`);
 		}
@@ -94,7 +87,6 @@ async function processBackupQueue() {
 	processingBackups.add(task.id);
 
 	try {
-		console.log(`Processing backup from queue: ${task.name}`);
 		await runBackup(task, store, (status) => {
 			sendBackupProgress(
 				task.name,
@@ -107,18 +99,11 @@ async function processBackupQueue() {
 		console.error(`Error processing backup queue for ${task.name}:`, error);
 	} finally {
 		processingBackups.delete(task.id);
-		console.log(
-			`Finished backup: ${task.name}. Queue length: ${backupQueue.length}`,
-		);
 
 		// After a backup completes, recalculate the next run date
-		console.log(`[processBackupQueue] Fetching updated task from store...`);
 		const currentTasks = store.get("tasks") || [];
 		const currentTask = currentTasks.find((t) => t.id === task.id);
-		if (currentTask && currentTask.active && currentTask.schedule) {
-			console.log(
-				`[processBackupQueue] Updating next run date for: ${currentTask.name}`,
-			);
+		if (currentTask?.active && currentTask.schedule) {
 			updateNextRunDate(currentTask.id, currentTask.schedule);
 		} else {
 			console.warn(
@@ -137,49 +122,37 @@ async function processBackupQueue() {
 
 function queueBackup(task) {
 	if (processingBackups.has(task.id)) {
-		console.log(`Backup already in progress for task: ${task.name}`);
 		return;
 	}
 
 	if (backupQueue.some((t) => t.id === task.id)) {
-		console.log(`Backup already queued for task: ${task.name}`);
 		return;
 	}
 
 	backupQueue.push(task);
-	console.log(
-		`Backup queued: ${task.name}. Queue length: ${backupQueue.length}`,
-	);
 	processBackupQueue();
 }
 
 function scheduleAll(storeInstance) {
 	store = storeInstance;
-	console.log("Initializing backups from store...");
 
 	const tasks = store.get("tasks") || [];
 
 	if (tasks.length === 0) {
-		console.log("No backup tasks found in store");
 		return;
 	}
 
 	// Initialize next dates for all tasks on startup
-	let updated = false;
+	let _updated = false;
 	tasks.forEach((task) => {
 		if (!task.next && task.active && task.schedule) {
-			console.log(
-				`[scheduleAll] Initializing next date for task: ${task.name}`,
-			);
 			const taskWithoutNext = { ...task };
 			scheduleOne(task.id);
-			updated = true;
+			_updated = true;
 		} else {
 			scheduleOne(task.id);
 		}
 	});
-
-	console.log(`Initialized ${cronJobs.size} backup task(s)`);
 }
 
 function scheduleOne(id) {
@@ -201,11 +174,9 @@ function scheduleOne(id) {
 		existingJob.stop();
 		existingJob.destroy();
 		cronJobs.delete(id);
-		console.log(`Rescheduled existing job: ${task.name}`);
 	}
 
 	if (!task.active) {
-		console.log(`Backup task disabled, not scheduling: ${task.name}`);
 		clearNextRunDate(id);
 		return;
 	}
@@ -214,7 +185,6 @@ function scheduleOne(id) {
 		const cronExpression = task.schedule;
 
 		const job = cron.schedule(cronExpression, () => {
-			console.log(`Cron trigger for backup: ${task.name}`);
 			const currentTasks = store.get("tasks") || [];
 			const currentTask = currentTasks.find((t) => t.id === id);
 			if (currentTask) {
@@ -226,8 +196,6 @@ function scheduleOne(id) {
 
 		// Calculate and store the next execution date
 		updateNextRunDate(id, cronExpression);
-
-		console.log(`Cron job scheduled for: ${task.name} (${cronExpression})`);
 	} catch (error) {
 		console.error(
 			`Failed to schedule backup task "${task.name}":`,
@@ -237,8 +205,6 @@ function scheduleOne(id) {
 }
 
 function stopAllSchedules() {
-	console.log("Stopping all backup cron jobs...");
-
 	cronJobs.forEach((job, taskId) => {
 		job.stop();
 		job.destroy();
@@ -248,7 +214,6 @@ function stopAllSchedules() {
 	cronJobs.clear();
 	backupQueue.length = 0;
 	processingBackups.clear();
-	console.log("All backup cron jobs stopped");
 }
 
 function getProcessingStatus() {
@@ -267,7 +232,6 @@ function scheduleDelete(id) {
 		job.stop();
 		job.destroy();
 		cronJobs.delete(id);
-		console.log(`Stopped and removed schedule for task: ${id}`);
 	}
 
 	clearNextRunDate(id);
@@ -276,7 +240,6 @@ function scheduleDelete(id) {
 	const queueIndex = backupQueue.findIndex((t) => t.id === id);
 	if (queueIndex !== -1) {
 		backupQueue.splice(queueIndex, 1);
-		console.log(`Removed task ${id} from backup queue`);
 	}
 }
 

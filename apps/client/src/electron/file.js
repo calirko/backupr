@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const archiver = require("archiver");
 
@@ -36,12 +37,56 @@ function validateFilePaths(filePaths) {
 	}
 }
 
+function copyFilesToTemp(filePaths) {
+	const tempStagingDir = fs.mkdtempSync(
+		path.join(os.tmpdir(), "backupr-staging-"),
+	);
+	const copiedFiles = [];
+
+	try {
+		for (const filePath of filePaths) {
+			if (!fs.existsSync(filePath)) {
+				continue;
+			}
+			const fileName = path.basename(filePath);
+			const destPath = path.join(tempStagingDir, fileName);
+			fs.copyFileSync(filePath, destPath);
+			copiedFiles.push({ original: filePath, temp: destPath });
+		}
+	} catch (error) {
+		// Clean up any already-copied files if something goes wrong
+		cleanupStagingDir(tempStagingDir);
+		throw error;
+	}
+
+	return { tempStagingDir, copiedFiles };
+}
+
+function cleanupStagingDir(tempStagingDir) {
+	try {
+		if (tempStagingDir && fs.existsSync(tempStagingDir)) {
+			fs.rmSync(tempStagingDir, { recursive: true, force: true });
+		}
+	} catch (error) {
+		console.error(
+			`Failed to clean up staging directory ${tempStagingDir}:`,
+			error,
+		);
+	}
+}
+
 async function generateZip({ paths, backupName, onProgress }) {
 	let zipPath;
+	let tempStagingDir;
 
 	try {
 		// Validate all files before proceeding
 		validateFilePaths(paths);
+
+		// Copy files to system temp directory
+		const staging = copyFilesToTemp(paths);
+		tempStagingDir = staging.tempStagingDir;
+		const copiedFiles = staging.copiedFiles;
 
 		if (!fs.existsSync(TEMP_DIR)) {
 			fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -53,7 +98,9 @@ async function generateZip({ paths, backupName, onProgress }) {
 			fs.unlinkSync(zipPath);
 		}
 
-		await createZipFromFiles(paths, zipPath, onProgress);
+		// Use the temp copies instead of the original paths
+		const tempPaths = copiedFiles.map((f) => f.temp);
+		await createZipFromFiles(tempPaths, zipPath, onProgress);
 
 		return zipPath;
 	} catch (error) {
@@ -65,6 +112,11 @@ async function generateZip({ paths, backupName, onProgress }) {
 			}
 		}
 		throw error;
+	} finally {
+		// Always clean up the staging directory
+		if (tempStagingDir) {
+			cleanupStagingDir(tempStagingDir);
+		}
 	}
 }
 

@@ -264,3 +264,21 @@ img {
       background-color: hsl(var(--muted));
    }
 }
+
+/* SCROLLBAR */
+::-webkit-scrollbar {
+   width: 8px;
+}
+
+::-webkit-scrollbar-track {
+   background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+   background: hsl(var(--card));
+   border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+   background: hsl(var(--foreground));
+}

@@ -8,7 +8,6 @@ const os = require("node:os");
  * Uses different methods based on the platform
  */
 function enableAutoLaunch() {
-	console.log("[AutoLaunch] Enabling auto-launch");
 	if (process.platform === "win32" || process.platform === "darwin") {
 		// Windows and macOS: Use Electron's built-in login item settings
 		try {
@@ -16,7 +15,6 @@ function enableAutoLaunch() {
 				openAtLogin: true,
 				openAsHidden: true, // Launch in background
 			});
-			console.log("[AutoLaunch] Auto-launch enabled (Windows/macOS)");
 		} catch (error) {
 			console.error("[AutoLaunch] Failed to enable auto-launch:", error);
 		}
@@ -47,9 +45,6 @@ Terminal=false
 `;
 
 			fs.writeFileSync(desktopFilePath, desktopFileContent);
-			console.log(
-				`[AutoLaunch] Auto-launch enabled (Linux) at ${desktopFilePath}`,
-			);
 		} catch (error) {
 			console.error(
 				"[AutoLaunch] Failed to enable auto-launch on Linux:",
@@ -63,14 +58,12 @@ Terminal=false
  * Disable auto-launch on system startup
  */
 function disableAutoLaunch() {
-	console.log("[AutoLaunch] Disabling auto-launch");
 	if (process.platform === "win32" || process.platform === "darwin") {
 		// Windows and macOS: Disable login item
 		try {
 			app.setLoginItemSettings({
 				openAtLogin: false,
 			});
-			console.log("[AutoLaunch] Auto-launch disabled (Windows/macOS)");
 		} catch (error) {
 			console.error("[AutoLaunch] Failed to disable auto-launch:", error);
 		}
@@ -84,7 +77,6 @@ function disableAutoLaunch() {
 
 			if (fs.existsSync(desktopFilePath)) {
 				fs.unlinkSync(desktopFilePath);
-				console.log("[AutoLaunch] Auto-launch disabled (Linux)");
 			}
 		} catch (error) {
 			console.error(
@@ -128,10 +120,6 @@ function isAutoLaunchEnabled() {
 function initializeAutoLaunch(store) {
 	try {
 		const startInBackground = store.get("startInBackground", false);
-		console.log(
-			`[AutoLaunch] Initializing auto-launch with stored setting: ${startInBackground}`,
-		);
-
 		if (startInBackground) {
 			enableAutoLaunch();
 		} else {

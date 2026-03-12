@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: ./apps/app
+      args:
+        SECRET_TOKEN: ${SECRET_TOKEN}
+        DATABASE_URL: ${DATABASE_URL}
+        BACKUP_STORAGE_DIR: ${BACKUP_STORAGE_DIR:-/bkp}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL}
+    volumes:
+      - ${BACKUP_HOST_DIR:-./backups}:${BACKUP_STORAGE_DIR:-/bkp}
+    networks:
+      - backupr_net
+    restart: unless-stopped
+
+  ws:
+    build:
+      context: ./apps/ws
+      args:
+        SECRET_TOKEN: ${SECRET_TOKEN}
+        DATABASE_URL: ${DATABASE_URL}
+        WS_PORT: ${WS_PORT:-4001}
+    networks:
+      - backupr_net
+    restart: unless-stopped
+
+networks:
+  backupr_net:
+    name: ${DOCKER_NETWORK}
+    external: true

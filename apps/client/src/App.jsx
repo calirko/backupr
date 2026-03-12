@@ -12,7 +12,10 @@ function App() {
 	return (
 		<div className="h-screen bg-background flex flex-col">
 			<TitleBar />
-			<div className="flex-1 overflow-y-auto">
+			<div
+				className="flex-1 overflow-y-scroll pb-2"
+				style={{ scrollbarGutter: "stable both-edges" }}
+			>
 				<div>
 					<div className="p-4 flex flex-col gap-4">
 						<div className="flex gap-4 items-center my-2">

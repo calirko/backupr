@@ -1,12 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { ChevronDown, ChevronRight, Server, ServerOff } from "lucide-react";
-import { formatBytes } from "./helpers";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { ConnectionIcon, formatBytes } from "./helpers";
 import type { Client, ClientState } from "./types";
 
 interface Props {
@@ -35,6 +30,11 @@ export default function ClientsGrid({
 					const activeBackup = cs?.activeBackup ?? null;
 					const lastError = cs?.lastError ?? null;
 					const lastCompleted = cs?.lastCompleted ?? null;
+					const clientConnectionStatus = isConnected
+						? activeBackup
+							? activeBackup.status
+							: "idle"
+						: "disconnected";
 					return (
 						<Card
 							key={client.id}
@@ -50,31 +50,7 @@ export default function ClientsGrid({
 										</span>
 									</div>
 									<div className="flex items-center gap-1.5 shrink-0 p-2 border gap-1 bg-background">
-										{isConnected ? (
-											<Tooltip>
-												<TooltipTrigger>
-													<Server className="h-4 w-4 text-green-200 text-blink-green" />
-												</TooltipTrigger>
-												<TooltipContent>
-													<span>
-														This client is connected to Backupr services.
-													</span>
-												</TooltipContent>
-											</Tooltip>
-										) : (
-											<Tooltip>
-												<TooltipTrigger>
-													<ServerOff className="h-4 w-4 text-muted-foreground" />
-												</TooltipTrigger>
-												<TooltipContent>
-													<span>
-														This client is not currently connected to Backupr
-														services. Please ensure the Backupr client is
-														running and has an active internet connection.
-													</span>
-												</TooltipContent>
-											</Tooltip>
-										)}
+										<ConnectionIcon connectionStatus={clientConnectionStatus} />
 										<ChevronRight className="h-5 w-5" />
 									</div>
 								</CardTitle>

@@ -32,10 +32,6 @@ export async function cleanupOldBackups(
 		const backupsToDelete = backups.slice(MAX_BACKUPS_PER_ENTRY - 1);
 
 		for (const backup of backupsToDelete) {
-			console.log(
-				`Deleting old backup: ${backupName} v${backup.version} (id: ${backup.id})`,
-			);
-
 			// Delete files from filesystem
 			for (const file of backup.files) {
 				try {
@@ -46,7 +42,6 @@ export async function cleanupOldBackups(
 						file.filePath,
 					);
 					await rm(filePath, { force: true });
-					console.log(`Deleted file: ${filePath}`);
 				} catch (error) {
 					console.error(`Failed to delete file ${file.filePath}:`, error);
 				}
@@ -56,12 +51,6 @@ export async function cleanupOldBackups(
 			await prisma.backup.delete({
 				where: { id: backup.id },
 			});
-
-			console.log(`Deleted backup record: ${backup.id}`);
 		}
-
-		console.log(
-			`Cleanup complete: Deleted ${backupsToDelete.length} old backup(s) for ${backupName}`,
-		);
 	}
 }

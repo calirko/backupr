@@ -10,15 +10,16 @@ import Cookies from "js-cookie";
 import { ChevronDown, Clipboard, Download } from "lucide-react";
 import { toast } from "sonner";
 import { ClientTitle, formatBytes, renderStatusBadge } from "./helpers";
-import type { BackupDetail, ClientState } from "./types";
+import type { BackupDetail } from "./types";
 
 interface Props {
 	backupDetails: BackupDetail[];
 	selectedBackupName: string;
 	onBack: () => void;
 	clientName: string;
-	selectedClient?: string;
-	clientStates: Map<string, ClientState>;
+	currentStatus: string | null;
+	clientStates: Map<string, any>;
+	selectedClient: string;
 }
 
 export default function BackupDetailsGrid({
@@ -26,25 +27,53 @@ export default function BackupDetailsGrid({
 	selectedBackupName,
 	clientName,
 	onBack,
+	currentStatus,
 	clientStates,
 	selectedClient,
 }: Props) {
-	const wsState = clientStates.get(selectedClient || "");
-
+	const wsState = clientStates.get(selectedClient);
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center gap-3 border bg-card p-3">
 				<Button variant="outline" size="sm" onClick={onBack}>
 					<ChevronDown className="h-4 w-4 rotate-90" />
 				</Button>
-				<ClientTitle
-					connectionStatus={wsState?.connected || false}
-					name={clientName}
-				/>
+				<ClientTitle connectionStatus={currentStatus} name={clientName} />
 				<h2 className="font-semibold flex items-center gap-2">
 					{selectedBackupName} Versions
 				</h2>
 			</div>
+			{wsState?.activeBackup && (
+				<div className="w-full border p-3 flex items-center relative bg-background">
+					<div
+						style={{ zIndex: 1 }}
+						className="flex justify-between items-center w-full"
+					>
+						<div>
+							<p className="font-semibold text-sm mb-0.5">
+								{wsState?.activeBackup.title}
+							</p>
+							<p className="text-xs text-muted-foreground">
+								{wsState?.activeBackup.description}
+							</p>
+						</div>
+						<div className="flex items-center gap-1.5">
+							{wsState?.activeBackup?.progress !== 0 && (
+								<p className="text-xs text-muted-foreground">
+									{wsState?.activeBackup.progress}%
+								</p>
+							)}
+						</div>
+					</div>
+					<div
+						className={`h-full absolute top-0 left-0 transition-all duration-300 ease-in-out bg-progression`}
+						style={{
+							width: `${wsState?.activeBackup.progress || 0}%`,
+							zIndex: 0,
+						}}
+					/>
+				</div>
+			)}
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 				{backupDetails.map((backup) => (
 					<Card key={backup.id}>

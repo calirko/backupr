@@ -33,10 +33,6 @@ async function streamUploadFile({
 	const fileSize = fileStats.size;
 	const fileName = path.basename(zipPath);
 
-	console.log(
-		`Uploading backup: ${backupName} (${fileName}, ${fileSize} bytes)`,
-	);
-
 	return new Promise((resolve) => {
 		try {
 			const uploadUrl = new URL("/api/backup/upload", serverHost);
@@ -76,11 +72,12 @@ async function streamUploadFile({
 							onProgress(100); // Upload complete
 						}
 						try {
-							const result = JSON.parse(data);
-							console.log(`Backup uploaded successfully:`, result);
 							resolve(true);
-						} catch (e) {
-							console.log(`Backup uploaded successfully`);
+						} catch (_e) {
+							console.error(
+								`Failed to resolve upload promise for ${backupName}:`,
+								_e,
+							);
 							resolve(true);
 						}
 					} else {
@@ -123,10 +120,6 @@ async function streamUploadFile({
 async function runBackup(task, store, onStatus = null) {
 	const backupStartTime = new Date();
 	let zipPath;
-
-	console.log(
-		`Starting backup: ${task.name} at ${backupStartTime.toISOString()}`,
-	);
 
 	const serverHost = await store.get("serverHost");
 	const apiKey = await store.get("apiKey");
@@ -264,8 +257,6 @@ async function runBackup(task, store, onStatus = null) {
 
 			// Send desktop notification even if window is closed
 			notifyBackupSuccess(task.name);
-
-			console.log(`Backup completed successfully: ${task.name}`);
 		} else {
 			if (onStatus)
 				onStatus({

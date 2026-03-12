@@ -14,8 +14,6 @@ const {
 const { setupAutoLaunchHandlers } = require("./auto-launch");
 
 function initIPC(win, store) {
-	console.log("Initializing IPC handlers");
-
 	setMainWindow(win);
 	setMainWindowReference(win);
 	setStore(store);
@@ -24,12 +22,10 @@ function initIPC(win, store) {
 	setupAutoLaunchHandlers(ipcMain, store);
 
 	ipcMain.on("minimize-window", () => {
-		console.log("Received: minimize-window");
 		win?.minimize();
 	});
 
 	ipcMain.on("close-window", () => {
-		console.log("Received: close-window");
 		win?.hide();
 	});
 
@@ -51,7 +47,6 @@ function initIPC(win, store) {
 	});
 
 	ipcMain.handle("store-set", (_event, key, value) => {
-		console.log("Store set:", key, value);
 		store.set(key, value);
 	});
 
@@ -85,12 +80,10 @@ function initIPC(win, store) {
 	});
 
 	ipcMain.handle("schedule-update", (_event, taskId) => {
-		console.log("Received: schedule-update for task", taskId);
 		scheduleOne(taskId);
 	});
 
 	ipcMain.handle("schedule-delete", (_event, taskId) => {
-		console.log("Received: schedule-delete for task", taskId);
 		scheduleDelete(taskId);
 	});
 

@@ -31,8 +31,6 @@ export function getBackupStorageDir(): string {
 export async function validateApiKey(request: NextRequest) {
 	const apiKey = request.headers.get("X-API-Key");
 
-	console.log("Validating API Key:", apiKey);
-
 	if (!apiKey) {
 		return { error: "API key required", status: 401 };
 	}

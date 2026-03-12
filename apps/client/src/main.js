@@ -166,9 +166,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-	console.log(
-		"App quitting - stopping all backup schedules and WebSocket client",
-	);
 	stopAllSchedules();
 	shutdownWsClient();
 });

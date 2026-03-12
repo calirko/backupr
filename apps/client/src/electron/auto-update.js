@@ -23,12 +23,10 @@ function sendStatusToWindow(mainWindow, text) {
  */
 function setupAutoUpdaterHandlers(mainWindow, store) {
 	autoUpdater.on("checking-for-update", () => {
-		console.log("Checking for updates...");
 		sendStatusToWindow(mainWindow, "Checking for updates...");
 	});
 
 	autoUpdater.on("update-available", (info) => {
-		console.log("Update available:", info.version);
 		sendStatusToWindow(mainWindow, `Update available: ${info.version}`);
 
 		// Show dialog to user
@@ -54,7 +52,6 @@ function setupAutoUpdaterHandlers(mainWindow, store) {
 	});
 
 	autoUpdater.on("update-not-available", (info) => {
-		console.log("Update not available:", info.version);
 		sendStatusToWindow(mainWindow, "You are running the latest version.");
 
 		// Only show dialog if user manually checked for updates
@@ -88,7 +85,6 @@ function setupAutoUpdaterHandlers(mainWindow, store) {
 
 	autoUpdater.on("download-progress", (progressObj) => {
 		const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(2)}% (${progressObj.transferred}/${progressObj.total})`;
-		console.log(message);
 		sendStatusToWindow(mainWindow, message);
 
 		if (mainWindow && !mainWindow.isDestroyed()) {
@@ -101,7 +97,6 @@ function setupAutoUpdaterHandlers(mainWindow, store) {
 	});
 
 	autoUpdater.on("update-downloaded", (info) => {
-		console.log("Update downloaded:", info.version);
 		sendStatusToWindow(mainWindow, "Update downloaded. Will install on quit.");
 
 		// Show dialog to user
@@ -136,7 +131,6 @@ function checkForUpdatesOnStartup() {
 	if (!process.env.ELECTRON_START_URL) {
 		// Wait a few seconds before checking for updates to allow app to fully initialize
 		setTimeout(() => {
-			console.log("Checking for updates on startup...");
 			autoUpdater.checkForUpdates().catch((err) => {
 				console.error("Failed to check for updates:", err);
 			});
