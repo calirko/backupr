@@ -10,9 +10,10 @@ services:
     volumes:
       - ${BACKUP_HOST_DIR:-./backups}:${BACKUP_STORAGE_DIR:-/bkp}
     networks:
-      - backupr_net
+      backupr_net:
+        aliases:
+          - app
     restart: unless-stopped
-    name: backupr_app
 
   ws:
     build:
@@ -22,9 +23,10 @@ services:
         DATABASE_URL: ${DATABASE_URL}
         WS_PORT: ${WS_PORT:-4001}
     networks:
-      - backupr_net
+      backupr_net:
+        aliases:
+          - ws
     restart: unless-stopped
-    name: backupr_ws
 
 networks:
   backupr_net:
