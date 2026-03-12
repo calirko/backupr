@@ -17,6 +17,9 @@ const {
 
 const store = new Store();
 
+// Ensure the app name is always shown as "Backupr", not the appId
+app.setName("Backupr");
+
 let win, tray;
 
 const instanceLock = app.requestSingleInstanceLock();

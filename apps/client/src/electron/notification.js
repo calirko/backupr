@@ -1,4 +1,4 @@
-const { Notification } = require("electron");
+const { Notification, app } = require("electron");
 const path = require("node:path");
 
 /**
@@ -6,7 +6,10 @@ const path = require("node:path");
  * @returns {string} Path to the icon file
  */
 function getIconPath() {
-	const iconDir = path.join(__dirname, "../public/icons");
+	// In packaged builds, icons are extracted via extraResources to process.resourcesPath/icons/
+	const iconDir = app.isPackaged
+		? path.join(process.resourcesPath, "icons")
+		: path.join(__dirname, "../public/icons");
 	if (process.platform === "win32") {
 		return path.join(iconDir, "icon.ico");
 	} else if (process.platform === "darwin") {
