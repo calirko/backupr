@@ -12,7 +12,7 @@ services:
     networks:
       backupr_net:
         aliases:
-          - app
+          - backupr_app
     restart: unless-stopped
 
   ws:
@@ -25,7 +25,7 @@ services:
     networks:
       backupr_net:
         aliases:
-          - ws
+          - backupr_ws
     restart: unless-stopped
 
 networks:
