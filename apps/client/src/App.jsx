@@ -5,6 +5,7 @@ import { TitleBar } from "./components/TitleBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Toaster } from "./components/ui/toaster";
 import { useToast } from "./hooks/use-toast";
+import logoSrc from "./public/icons/icon.png";
 
 function App() {
 	const { toasts } = useToast();
@@ -19,11 +20,7 @@ function App() {
 				<div>
 					<div className="p-4 flex flex-col gap-4">
 						<div className="flex gap-4 items-center my-2">
-							<img
-								src="/icons/icon.png"
-								alt="Backupr Logo"
-								className="h-14 w-14"
-							/>
+							<img src={logoSrc} alt="Backupr Logo" className="h-14 w-14" />
 							<div>
 								<h1 className="text-3xl font-black">Backupr</h1>
 								<p className="text-muted-foreground">Simple file backup tool</p>

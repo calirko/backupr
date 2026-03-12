@@ -13,7 +13,7 @@ function configureAutoUpdater() {
  * Helper function to send status messages to window
  */
 function sendStatusToWindow(mainWindow, text) {
-	if (mainWindow && !mainWindow.isDestroyed()) {
+	if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
 		mainWindow.webContents.send("update-status", text);
 	}
 }
@@ -128,7 +128,7 @@ function setupAutoUpdaterHandlers(mainWindow, store) {
  */
 function checkForUpdatesOnStartup() {
 	// Check for updates on startup (only in production)
-	if (!process.env.ELECTRON_START_URL) {
+	if (app.isPackaged) {
 		// Wait a few seconds before checking for updates to allow app to fully initialize
 		setTimeout(() => {
 			autoUpdater.checkForUpdates().catch((err) => {

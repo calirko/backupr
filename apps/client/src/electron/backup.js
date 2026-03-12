@@ -12,7 +12,7 @@ function setMainWindow(win) {
 }
 
 function sendBackupStatus(status) {
-	if (mainWindow?.webContents) {
+	if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
 		mainWindow.webContents.send("backup-status", status);
 	}
 }

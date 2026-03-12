@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import Cookies from "js-cookie";
 import {
 	ChevronDown,
 	ChevronRight,
@@ -7,6 +8,7 @@ import {
 	Loader2,
 	PlugZap,
 } from "lucide-react";
+import { toast } from "sonner";
 import { ClientTitle, formatBytes } from "./helpers";
 import type { ClientState, GroupedBackup } from "./types";
 
@@ -34,6 +36,34 @@ export default function GroupedBackupsGrid({
 	currentStatus,
 }: Props) {
 	const wsState = clientStates.get(selectedClient);
+
+	const handleDownloadLatest = async (backup: GroupedBackup) => {
+		if (!backup.latestBackup) {
+			toast.error("No backup available to download");
+			return;
+		}
+
+		try {
+			const token = Cookies.get("token");
+			if (!token) {
+				toast.error("Authentication token not found");
+				return;
+			}
+
+			// Create a download link and let the browser handle it natively
+			const link = document.createElement("a");
+			link.href = `/api/backup/${backup.latestBackup.id}/download?apiKey=${encodeURIComponent(token)}`;
+			link.download = `${backup.backupName}.zip`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+
+			toast.success("Download started");
+		} catch (error) {
+			console.error("Download error:", error);
+			toast.error("Error starting download");
+		}
+	};
 
 	return (
 		<div className="space-y-4">
@@ -155,9 +185,12 @@ export default function GroupedBackupsGrid({
 										size="sm"
 										className="mt-3"
 										disabled={!backup.latestBackup || anyRunning}
-										onClick={() => {}}
+										onClick={(e) => {
+											e.stopPropagation();
+											handleDownloadLatest(backup);
+										}}
 									>
-										<Download />
+										<Download className="h-4 w-4 mr-2" />
 										Download latest
 									</Button>
 								</div>

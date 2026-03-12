@@ -51,7 +51,11 @@ function getStatus() {
 
 /** Push the current status to the renderer. */
 function broadcastWsStatus() {
-	if (mainWindowRef?.webContents) {
+	if (
+		mainWindowRef &&
+		!mainWindowRef.isDestroyed() &&
+		mainWindowRef.webContents
+	) {
 		mainWindowRef.webContents.send("ws-status", getStatus());
 	}
 }

@@ -1,4 +1,5 @@
 import { Minus, X } from "lucide-react";
+import logoSrc from "../public/icons/icon.png";
 import { Button } from "./ui/button";
 
 export function TitleBar() {
@@ -21,7 +22,7 @@ export function TitleBar() {
 				style={{ WebkitAppRegion: "drag" }}
 			>
 				<div className="flex items-center gap-2 px-3">
-					<img src="/icons/icon.png" alt="Backupr" className="h-4 w-4" />
+					<img src={logoSrc} alt="Backupr" className="h-4 w-4" />
 					<span className="text-xs font-medium">Backupr</span>
 				</div>
 
