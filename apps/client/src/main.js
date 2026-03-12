@@ -37,7 +37,11 @@ app.on("second-instance", () => {
 });
 
 function getIconPath() {
-	const iconDir = path.join(__dirname, "./public/icons");
+	// In packaged builds, icons are extracted via extraResources to process.resourcesPath/icons/
+	// Native Win32 APIs used by Tray cannot read from inside an ASAR archive.
+	const iconDir = app.isPackaged
+		? path.join(process.resourcesPath, "icons")
+		: path.join(__dirname, "./public/icons");
 	if (process.platform === "win32") {
 		return path.join(iconDir, "icon.ico");
 	} else if (process.platform === "darwin") {
@@ -90,8 +94,13 @@ function createTray() {
 	tray.setToolTip("Backupr");
 	tray.setContextMenu(contextMenu);
 
+	// Single-click toggles on Linux/macOS; double-click is standard on Windows
 	tray.on("click", () => {
 		win.isVisible() ? win.hide() : win.show();
+	});
+	tray.on("double-click", () => {
+		win.show();
+		win.focus();
 	});
 }
 
@@ -114,16 +123,12 @@ function createWindow() {
 		},
 	});
 
-	// parse the start URL from an environment variable or default to the local file
-	const startUrl =
-		process.env.ELECTRON_START_URL ||
-		`file://${path.join(__dirname, "../dist/index.html")}`;
-
-	win.loadURL(startUrl);
-
-	// Open dev tools in development
 	if (process.env.ELECTRON_START_URL) {
+		win.loadURL(process.env.ELECTRON_START_URL);
 		win.webContents.openDevTools();
+	} else {
+		// loadFile handles ASAR paths correctly on all platforms
+		win.loadFile(path.join(__dirname, "../dist/index.html"));
 	}
 
 	// Show window when ready (dev only - production starts in system tray)

@@ -10,7 +10,8 @@
 		"src/electron/**/*",
 		"src/main.js",
 		"package.json",
-		"src/public/icons/**/*"
+		"src/public/icons/**/*",
+		"dist/**/*"
 	],
 	"asarUnpack": ["src/public/icons/**/*"],
 	"publish": {
