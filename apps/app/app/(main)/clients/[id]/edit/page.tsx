@@ -9,7 +9,7 @@ export default function EditClientPage() {
 
 	return (
 		<ClientEntry
-			client_id={params.id}
+			client_id={params?.id}
 			onCancel={() => router.push("/clients")}
 			onFinish={() => router.push("/clients")}
 		/>
