@@ -31,7 +31,7 @@ export default function ClientsPage() {
 		{ key: "email", label: "Email" },
 		{ key: "apiKeyLabel", label: "API Key", orderable: false },
 		{ key: "folderPath", label: "Folder Path" },
-		{ key: "backupCount", label: "Backups" },
+		{ key: "backupCount", label: "Backups", orderable: false },
 		{ key: "createdAt", label: "Created" },
 	];
 
@@ -72,7 +72,6 @@ export default function ClientsPage() {
 		{
 			id: "delete",
 			label: "Delete",
-
 			icon: <Trash className="w-4 h-4" />,
 			onClick: async (row) => {
 				try {

@@ -61,28 +61,22 @@ export default function BackupsPage() {
 
 	const filterFields = [
 		{
-			name: "client_name",
-			label: "Client",
-			type: "string",
-			matching: "contains",
-		},
-		{
 			name: "backupName",
 			label: "Name",
 			type: "string",
 			matching: "contains",
 		},
-		{
-			name: "status",
-			label: "Status",
-			type: "select",
-			matching: "equals",
-			options: [
-				{ value: "completed", label: "Completed" },
-				{ value: "in_progress", label: "In Progress" },
-				{ value: "failed", label: "Failed" },
-			],
-		},
+		// {
+		// 	name: "status",
+		// 	label: "Status",
+		// 	type: "select",
+		// 	matching: "equals",
+		// 	options: [
+		// 		{ value: "completed", label: "Completed" },
+		// 		{ value: "in_progress", label: "In Progress" },
+		// 		{ value: "failed", label: "Failed" },
+		// 	],
+		// },
 	] as SearchField[];
 
 	const dataActions: TableAction[] = [
@@ -387,7 +381,11 @@ export default function BackupsPage() {
 
 	return (
 		<div className="flex flex-col h-full gap-3 md:gap-4 ">
-			<DataHeader filterFields={filterFields} name="backups">
+			<DataHeader
+				filterFields={filterFields}
+				name="backups"
+				disabled={tab === "blocks" && selectedClient !== null}
+			>
 				<Tabs value={tab} onValueChange={setTab}>
 					<TabsList>
 						<TabsTrigger value="blocks" className="w-30">

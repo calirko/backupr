@@ -53,7 +53,6 @@ export default function MainLayout({
 							<Link key={item.href} href={item.href} className="h-full">
 								<Button
 									variant={"ghost"}
-									size="sm"
 									className={cn(
 										"gap-2 border-r h-full",
 

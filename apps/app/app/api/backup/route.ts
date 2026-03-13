@@ -36,11 +36,20 @@ export async function GET(request: NextRequest) {
 			where.status = filters.status;
 		}
 		if (filters.backupName) {
-			where.backupName = filters.backupName;
+			// If filters.backupName is already an object with contains/mode, use it directly
+			where.backupName =
+				typeof filters.backupName === "string"
+					? { contains: filters.backupName, mode: "insensitive" }
+					: filters.backupName;
 		}
 		if (filters.client_name) {
+			// If filters.client_name is already an object with contains/mode, use it directly
+			const nameFilter =
+				typeof filters.client_name === "string"
+					? { contains: filters.client_name, mode: "insensitive" }
+					: filters.client_name;
 			where.client = {
-				name: filters.client_name,
+				name: nameFilter,
 			};
 		}
 

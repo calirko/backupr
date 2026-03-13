@@ -36,17 +36,17 @@ export default function ConfirmActionDialog({
 			<Drawer open={open} onOpenChange={onClose}>
 				<DrawerContent>
 					<DrawerHeader>
-						<DrawerTitle>Confirmar Ação</DrawerTitle>
+						<DrawerTitle>Confirm Action</DrawerTitle>
 						<DrawerDescription>
-							Tem certeza de que quer realizar esta ação? Não será possível
-							desfazê-la.
+							Are you sure you want to perform this action? This cannot be
+							undone.
 						</DrawerDescription>
 					</DrawerHeader>
 					<DrawerFooter>
 						<DrawerClose asChild>
 							<Button variant="outline">
 								<X />
-								Cancelar
+								Cancel
 							</Button>
 						</DrawerClose>
 						<DrawerClose asChild>
@@ -57,7 +57,7 @@ export default function ConfirmActionDialog({
 								}}
 							>
 								<Check />
-								Confirmar
+								Confirm
 							</Button>
 						</DrawerClose>
 					</DrawerFooter>
@@ -70,17 +70,16 @@ export default function ConfirmActionDialog({
 		<Dialog open={open} onOpenChange={onClose}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Confirmar Ação</DialogTitle>
+					<DialogTitle>Confirm Action</DialogTitle>
 					<DialogDescription>
-						Tem certeza de que quer realizar esta ação? Não será possível
-						desfazê-la.
+						Are you sure you want to perform this action? This cannot be undone.
 					</DialogDescription>
 				</DialogHeader>
 				<DialogFooter>
 					<DialogClose asChild>
 						<Button variant="outline">
 							<X />
-							Cancelar
+							Cancel
 						</Button>
 					</DialogClose>
 					<DialogClose asChild>
@@ -91,7 +90,7 @@ export default function ConfirmActionDialog({
 							}}
 						>
 							<Check />
-							Confirmar
+							Confirm
 						</Button>
 					</DialogClose>
 				</DialogFooter>

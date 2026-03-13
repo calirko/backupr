@@ -53,10 +53,12 @@ export default function DataHeader({
 	children,
 	filterFields,
 	name,
+	disabled = false,
 }: {
 	children?: React.ReactNode;
 	filterFields: SearchField[];
 	name: string;
+	disabled?: boolean;
 }) {
 	const { filters, setFilters, setSkip } = useData(name);
 	const [localFilters, setLocalFilters] = useState<Record<string, any>>(() =>
@@ -220,6 +222,7 @@ export default function DataHeader({
 								[field.name]: e.target.value,
 							});
 						}}
+						disabled={disabled}
 					/>
 				);
 			case "number":
@@ -269,7 +272,10 @@ export default function DataHeader({
 							});
 						}}
 					>
-						<SelectTrigger className="w-full text-muted-foreground">
+						<SelectTrigger
+							disabled={disabled}
+							className="w-full text-muted-foreground"
+						>
 							<SelectValue placeholder="Select an option" />
 						</SelectTrigger>
 						<SelectContent>
@@ -303,6 +309,7 @@ export default function DataHeader({
 								setSkip(0);
 								setFilters(buildQueryObject());
 							}}
+							disabled={disabled}
 						>
 							<Search />
 						</Button>
@@ -322,20 +329,23 @@ export default function DataHeader({
 								),
 							);
 						}}
+						disabled={disabled}
 					>
 						<X />
 					</Button>
-					<Button
-						variant={"outline"}
-						className="p-1! aspect-square"
-						onClick={() => setAdvancedExpanded(!advancedExpanded)}
-					>
-						{advancedExpanded ? <ChevronsDownUp /> : <ChevronsUpDown />}
-					</Button>
+					{filterFields.length > 1 && (
+						<Button
+							variant={"outline"}
+							className="p-1! aspect-square"
+							onClick={() => setAdvancedExpanded(!advancedExpanded)}
+						>
+							{advancedExpanded ? <ChevronsDownUp /> : <ChevronsUpDown />}
+						</Button>
+					)}
 				</div>
 			</div>
 			{advancedExpanded && (
-				<FormPanel title="Filtro Avançado" className="grid-cols-2">
+				<FormPanel title="Advanced Filter" className="grid-cols-2">
 					{filterFields.slice(1, filterFields.length).map((field) => (
 						<div key={field.name}>
 							<Label>{field.label}</Label>

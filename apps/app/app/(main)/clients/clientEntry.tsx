@@ -217,9 +217,7 @@ export default function ClientEntry({
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Client API Key</DialogTitle>
-						<DialogDescription>
-							Save this API key securely. You won't be able to see it again.
-						</DialogDescription>
+						<DialogDescription>Save this API key securely.</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-4">
 						<div>
@@ -232,7 +230,6 @@ export default function ClientEntry({
 									className="font-mono text-sm grow"
 								/>
 								<Button
-									size="sm"
 									variant="outline"
 									className="h-9 border-l-0"
 									onClick={() => {

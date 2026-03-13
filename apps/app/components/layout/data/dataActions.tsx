@@ -150,6 +150,9 @@ export function RowActionsWrapper({
 						<ContextMenuItem
 							disabled={action.disabled?.(row)}
 							key={action.id}
+							className={
+								action.variant === "destructive" ? "text-destructive!" : ""
+							}
 							onClick={() => {
 								functionExecute({ action, row, router, openDialog });
 							}}
@@ -177,11 +180,7 @@ export function RowDataActions({
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button
-					className="p-0! h-8 w-8 rounded-none"
-					variant={"ghost"}
-					size="sm"
-				>
+				<Button className="p-0! h-8 w-8 rounded-none" variant={"ghost"}>
 					<Ellipsis size={18} />
 				</Button>
 			</DropdownMenuTrigger>
@@ -208,6 +207,9 @@ export function RowDataActions({
 							onClick={() => {
 								functionExecute({ action, row, router, openDialog });
 							}}
+							className={
+								action.variant === "destructive" ? "text-destructive!" : ""
+							}
 						>
 							{action.icon}
 							{action.label}
@@ -262,6 +264,9 @@ export function RowDataActionsBulk({
 						return (
 							<DropdownMenuItem
 								key={action.id}
+								className={
+									action.variant === "destructive" ? "text-destructive!" : ""
+								}
 								onClick={() => {
 									bulkFunctionExecute({
 										action,

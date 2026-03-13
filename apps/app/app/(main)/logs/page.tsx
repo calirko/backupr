@@ -114,9 +114,7 @@ export default function LogsPage() {
 	return (
 		<div className="flex flex-col gap-3 md:gap-4 h-full">
 			<DataHeader filterFields={filterFields} name="logs">
-				<p className="text-muted-foreground font-semibold">
-					System Logs and Activity
-				</p>
+				<p className="text-muted-foreground ">System Logs and Activity</p>
 			</DataHeader>
 			<DataTableWrapper>
 				<Data
