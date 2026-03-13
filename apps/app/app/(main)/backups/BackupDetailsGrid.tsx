@@ -35,7 +35,7 @@ export default function BackupDetailsGrid({
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center gap-3 border bg-card p-3">
-				<Button variant="outline" size="sm" onClick={onBack}>
+				<Button variant="outline" onClick={onBack}>
 					<ChevronDown className="h-4 w-4 rotate-90" />
 				</Button>
 				<ClientTitle connectionStatus={currentStatus} name={clientName} />

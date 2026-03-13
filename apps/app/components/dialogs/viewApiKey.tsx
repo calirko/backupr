@@ -1,4 +1,3 @@
-import { Label } from "@radix-ui/react-dropdown-menu";
 import { Clipboard } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
@@ -10,6 +9,7 @@ import {
 	DialogTitle,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 
 export default function ViewApiKeyDialog({
 	apiKey,
@@ -32,9 +32,7 @@ export default function ViewApiKeyDialog({
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>Client API Key</DialogTitle>
-					<DialogDescription>
-						Save this API key securely. You won't be able to see it again.
-					</DialogDescription>
+					<DialogDescription>Save this API key securely.</DialogDescription>
 				</DialogHeader>
 				<div className="space-y-4">
 					<div>
@@ -47,7 +45,6 @@ export default function ViewApiKeyDialog({
 								className="font-mono text-sm grow"
 							/>
 							<Button
-								size="sm"
 								variant="outline"
 								className="h-9 border-l-0"
 								onClick={() => {

@@ -45,7 +45,7 @@ const getDefaultFilters = (): Filters => {
 };
 
 const defaultSkip = 0;
-const defaultTake = 35;
+const defaultTake = 20;
 const defaultOrderBy: OrderBy = { createdAt: "desc" };
 const defaultSelectedRows: any[] = [];
 

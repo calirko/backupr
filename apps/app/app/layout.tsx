@@ -48,7 +48,21 @@ export default function RootLayout({
 						</MemoryProvider>
 					</DataProvider>
 				</ThemeProvider>
-				<Toaster position="bottom-center" richColors />
+				<Toaster
+					position="bottom-center"
+					richColors
+					toastOptions={{
+						style: {
+							background: "var(--background)",
+							border: "1px solid var(--border)",
+							boxShadow: "none",
+							color: "var(--foreground)",
+							borderRadius: "0",
+							gap: "9px",
+						},
+					}}
+					expand={true}
+				/>
 			</body>
 		</html>
 	);

@@ -35,10 +35,18 @@ export async function GET(request: NextRequest) {
 		// Build where clause from filters
 		const where: any = {};
 		if (filters.name) {
-			where.name = { contains: filters.name, mode: "insensitive" };
+			// If filters.name is already an object with contains/mode, use it directly
+			where.name =
+				typeof filters.name === "string"
+					? { contains: filters.name, mode: "insensitive" }
+					: filters.name;
 		}
 		if (filters.email) {
-			where.email = { contains: filters.email, mode: "insensitive" };
+			// If filters.email is already an object with contains/mode, use it directly
+			where.email =
+				typeof filters.email === "string"
+					? { contains: filters.email, mode: "insensitive" }
+					: filters.email;
 		}
 
 		const [clients, total] = await Promise.all([

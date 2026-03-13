@@ -68,7 +68,7 @@ export default function GroupedBackupsGrid({
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center gap-3 border bg-card p-3">
-				<Button variant="outline" size="sm" onClick={onBack}>
+				<Button variant="outline" onClick={onBack}>
 					<ChevronDown className="h-4 w-4 rotate-90" />
 				</Button>
 				<ClientTitle connectionStatus={currentStatus} name={clientName} />
@@ -155,7 +155,6 @@ export default function GroupedBackupsGrid({
 
 									<Button
 										variant="outline"
-										size="sm"
 										className={`mt-3 grow relative ${isThisRunning && activeProgress !== null && "bg-background"}`}
 										disabled={anyRunning}
 										onClick={(e) => {
@@ -172,7 +171,7 @@ export default function GroupedBackupsGrid({
 										{isThisRunning ? (
 											<>
 												<Loader2 className="h-4 w-4 mr-2 animate-spin z-20" />
-												<span className="z-20">Running...</span>
+												<span className="z-20">Running</span>
 											</>
 										) : (
 											<>
@@ -182,7 +181,6 @@ export default function GroupedBackupsGrid({
 										)}
 									</Button>
 									<Button
-										size="sm"
 										className="mt-3"
 										disabled={!backup.latestBackup || anyRunning}
 										onClick={(e) => {

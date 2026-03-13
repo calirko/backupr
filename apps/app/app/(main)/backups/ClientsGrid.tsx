@@ -18,7 +18,7 @@ export default function ClientsGrid({
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center gap-3 border bg-card p-3">
-				<Button variant="outline" size="sm" disabled>
+				<Button variant="outline" disabled>
 					<ChevronDown className="h-4 w-4 rotate-90" />
 				</Button>
 				<h2 className="font-semibold flex items-center gap-2">Clients</h2>

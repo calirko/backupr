@@ -1,7 +1,11 @@
+import {
+	errorResponse,
+	getPrismaClient,
+	validateToken,
+} from "@/lib/server/api-helpers";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { getPrismaClient, validateToken, errorResponse } from "@/lib/server/api-helpers";
+import { randomBytes } from "node:crypto";
 
 export async function GET(request: NextRequest) {
 	try {
@@ -9,29 +13,41 @@ export async function GET(request: NextRequest) {
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
 		const prisma = getPrismaClient();
 		const { searchParams } = new URL(request.url);
-		
+
 		const skip = parseInt(searchParams.get("skip") || "0", 10);
 		const take = parseInt(searchParams.get("take") || "30", 10);
 		const filtersParam = searchParams.get("filters");
 		const orderByParam = searchParams.get("orderBy");
 
 		// Parse filters and orderBy if provided
-		const filters = filtersParam ? JSON.parse(decodeURIComponent(filtersParam)) : {};
-		const orderBy = orderByParam ? JSON.parse(decodeURIComponent(orderByParam)) : { createdAt: "desc" };
+		const filters = filtersParam
+			? JSON.parse(decodeURIComponent(filtersParam))
+			: {};
+		const orderBy = orderByParam
+			? JSON.parse(decodeURIComponent(orderByParam))
+			: { createdAt: "desc" };
 
 		// Build where clause from filters
 		const where: any = {};
 		if (filters.email) {
-			where.email = { contains: filters.email, mode: "insensitive" };
+			// If filters.email is already an object with contains/mode, use it directly
+			where.email =
+				typeof filters.email === "string"
+					? { contains: filters.email, mode: "insensitive" }
+					: filters.email;
 		}
 		if (filters.name) {
-			where.name = { contains: filters.name, mode: "insensitive" };
+			// If filters.name is already an object with contains/mode, use it directly
+			where.name =
+				typeof filters.name === "string"
+					? { contains: filters.name, mode: "insensitive" }
+					: filters.name;
 		}
 
 		const [users, total] = await Promise.all([
@@ -63,7 +79,7 @@ export async function POST(request: NextRequest) {
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
@@ -74,7 +90,7 @@ export async function POST(request: NextRequest) {
 		if (!name || !email || !password) {
 			return NextResponse.json(
 				{ error: "Name, email, and password are required" },
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
@@ -86,7 +102,7 @@ export async function POST(request: NextRequest) {
 		if (existingUser) {
 			return NextResponse.json(
 				{ error: "A user with this email already exists" },
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
@@ -125,7 +141,7 @@ export async function DELETE(request: NextRequest) {
 		if ("error" in validation) {
 			return NextResponse.json(
 				{ error: validation.error },
-				{ status: validation.status }
+				{ status: validation.status },
 			);
 		}
 
@@ -134,14 +150,17 @@ export async function DELETE(request: NextRequest) {
 		const { ids } = await request.json();
 
 		if (!ids || !Array.isArray(ids) || ids.length === 0) {
-			return NextResponse.json({ error: "User IDs are required" }, { status: 400 });
+			return NextResponse.json(
+				{ error: "User IDs are required" },
+				{ status: 400 },
+			);
 		}
 
 		// Check if user is trying to delete themselves
 		if (ids.includes(currentUser.userId)) {
 			return NextResponse.json(
 				{ error: "You cannot delete your own user account" },
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
@@ -162,7 +181,7 @@ export async function DELETE(request: NextRequest) {
 					error:
 						"These users cannot be deleted because they have associated data in the system",
 				},
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
