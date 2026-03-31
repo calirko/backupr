@@ -137,11 +137,12 @@ export default function BackupsPage() {
 		setLoadingBlocks(true);
 		try {
 			const params = new URLSearchParams();
-			const clientName = currentFilters.client_name as string | undefined;
-			if (clientName) params.set("search", clientName);
+			const backupName = currentFilters.backupName as string | undefined;
+			if ((backupName as any)?.contains)
+				params.set("backupName", (backupName as any)?.contains);
 
 			const response: { clients: Client[] } = await Api.get(
-				`/api/backup/clients${params.toString() ? `?${params.toString()}` : ""}`,
+				`/api/backup/clients?${params}`,
 				{
 					token: Cookies.get("token"),
 				},
@@ -384,7 +385,7 @@ export default function BackupsPage() {
 			<DataHeader
 				filterFields={filterFields}
 				name="backups"
-				disabled={tab === "blocks" && selectedClient !== null}
+				disabled={selectedClient !== null}
 			>
 				<Tabs value={tab} onValueChange={setTab}>
 					<TabsList>

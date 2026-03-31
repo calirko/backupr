@@ -28,8 +28,6 @@ function updateNextRunDate(taskId, cronExpression) {
 	}
 
 	try {
-		// cron-parser v5+ uses parseExpression as a named export
-		// cron-parser v4 and below uses cronParser.parseExpression
 		let nextDate;
 
 		if (typeof cronParser.parseExpression === "function") {
@@ -98,6 +96,7 @@ async function processBackupQueue() {
 	} catch (error) {
 		console.error(`Error processing backup queue for ${task.name}:`, error);
 	} finally {
+		// Ensure we always clean up state even if runBackup throws silently or stalls
 		processingBackups.delete(task.id);
 
 		// After a backup completes, recalculate the next run date

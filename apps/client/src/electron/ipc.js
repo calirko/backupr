@@ -103,6 +103,15 @@ function initIPC(win, store) {
 		reconnectWs();
 		return { ok: true };
 	});
+
+	ipcMain.handle("get-app-info", () => {
+		const { app } = require("electron");
+		return {
+			version: app.getVersion(),
+			name: app.getName(),
+			platform: process.platform,
+		};
+	});
 }
 
 module.exports = {

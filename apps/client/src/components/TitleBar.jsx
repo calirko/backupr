@@ -1,6 +1,6 @@
 import { Minus, X } from "lucide-react";
-import logoSrc from "../public/icons/icon.png";
 import { Button } from "./ui/button";
+import logoSrc from "/icons/icon.png?url";
 
 export function TitleBar() {
 	const handleMinimize = () => {

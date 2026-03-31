@@ -106,7 +106,7 @@ export default function GroupedBackupsGrid({
 													className={`${
 														new Date(backup.latestBackup.createdAt).getTime() <
 														Date.now() - 2 * 24 * 60 * 60 * 1000
-															? "text-orange-300"
+															? "text-orange-200"
 															: ""
 													}`}
 												>

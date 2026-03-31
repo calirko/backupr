@@ -24,6 +24,11 @@ export function SettingsPage() {
 	});
 	const [wsStatus, setWsStatus] = useState("disconnected"); // "connected" | "connecting" | "disconnected"
 	const [reconnecting, setReconnecting] = useState(false);
+	const [appInfo, setAppInfo] = useState({
+		version: "",
+		name: "",
+		platform: "",
+	});
 
 	// Load settings from store on mount
 	useEffect(() => {
@@ -51,6 +56,9 @@ export function SettingsPage() {
 			}
 		};
 		loadSettings();
+
+		// Load app info
+		window.electron?.getAppInfo?.().then(setAppInfo).catch(console.error);
 
 		// Fetch initial WS status and subscribe to live updates
 		window.electron
@@ -173,7 +181,7 @@ export function SettingsPage() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
-					<div className="space-y-2">
+					<div className="space-y-1">
 						<Label htmlFor="serverHost">Server Host</Label>
 						<Input
 							id="serverHost"
@@ -182,7 +190,7 @@ export function SettingsPage() {
 							onChange={(e) => updateSetting("serverHost", e.target.value)}
 						/>
 					</div>
-					<div className="space-y-2">
+					<div className="space-y-1">
 						<Label htmlFor="apiKey">API Key</Label>
 						<Input
 							id="apiKey"
@@ -192,7 +200,7 @@ export function SettingsPage() {
 							onChange={(e) => updateSetting("apiKey", e.target.value)}
 						/>
 					</div>
-					<div className="space-y-2">
+					<div className="space-y-1">
 						<Label htmlFor="wsServiceUrl">WebSocket Service URL</Label>
 						<Input
 							id="wsServiceUrl"
@@ -229,14 +237,14 @@ export function SettingsPage() {
 				<CardContent className="flex items-center justify-between gap-4">
 					<div className="flex items-center gap-2">
 						{wsStatus === "connected" ? (
-							<Server className="h-5 w-5 text-green-500" />
+							<Server className="h-5 w-5 text-green-300" />
 						) : (
 							<ServerOff className="h-5 w-5 text-muted-foreground" />
 						)}
 						<span
 							className={
 								wsStatus === "connected"
-									? "text-sm font-medium text-green-500"
+									? "text-sm font-medium text-green-300"
 									: wsStatus === "connecting"
 										? "text-sm font-medium text-amber-500"
 										: "text-sm font-medium text-muted-foreground"
@@ -292,7 +300,7 @@ export function SettingsPage() {
 									startInBackground: e.target.checked,
 								}))
 							}
-							className="w-4 h-4 rounded-0"
+							className="w-4 h-4 border-none outline-none bg-red-500"
 						/>
 						<Label htmlFor="startInBackground" className="cursor-pointer">
 							Launch at system startup
@@ -304,6 +312,35 @@ export function SettingsPage() {
 						and you can click the tray icon to show or hide the window. This
 						ensures your scheduled backups run automatically.
 					</p>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle className="flex items-center gap-2">App Info</CardTitle>
+					<CardDescription>
+						Details about your Backupr client installation
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-1 text-sm text-muted-foreground">
+					<div className="flex justify-between">
+						<span>Version</span>
+						<span className="font-mono text-foreground">
+							{appInfo.version || "Unknown"}
+						</span>
+					</div>
+					<div className="flex justify-between">
+						<span>OS Platform</span>
+						<span className="font-mono text-foreground capitalize">
+							{appInfo.platform || "Unknown"}
+						</span>
+					</div>
+					<div className="flex justify-between">
+						<span>App Name</span>
+						<span className="font-mono text-foreground">
+							{appInfo.name || "Backupr"}
+						</span>
+					</div>
 				</CardContent>
 			</Card>
 
