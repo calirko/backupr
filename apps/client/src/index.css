@@ -117,11 +117,6 @@
    }
 }
 
-input[type="checkbox"] {
-   accent-color: hsl(var(--primary));
-   border-radius: 0;
-}
-
 img {
    user-select: none;
    -webkit-user-drag: none;

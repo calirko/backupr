@@ -39,7 +39,7 @@ export function UserMenu({ email, name }: UserMenuProps) {
 			<DropdownMenuTrigger asChild>
 				<Button
 					variant="ghost"
-					className="relative aspect-square w-[49px] h-full border-l p-0"
+					className="relative aspect-square w-12.25 h-full border-l p-0"
 				>
 					{email ? (
 						<img
@@ -68,7 +68,7 @@ export function UserMenu({ email, name }: UserMenuProps) {
 			<DropdownMenuContent>
 				<DropdownMenuLabel>
 					<div className="flex items-center gap-3">
-						<div className="relative aspect-square w-[40px] h-full p-0">
+						<div className="relative aspect-square w-10 h-full p-0">
 							{email ? (
 								<img
 									src={getGravatarUrl(email)}

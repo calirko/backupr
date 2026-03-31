@@ -59,10 +59,8 @@ async function streamUploadFile({
 			let done = false;
 
 			const req = protocol.request(options, (res) => {
-				let data = "";
-
-				res.on("data", (chunk) => {
-					data += chunk;
+				res.on("data", () => {
+					// We don't need the response data, just consume it so the stream ends
 				});
 
 				res.on("end", () => {
@@ -87,6 +85,14 @@ async function streamUploadFile({
 						resolve(false);
 					}
 				});
+			});
+
+			req.setTimeout(480000, () => {
+				// 8 minute timeout for slow uploads
+				if (done) return;
+				done = true;
+				console.error(`Upload timeout for ${backupName}`);
+				req.destroy(new Error("Request timed out"));
 			});
 
 			req.on("error", (error) => {

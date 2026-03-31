@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld("electron", {
 	},
 	getWsStatus: () => ipcRenderer.invoke("ws-get-status"),
 	wsReconnect: () => ipcRenderer.invoke("ws-reconnect"),
+	getAppInfo: () => ipcRenderer.invoke("get-app-info"),
 });
 
 contextBridge.exposeInMainWorld("store", {

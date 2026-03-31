@@ -180,14 +180,13 @@ export function AddBackupDialog({ visible, onClose, isEdit }) {
 			onClick={handleBackdropClick}
 			onKeyDown={handleKeyDown}
 			tabIndex={-1}
+			style={{ marginTop: 0 }}
 		>
 			<Card className="w-[410px] max-w-[420px] mx-4">
 				<CardHeader>
 					<div className="flex items-center gap-3">
 						<div className="flex-1">
-							<CardTitle className="text-xl">
-								{isEdit ? "Edit Backup" : "Create Backup"}
-							</CardTitle>
+							<CardTitle>{isEdit ? "Edit Backup" : "Create Backup"}</CardTitle>
 							<CardDescription className="mt-1.5">
 								{isEdit
 									? "Edit your backup configuration"
@@ -228,7 +227,7 @@ export function AddBackupDialog({ visible, onClose, isEdit }) {
 						</Label>
 					</div> */}
 
-					<div className="space-y-2">
+					<div className="space-y-1">
 						<div className="flex justify-between items-center">
 							<Label>Files and Folders</Label>
 							<div className="flex gap-2">
@@ -242,7 +241,7 @@ export function AddBackupDialog({ visible, onClose, isEdit }) {
 								</Button>
 							</div>
 						</div>
-						<div className="space-y-2 min-h-[100px] max-h-[150px] overflow-auto border p-3">
+						<div className="space-y-1 min-h-[100px] max-h-[150px] overflow-auto border p-3">
 							{paths.length === 0 ? (
 								<div className="flex items-center justify-center h-20">
 									<p className="text-sm text-muted-foreground text-center">

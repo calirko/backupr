@@ -111,7 +111,14 @@ function _startPingInterval() {
 		ws.ping();
 		pongTimeout = setTimeout(() => {
 			console.warn("[WS-CLIENT] Pong timeout – closing stale connection");
-			ws.terminate();
+			try {
+				if (ws) ws.terminate();
+			} catch (_e) {}
+			ws = null;
+			broadcastWsStatus();
+			if (!isShuttingDown) {
+				_scheduleReconnect();
+			}
 		}, PING_TIMEOUT_MS);
 	}, PING_INTERVAL_MS);
 }
@@ -161,7 +168,14 @@ async function _connect() {
 	connectTimeoutTimer = setTimeout(() => {
 		connectTimeoutTimer = null;
 		if (!ws || ws.readyState !== WebSocket.CONNECTING) return;
-		ws.terminate();
+		try {
+			ws.terminate();
+		} catch (_e) {}
+		ws = null;
+		broadcastWsStatus();
+		if (!isShuttingDown) {
+			_scheduleReconnect();
+		}
 	}, CONNECT_TIMEOUT_MS);
 
 	ws.on("open", () => {
@@ -191,7 +205,7 @@ async function _connect() {
 		}
 	});
 
-	ws.on("close", (code, reason) => {
+	ws.on("close", () => {
 		_clearConnectTimeout();
 		_clearPingInterval();
 		// const reasonStr = reason?.toString() || "Unknown";
@@ -207,6 +221,16 @@ async function _connect() {
 		console.error("[WS-CLIENT] WebSocket error:", err.message);
 		_clearConnectTimeout();
 		_clearPingInterval();
+		if (ws) {
+			try {
+				ws.terminate();
+			} catch (_e) {}
+			ws = null;
+			broadcastWsStatus();
+		}
+		if (!isShuttingDown) {
+			_scheduleReconnect();
+		}
 	});
 }
 

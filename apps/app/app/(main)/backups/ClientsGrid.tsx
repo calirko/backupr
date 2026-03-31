@@ -49,7 +49,7 @@ export default function ClientsGrid({
 											{client.email}
 										</span>
 									</div>
-									<div className="flex items-center gap-1.5 shrink-0 p-2 border gap-1 bg-background">
+									<div className="flex items-center shrink-0 p-2 border gap-1 bg-background">
 										<ConnectionIcon connectionStatus={clientConnectionStatus} />
 										<ChevronRight className="h-5 w-5" />
 									</div>
@@ -82,7 +82,7 @@ export default function ClientsGrid({
 												className={`font-semibold ${
 													new Date(client.lastBackupDate).getTime() <
 													Date.now() - 2 * 24 * 60 * 60 * 1000
-														? "text-orange-300"
+														? "text-orange-200"
 														: ""
 												}`}
 											>

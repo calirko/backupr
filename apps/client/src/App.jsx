@@ -5,7 +5,7 @@ import { TitleBar } from "./components/TitleBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Toaster } from "./components/ui/toaster";
 import { useToast } from "./hooks/use-toast";
-import logoSrc from "./public/icons/icon.png";
+import logoSrc from "/icons/icon.png?url";
 
 function App() {
 	const { toasts } = useToast();

@@ -2,8 +2,10 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const archiver = require("archiver");
+const { app } = require("electron/main");
 
-const TEMP_DIR = path.join(process.cwd(), ".temp");
+// Use the app's userData directory for temp files to bypass system32/permission issues
+const TEMP_DIR = path.join(app.getPath("userData"), ".temp");
 
 function validateFilePaths(filePaths) {
 	const invalidFiles = [];

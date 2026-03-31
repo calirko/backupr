@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray } = require("electron/main");
+const { app, BrowserWindow, Tray, powerMonitor } = require("electron/main");
 const path = require("node:path");
 const { Menu } = require("electron/main");
 const Store = require("electron-store");
@@ -159,6 +159,16 @@ app.whenReady().then(() => {
 	initWsClient(store, win);
 	createTray();
 	checkForUpdatesOnStartup();
+
+	powerMonitor.on("resume", () => {
+		console.log("System woken up from sleep, reinitializing schedules & ws");
+		const { scheduleAll } = require("./electron/schedule");
+		const { reconnect } = require("./electron/ws-client");
+
+		stopAllSchedules();
+		scheduleAll(store);
+		reconnect();
+	});
 
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) {

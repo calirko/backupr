@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import InputPassword from "@/components/ui/input-password";
 import { Label } from "@/components/ui/label";
-import Api, { FetchError } from "@/lib/api";
+import Api from "@/lib/api";
 import Cookies from "js-cookie";
 import { DoorOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -34,18 +34,18 @@ export default function SignInPage() {
 		const errors = { email: "", password: "" };
 
 		if (!form.email) {
-			errors.email = "Email é obrigatório";
+			errors.email = "Email is required";
 			valid = false;
 		} else if (!/\S+@\S+\.\S+/.test(form.email)) {
-			errors.email = "Email é inválido";
+			errors.email = "The email is invalid";
 			valid = false;
 		}
 
 		if (!form.password) {
-			errors.password = "Senha é obrigatória";
+			errors.password = "Password is required";
 			valid = false;
 		} else if (form.password.length < 6) {
-			errors.password = "Senha deve ter ao menos 6 caracteres";
+			errors.password = "The password must be at least 6 characters";
 			valid = false;
 		}
 
@@ -71,35 +71,31 @@ export default function SignInPage() {
 			router.push("/home");
 		} catch (error: any) {
 			console.error("Error during sign-in:", error);
-			if (error instanceof FetchError) {
-				const maybeData = error.data as unknown;
-				const obj = maybeData as Record<string, unknown> | null;
-				const msg =
-					obj && typeof obj.message === "string"
-						? (obj.message as string)
-						: error.message;
+			const maybeData = error.data as unknown;
+			const obj = maybeData as Record<string, unknown> | null;
+			const msg =
+				obj && typeof obj.message === "string"
+					? (obj.message as string)
+					: error.message;
 
-				switch (msg) {
-					case "user not found":
-						setFormErrors((prev) => ({
-							...prev,
-							email: "Usuário não encontrado",
-						}));
-						break;
-					case "invalid password":
-						setFormErrors((prev) => ({
-							...prev,
-							password: "A senha está incorreta",
-						}));
-						break;
-					default:
-						toast.error(msg || "Um erro ocorreu ao entrar");
-						break;
-				}
-			} else if (error instanceof Error) {
-				toast.error(error.message || "Um erro ocorreu ao entrar");
-			} else {
-				toast.error("Um erro ocorreu ao entrar");
+			console.error("Error message:", error.message);
+
+			switch (msg) {
+				case "user not found":
+					setFormErrors((prev) => ({
+						...prev,
+						email: "User with this email does not exist",
+					}));
+					break;
+				case "invalid password":
+					setFormErrors((prev) => ({
+						...prev,
+						password: "The password is incorrect",
+					}));
+					break;
+				default:
+					toast.error(msg || "An error occurred during sign-in");
+					break;
 			}
 		} finally {
 			setLoading(false);
@@ -121,9 +117,9 @@ export default function SignInPage() {
 
 				<Card className="w-112.5">
 					<CardHeader>
-						<CardTitle>Entrar</CardTitle>
+						<CardTitle>Login</CardTitle>
 						<CardDescription>
-							Entre com sua conta para continuar.
+							Enter your email and password to access your account.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
@@ -133,7 +129,7 @@ export default function SignInPage() {
 									<div>
 										<Label htmlFor="email">Email</Label>
 										<Input
-											placeholder="exemplo@email.com"
+											placeholder="example@backupr.local"
 											type="email"
 											value={form.email}
 											onChange={(e) => {
@@ -144,7 +140,7 @@ export default function SignInPage() {
 										/>
 									</div>
 									<div>
-										<Label htmlFor="password">Senha</Label>
+										<Label htmlFor="password">Password</Label>
 										<InputPassword
 											value={form.password}
 											onChange={(e) => {

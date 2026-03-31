@@ -110,7 +110,7 @@ export function ConnectionIcon({
 		default:
 			<Tooltip>
 				<TooltipTrigger>
-					<Server className="h-4 w-4 text-orange-300" />
+					<Server className="h-4 w-4 text-orange-200" />
 				</TooltipTrigger>
 				<TooltipContent>
 					<span>This client's status is unknown.</span>
