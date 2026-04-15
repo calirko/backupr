@@ -48,7 +48,36 @@ export default function BackupsPage() {
 	const [triggeringBackups, setTriggeringBackups] = useState<Set<string>>(
 		new Set(),
 	);
+	/**
+	 * Set of clientIds whose status icon should temporarily show red.
+	 * Populated when a new lastError arrives; auto-cleared after ERROR_FLASH_MS.
+	 */
+	const [clientErrorFlash, setClientErrorFlash] = useState<Set<string>>(
+		new Set(),
+	);
 	const wsRef = useRef<WebSocket | null>(null);
+	/** Pending reconnect timer handle. */
+	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	/** How many consecutive reconnect attempts have been made (reset on open). */
+	const reconnectAttemptsRef = useRef(0);
+	/**
+	 * Set to false in the effect's cleanup so callbacks scheduled after unmount
+	 * do not touch React state or attempt new connections.
+	 */
+	const isMountedRef = useRef(false);
+	/**
+	 * Tracks the last-seen lastError.date per clientId so we can distinguish a
+	 * genuinely new error from a repeated broadcast of the same one.
+	 * Seeded from the initial all-client-states snapshot so pre-existing errors
+	 * never trigger a flash on first load.
+	 */
+	const lastErrorDatesRef = useRef<Map<string, string>>(new Map());
+	/** Per-client auto-clear timers for the error flash. */
+	const flashTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+		new Map(),
+	);
+	/** How long (ms) the red error icon stays visible before reverting. */
+	const ERROR_FLASH_MS = 6_000;
 	const columns = [
 		{ key: "backupName", label: "Name" },
 		{ key: "client_name", label: "Cliente", orderByKey: "client.name" },
@@ -269,78 +298,208 @@ export default function BackupsPage() {
 	}, [tab, skip, take, filters, orderBy]);
 
 	useEffect(() => {
+		isMountedRef.current = true;
+
 		const wsServiceUrl = process.env.NEXT_PUBLIC_WS_URL;
 		if (!wsServiceUrl) {
 			console.error("[frontend-ws] NEXT_PUBLIC_WS_URL is not configured");
 			return;
 		}
 
-		const token = Cookies.get("token");
-		const ws = new WebSocket(`${wsServiceUrl}/frontend-ws?token=${token}`);
-		wsRef.current = ws;
+		// ── Backoff helpers ───────────────────────────────────────────────────
+		/** Full-jitter exponential backoff: random value in [BASE, min(BASE*2^n, MAX)]. */
+		function getReconnectDelay(): number {
+			const BASE = 3_000;
+			const MAX = 60_000;
+			const exp = Math.min(reconnectAttemptsRef.current, 7);
+			const ceiling = Math.min(BASE * 2 ** exp, MAX);
+			// Random value in [BASE, ceiling] avoids thundering herd after an
+			// outage while still bounding the minimum wait.
+			return Math.floor(BASE + Math.random() * (ceiling - BASE));
+		}
 
-		ws.onopen = () => {
-			ws.send(JSON.stringify({ type: "subscribe" }));
-			console.log("[frontend-ws] connected");
-		};
+		function scheduleReconnect() {
+			if (!isMountedRef.current) return;
+			// Guard: don't stack timers if one is already pending.
+			if (reconnectTimerRef.current !== null) return;
 
-		ws.onmessage = (event) => {
-			let msg: {
-				type: string;
-				states?: Record<string, ClientState>;
-				clientId?: string;
-				state?: ClientState;
-				backupName?: string;
-				error?: string;
-			};
-			try {
-				msg = JSON.parse(event.data);
-				console.log("[frontend-ws] received message");
-			} catch {
+			const delay = getReconnectDelay();
+			reconnectAttemptsRef.current += 1;
+			console.log(
+				`[frontend-ws] reconnecting in ${Math.round(delay / 1000)}s` +
+					` (attempt #${reconnectAttemptsRef.current})`,
+			);
+			reconnectTimerRef.current = setTimeout(() => {
+				reconnectTimerRef.current = null;
+				connect();
+			}, delay);
+		}
+
+		// ── Connection factory ────────────────────────────────────────────────
+		function connect() {
+			if (!isMountedRef.current) return;
+
+			// Re-read the token on every attempt so a refreshed token is picked up.
+			const token = Cookies.get("token");
+			if (!token) {
+				console.warn("[frontend-ws] no auth token – will retry");
+				scheduleReconnect();
 				return;
 			}
 
-			if (msg.type === "all-client-states" && msg.states) {
-				setClientStates(new Map(Object.entries(msg.states)));
-			} else if (
-				msg.type === "client-state-update" &&
-				msg.clientId &&
-				msg.state
-			) {
-				const { clientId, state } = msg as {
-					clientId: string;
-					state: ClientState;
+			let ws: WebSocket;
+			try {
+				ws = new WebSocket(`${wsServiceUrl}/frontend-ws?token=${token}`);
+			} catch (err) {
+				console.error("[frontend-ws] failed to create WebSocket:", err);
+				scheduleReconnect();
+				return;
+			}
+			wsRef.current = ws;
+
+			ws.onopen = () => {
+				if (!isMountedRef.current) {
+					// Component unmounted while the handshake was in-flight.
+					ws.close(1000, "Unmounted");
+					return;
+				}
+				// Reset backoff so the next disconnect starts from the shortest delay.
+				reconnectAttemptsRef.current = 0;
+				ws.send(JSON.stringify({ type: "subscribe" }));
+				console.log("[frontend-ws] connected");
+			};
+
+			ws.onmessage = (event) => {
+				if (!isMountedRef.current) return;
+				let msg: {
+					type: string;
+					states?: Record<string, ClientState>;
+					clientId?: string;
+					state?: ClientState;
+					backupName?: string;
+					error?: string;
 				};
-				setClientStates((prev) => new Map(prev).set(clientId, state));
-				if (state.activeBackup) {
-					const activeName = state.activeBackup.backupName;
+				try {
+          msg = JSON.parse(event.data);
+					console.debug("[frontend-ws] message:", msg);
+				} catch {
+					return;
+				}
+
+				if (msg.type === "all-client-states" && msg.states) {
+					const statesMap = new Map(
+						Object.entries(msg.states) as [string, ClientState][],
+					);
+					setClientStates(statesMap);
+					// Seed known error dates so pre-existing errors don't trigger a flash.
+					for (const [cid, st] of statesMap) {
+						if (st.lastError?.date) {
+							lastErrorDatesRef.current.set(cid, st.lastError.date);
+						}
+					}
+				} else if (
+					msg.type === "client-state-update" &&
+					msg.clientId &&
+					msg.state
+				) {
+					const { clientId, state } = msg as {
+						clientId: string;
+						state: ClientState;
+					};
+					setClientStates((prev) => new Map(prev).set(clientId, state));
+					if (state.activeBackup) {
+						const activeName = state.activeBackup.backupName;
+						setTriggeringBackups((prev) => {
+							const next = new Set(prev);
+							next.delete(activeName);
+							return next;
+						});
+					}
+					// Flash the status icon red if a genuinely new error arrived.
+					const incomingErrorDate = state.lastError?.date;
+					if (
+						incomingErrorDate &&
+						incomingErrorDate !== lastErrorDatesRef.current.get(clientId)
+					) {
+						lastErrorDatesRef.current.set(clientId, incomingErrorDate);
+						setClientErrorFlash((prev) => new Set(prev).add(clientId));
+						// Cancel any existing flash timer for this client before starting a new one.
+						const existing = flashTimersRef.current.get(clientId);
+						if (existing) clearTimeout(existing);
+						flashTimersRef.current.set(
+							clientId,
+							setTimeout(() => {
+								flashTimersRef.current.delete(clientId);
+								if (!isMountedRef.current) return;
+								setClientErrorFlash((prev) => {
+									const next = new Set(prev);
+									next.delete(clientId);
+									return next;
+								});
+							}, ERROR_FLASH_MS),
+						);
+					}
+				} else if (msg.type === "trigger-error" && msg.backupName) {
+					const errMsg = msg.error || "Failed to trigger backup";
+					toast.error(errMsg);
 					setTriggeringBackups((prev) => {
 						const next = new Set(prev);
-						next.delete(activeName);
+						next.delete(msg.backupName as string);
 						return next;
 					});
 				}
-			} else if (msg.type === "trigger-error" && msg.backupName) {
-				const errMsg = msg.error || "Failed to trigger backup";
-				toast.error(errMsg);
-				setTriggeringBackups((prev) => {
-					const next = new Set(prev);
-					next.delete(msg.backupName as string);
-					return next;
-				});
-			}
-		};
+			};
 
-		ws.onerror = (err) => {
-			console.error("[frontend-ws] error:", err);
-		};
+			ws.onerror = (err) => {
+				// The close event always fires after an error, so we let onclose
+				// handle scheduling the reconnect – no double-scheduling needed.
+				console.error("[frontend-ws] error:", err);
+			};
 
+			ws.onclose = (event) => {
+				// Only clear the module ref if it still points to this socket
+				// (a newer connect() call may have already replaced it).
+				if (wsRef.current === ws) wsRef.current = null;
+
+				if (!isMountedRef.current) return;
+
+				console.log(
+					`[frontend-ws] disconnected (code=${event.code}, clean=${event.wasClean})`,
+				);
+				scheduleReconnect();
+			};
+		}
+
+		connect();
+
+		// ── Cleanup ───────────────────────────────────────────────────────────
 		return () => {
-			if (wsRef.current) {
-				wsRef.current.close();
-				wsRef.current = null;
-				console.log("[frontend-ws] disconnected");
+			isMountedRef.current = false;
+
+			// Cancel any pending reconnect timer first.
+			if (reconnectTimerRef.current !== null) {
+				clearTimeout(reconnectTimerRef.current);
+				reconnectTimerRef.current = null;
 			}
+
+			const ws = wsRef.current;
+			if (ws) {
+				// Null out onclose BEFORE calling close() so the handler doesn't
+				// fire and try to schedule a reconnect for an intentional teardown.
+				ws.onclose = null;
+				ws.onerror = null;
+				ws.onmessage = null;
+				ws.close(1000, "Component unmounting");
+				wsRef.current = null;
+			}
+
+			// Clear all pending error-flash timers.
+			for (const timer of flashTimersRef.current.values()) {
+				clearTimeout(timer);
+			}
+			flashTimersRef.current.clear();
+
+			console.log("[frontend-ws] cleanup");
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
@@ -369,13 +528,12 @@ export default function BackupsPage() {
 			refreshCurrentView(selectedClient);
 		}
 
-		setCurrentStatus(
-			state?.connected
-				? state?.activeBackup
-					? state.activeBackup.status
-					: "idle"
-				: "disconnected",
-		);
+		const baseStatus = state?.connected
+			? state?.activeBackup
+				? state.activeBackup.status
+				: "idle"
+			: "disconnected";
+		setCurrentStatus(baseStatus);
 
 		prevActiveBackupForClientRef.current = current;
 	}, [clientStates, selectedClient]);
@@ -426,6 +584,7 @@ export default function BackupsPage() {
 								<ClientsGrid
 									clients={clients}
 									clientStates={clientStates}
+									clientErrorFlash={clientErrorFlash}
 									onSelectClient={fetchGroupedBackups}
 								/>
 							)}
@@ -437,7 +596,11 @@ export default function BackupsPage() {
 										clients.find((c) => c.id === selectedClient)?.name ??
 										"Unknown Client"
 									}
-									currentStatus={currentStatus}
+									currentStatus={
+										selectedClient && clientErrorFlash.has(selectedClient)
+											? "error"
+											: currentStatus
+									}
 									groupedBackups={groupedBackups}
 									selectedClient={selectedClient}
 									clientStates={clientStates}
@@ -456,7 +619,11 @@ export default function BackupsPage() {
 							{/* Backup Details Grid */}
 							{selectedBackupName && backupDetails.length > 0 && (
 								<BackupDetailsGrid
-									currentStatus={currentStatus}
+									currentStatus={
+										selectedClient && clientErrorFlash.has(selectedClient)
+											? "error"
+											: currentStatus
+									}
 									clientName={
 										clients.find((c) => c.id === selectedClient)?.name ??
 										"Unknown Client"

@@ -19,4 +19,4 @@ RUN yarn install
 # Copy application source
 COPY server.js ./
 
-CMD ["node", "server.js"]
+CMD ["node", "index.js"]

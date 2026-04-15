@@ -6,28 +6,14 @@
  *   /client-ws?apiKey=<key>   – Electron backup clients
  *   /frontend-ws?token=<jwt>  – Browser frontends
  *
- * The frontend may also send:
- *   { type: "trigger-backup", clientId, backupName }
- * to trigger a backup directly over the WS channel, replacing the old
- * Next.js HTTP trigger endpoint.
- *
- * State is plain module-level Maps/Sets – no global hacks needed because
- * this is a dedicated long-running process, not a Next.js module that gets
- * hot-reloaded.
- *
- * Required env vars (copy from your apps/app/.env or set in the environment):
- *   DATABASE_URL   – PostgreSQL connection string
- *   SECRET_TOKEN   – JWT secret used to sign/verify frontend session tokens
- *   WS_PORT        – Port to listen on (default: 4001)
  */
 
-require("dotenv").config();
-
-const http = require("node:http");
-const { URL } = require("node:url");
-const { WebSocketServer } = require("ws");
-const { jwtVerify } = require("jose");
-const { Pool } = require("pg");
+import "dotenv/config";
+import { createServer } from "node:http";
+import { URL } from "node:url";
+import { WebSocketServer } from "ws";
+import { jwtVerify } from "jose";
+import { Pool } from "pg";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +50,6 @@ async function validateToken(token) {
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-// Plain module-level Maps – safe here because this is a persistent process.
 
 /** apiKey → WebSocket */
 const electronClients = new Map();
@@ -93,7 +78,7 @@ function patchClientState(clientId, patch) {
 function broadcastClientState(clientId) {
 	const state = clientStates.get(clientId);
 	if (!state) return;
-	console.log(`[WS] Broadcasting state update for client ${clientId}:`, state);
+	// console.log(`[WS] Broadcasting state update for client ${clientId}:`, state);
 	const message = JSON.stringify({
 		type: "client-state-update",
 		clientId,
@@ -139,15 +124,21 @@ function handleElectronClient(ws, apiKey, clientId, clientName) {
 		`[WS] Electron client connected: ${clientName} (id: ${clientId})`,
 	);
 
-	// Heartbeat
+	// Heartbeat – detect and kill dead connections
 	let isAlive = true;
 	ws.on("pong", () => {
 		isAlive = true;
 	});
+	ws.on("ping", () => {
+		try {
+			ws.pong();
+		} catch (_) {}
+	});
+
 	const heartbeat = setInterval(() => {
 		if (!isAlive) {
 			console.warn(
-				`[WS] Heartbeat timeout for client ${clientId} – terminating`,
+				`[WS] Heartbeat timeout for Electron client ${clientId} – terminating dead connection`,
 			);
 			clearInterval(heartbeat);
 			ws.terminate();
@@ -156,14 +147,15 @@ function handleElectronClient(ws, apiKey, clientId, clientName) {
 		isAlive = false;
 		try {
 			ws.ping();
-		} catch (_) {}
+		} catch (err) {
+			console.warn(
+				`[WS] Failed to ping Electron client ${clientId}:`,
+				err.message,
+			);
+			clearInterval(heartbeat);
+			ws.terminate();
+		}
 	}, 30_000);
-
-	ws.on("ping", () => {
-		try {
-			ws.pong();
-		} catch (_) {}
-	});
 
 	ws.on("close", (code, reason) => {
 		clearInterval(heartbeat);
@@ -173,6 +165,7 @@ function handleElectronClient(ws, apiKey, clientId, clientName) {
 		if (electronClients.get(apiKey) === ws) {
 			electronClients.delete(apiKey);
 		}
+		apiKeyToClientId.delete(apiKey);
 		patchClientState(clientId, { connected: false, activeBackup: null });
 	});
 
@@ -219,6 +212,39 @@ function handleElectronClient(ws, apiKey, clientId, clientName) {
 function handleFrontend(ws) {
 	frontendClients.add(ws);
 	console.log(`[WS] Frontend connected (total: ${frontendClients.size})`);
+
+	// Heartbeat – detect and kill dead connections
+	let isAlive = true;
+	ws.on("pong", () => {
+		isAlive = true;
+	});
+	ws.on("ping", () => {
+		try {
+			ws.pong();
+		} catch (_) {}
+	});
+
+	const heartbeat = setInterval(() => {
+		if (!isAlive) {
+			console.warn(
+				`[WS] Heartbeat timeout for frontend client – terminating dead connection`,
+			);
+			clearInterval(heartbeat);
+			ws.terminate();
+			return;
+		}
+		isAlive = false;
+		try {
+			ws.ping();
+		} catch (err) {
+			console.warn(
+				`[WS] Failed to ping frontend client:`,
+				err.message,
+			);
+			clearInterval(heartbeat);
+			ws.terminate();
+		}
+	}, 30_000);
 
 	// Send full snapshot immediately
 	try {
@@ -340,11 +366,13 @@ function handleFrontend(ws) {
 	});
 
 	ws.on("close", () => {
+		clearInterval(heartbeat);
 		frontendClients.delete(ws);
 		console.log(`[WS] Frontend disconnected (total: ${frontendClients.size})`);
 	});
 
 	ws.on("error", () => {
+		clearInterval(heartbeat);
 		frontendClients.delete(ws);
 	});
 }
@@ -353,7 +381,7 @@ function handleFrontend(ws) {
 
 const wss = new WebSocketServer({ noServer: true });
 
-const server = http.createServer((req, res) => {
+const server = createServer((req, res) => {
 	if (req.method === "GET" && req.url === "/health") {
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(
