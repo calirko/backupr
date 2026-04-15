@@ -59,6 +59,17 @@ export function ConnectionIcon({
 	connectionStatus: string | null;
 }) {
 	switch (connectionStatus) {
+		case "error":
+			return (
+				<Tooltip>
+					<TooltipTrigger>
+						<Server className="h-4 w-4 text-red-400 text-blink-red" />
+					</TooltipTrigger>
+					<TooltipContent>
+						<span>This client encountered a backup error.</span>
+					</TooltipContent>
+				</Tooltip>
+			);
 		case "creating":
 			return (
 				<Tooltip>

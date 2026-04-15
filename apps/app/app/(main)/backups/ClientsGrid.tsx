@@ -7,12 +7,14 @@ import type { Client, ClientState } from "./types";
 interface Props {
 	clients: Client[];
 	clientStates: Map<string, ClientState>;
+	clientErrorFlash: Set<string>;
 	onSelectClient: (clientId: string) => void;
 }
 
 export default function ClientsGrid({
 	clients,
 	clientStates,
+	clientErrorFlash,
 	onSelectClient,
 }: Props) {
 	return (
@@ -30,11 +32,13 @@ export default function ClientsGrid({
 					const activeBackup = cs?.activeBackup ?? null;
 					const lastError = cs?.lastError ?? null;
 					const lastCompleted = cs?.lastCompleted ?? null;
-					const clientConnectionStatus = isConnected
-						? activeBackup
-							? activeBackup.status
-							: "idle"
-						: "disconnected";
+					const clientConnectionStatus = clientErrorFlash.has(client.id)
+							? "error"
+							: isConnected
+								? activeBackup
+									? activeBackup.status
+									: "idle"
+								: "disconnected";
 					return (
 						<Card
 							key={client.id}
