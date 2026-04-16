@@ -1,20 +1,17 @@
 {
-	"name": "backupr",
-	"version": "1.0.0",
-	"private": true,
-	"description": "Simple file backup tool",
-	"workspaces": [
-		"apps/*"
-	],
-	"scripts": {
-		"dev:client": "yarn workspace @backupr/client dev",
-		"dev:app": "yarn workspace @backupr/app dev",
-		"dev:ws": "yarn workspace @backupr/ws dev",
-		"build:client": "yarn workspace @backupr/client build",
-		"build:app": "yarn workspace @backupr/app build",
-		"start:client": "yarn workspace @backupr/client start",
-		"start:app": "yarn workspace @backupr/app start",
-		"start:ws": "yarn workspace @backupr/ws start"
-	},
-	"packageManager": "yarn@1.22.22"
+  "name": "backupr",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Simple file backup tool",
+  "workspaces": [
+    "apps/*"
+  ],
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
 }

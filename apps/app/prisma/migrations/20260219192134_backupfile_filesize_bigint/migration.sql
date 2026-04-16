@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "BackupFile" ALTER COLUMN "fileSize" SET DATA TYPE BIGINT;
