@@ -33,7 +33,7 @@ services:
     ports:
       - "5173:5173"
     networks:
-      - backupr_network
+      - backupr_networkw
     depends_on:
       server:
         condition: service_healthy
