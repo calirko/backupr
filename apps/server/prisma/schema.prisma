@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "./generated/prisma"
 }
 
 datasource db {
@@ -8,15 +8,14 @@ datasource db {
 }
 
 model User {
-  id       String   @id @default(uuid())
-  name     String
-  email    String   @unique
-  password String
-  cat      DateTime @default(now())
-  uat      DateTime @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  password   String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   agents         Agent[]
-  backups        Backup[]
   backupJobs     BackupJob[]
   backupPolicies BackupPolicy[]
   userSessions   UserSession[]
@@ -26,13 +25,13 @@ model User {
 }
 
 model UserSession {
-  id      String   @id @default(uuid())
-  token   String   @unique
-  user_id String
-  user    User     @relation(fields: [user_id], references: [id])
-  exp     DateTime
-  cat     DateTime @default(now())
-  uat     DateTime @updatedAt
+  id         String   @id @default(uuid())
+  token      String   @unique
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  expires_at DateTime
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@map("user_sessions")
 }
@@ -40,13 +39,14 @@ model UserSession {
 model Agent {
   id            String   @id @default(uuid())
   name          String
-  info          Json     @default("{}") // ex ip, os, client version, last successful connection, etc
+  info          Json     @default("{}") // ex ip, os, client version, etc
   created_by_id String
+  is_active     Boolean  @default(true)
   created_by    User     @relation(fields: [created_by_id], references: [id])
-  cat           DateTime @default(now())
-  uat           DateTime @updatedAt
+  last_seen     DateTime @default(now())
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
 
-  backups       Backup[]
   backupJobs    BackupJob[]
   agentSessions AgentSession[]
 
@@ -55,13 +55,14 @@ model Agent {
 
 // code used to pair an agent with the server
 model AgentCode {
-  id            String   @id @default(uuid())
-  used          Boolean  @default(false) // can only be used once
-  code          String   @unique
+  id            String    @id @default(uuid())
+  used_at       DateTime? // single use
+  code          String    @unique
+  expires_at    DateTime?
   created_by_id String
-  created_by    User     @relation(fields: [created_by_id], references: [id])
-  cat           DateTime @default(now())
-  uat           DateTime @updatedAt
+  created_by    User      @relation(fields: [created_by_id], references: [id])
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
 
   @@map("agent_codes")
 }
@@ -69,30 +70,31 @@ model AgentCode {
 // the session that the agent will use to connect and talk
 // doesnt expire
 model AgentSession {
-  id       String   @id @default(uuid())
-  agent_id String
-  agent    Agent    @relation(fields: [agent_id], references: [id])
-  cat      DateTime @default(now())
-  uat      DateTime @updatedAt
+  id         String   @id @default(uuid())
+  agent_id   String
+  token      String   @unique
+  agent      Agent    @relation(fields: [agent_id], references: [id])
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@map("agent_sessions")
 }
 
 // the job for the backup
 model BackupJob {
-  id                String   @id @default(uuid())
+  id                String            @id @default(uuid())
   cron              String // cron expression for when the backup job should run
   files             String[] // list of files/directories to backup
-  use_password      Boolean  @default(false) // whether to use a password for the backup
+  use_password      Boolean           @default(false) // whether to use a password for the backup
   password          String? // password for the backup, if use_password is true
-  compression_level Int      @default(9)
+  compression_level Int               @default(9)
   agent_id          String
-  agent             Agent    @relation(fields: [agent_id], references: [id])
-
+  agent             Agent             @relation(fields: [agent_id], references: [id])
+  is_active         Boolean           @default(true)
   created_by_id     String
   created_by        User              @relation(fields: [created_by_id], references: [id])
-  cat               DateTime          @default(now())
-  uat               DateTime          @updatedAt
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
   backups           Backup[]
   backupJobPolicies BackupJobPolicy[]
 
@@ -110,17 +112,15 @@ enum BackupStatus {
 model Backup {
   id                String       @id @default(uuid())
   status            BackupStatus @default(PENDING)
+  size_bytes        BigInt?
+  error             String?
+  blob_key          String?
   url               String? // url to the backup file, if completed
   requires_password Boolean      @default(false)
   backup_job_id     String
   backup_job        BackupJob    @relation(fields: [backup_job_id], references: [id])
-
-  created_by_id String
-  created_by    User     @relation(fields: [created_by_id], references: [id])
-  cat           DateTime @default(now())
-  uat           DateTime @updatedAt
-  agent         Agent?   @relation(fields: [agentId], references: [id])
-  agentId       String?
+  started_at        DateTime?    @default(now())
+  completed_at      DateTime?    @updatedAt
 
   @@map("backups")
 }
@@ -131,8 +131,8 @@ model BackupPolicy {
   max_backup_age_in_days Int? // if set, delete backups older than this many days
   created_by_id          String
   created_by             User              @relation(fields: [created_by_id], references: [id])
-  cat                    DateTime          @default(now())
-  uat                    DateTime          @updatedAt
+  created_at             DateTime          @default(now())
+  updated_at             DateTime          @updatedAt
   backupJobPolicies      BackupJobPolicy[]
 
   @@map("backup_policies")
@@ -148,8 +148,8 @@ model BackupJobPolicy {
   backup_policy_id String
   backup_policy    BackupPolicy @relation(fields: [backup_policy_id], references: [id])
 
-  cat DateTime @default(now())
-  uat DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@map("backup_job_policies")
 }

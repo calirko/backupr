@@ -1,10 +1,8 @@
 import { Hono } from "hono";
+import setupRoutes from "./routes";
 
 const app = new Hono();
-
-app.get("/ping", (c) => {
-  return c.json({ message: "pong" });
-});
+setupRoutes(app)
 
 export default {
   port: 5174,
