@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -10,4 +5,151 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+model User {
+  id       String   @id @default(uuid())
+  name     String
+  email    String   @unique
+  password String
+  cat      DateTime @default(now())
+  uat      DateTime @updatedAt
+
+  agents         Agent[]
+  backups        Backup[]
+  backupJobs     BackupJob[]
+  backupPolicies BackupPolicy[]
+  userSessions   UserSession[]
+  agentCodes     AgentCode[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id      String   @id @default(uuid())
+  token   String   @unique
+  user_id String
+  user    User     @relation(fields: [user_id], references: [id])
+  exp     DateTime
+  cat     DateTime @default(now())
+  uat     DateTime @updatedAt
+
+  @@map("user_sessions")
+}
+
+model Agent {
+  id            String   @id @default(uuid())
+  name          String
+  info          Json     @default("{}") // ex ip, os, client version, last successful connection, etc
+  created_by_id String
+  created_by    User     @relation(fields: [created_by_id], references: [id])
+  cat           DateTime @default(now())
+  uat           DateTime @updatedAt
+
+  backups       Backup[]
+  backupJobs    BackupJob[]
+  agentSessions AgentSession[]
+
+  @@map("agents")
+}
+
+// code used to pair an agent with the server
+model AgentCode {
+  id            String   @id @default(uuid())
+  used          Boolean  @default(false) // can only be used once
+  code          String   @unique
+  created_by_id String
+  created_by    User     @relation(fields: [created_by_id], references: [id])
+  cat           DateTime @default(now())
+  uat           DateTime @updatedAt
+
+  @@map("agent_codes")
+}
+
+// the session that the agent will use to connect and talk
+// doesnt expire
+model AgentSession {
+  id       String   @id @default(uuid())
+  agent_id String
+  agent    Agent    @relation(fields: [agent_id], references: [id])
+  cat      DateTime @default(now())
+  uat      DateTime @updatedAt
+
+  @@map("agent_sessions")
+}
+
+// the job for the backup
+model BackupJob {
+  id                String   @id @default(uuid())
+  cron              String // cron expression for when the backup job should run
+  files             String[] // list of files/directories to backup
+  use_password      Boolean  @default(false) // whether to use a password for the backup
+  password          String? // password for the backup, if use_password is true
+  compression_level Int      @default(9)
+  agent_id          String
+  agent             Agent    @relation(fields: [agent_id], references: [id])
+
+  created_by_id     String
+  created_by        User              @relation(fields: [created_by_id], references: [id])
+  cat               DateTime          @default(now())
+  uat               DateTime          @updatedAt
+  backups           Backup[]
+  backupJobPolicies BackupJobPolicy[]
+
+  @@map("backup_jobs")
+}
+
+enum BackupStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+// the backup itself
+model Backup {
+  id                String       @id @default(uuid())
+  status            BackupStatus @default(PENDING)
+  url               String? // url to the backup file, if completed
+  requires_password Boolean      @default(false)
+  backup_job_id     String
+  backup_job        BackupJob    @relation(fields: [backup_job_id], references: [id])
+
+  created_by_id String
+  created_by    User     @relation(fields: [created_by_id], references: [id])
+  cat           DateTime @default(now())
+  uat           DateTime @updatedAt
+  agent         Agent?   @relation(fields: [agentId], references: [id])
+  agentId       String?
+
+  @@map("backups")
+}
+
+model BackupPolicy {
+  id                     String            @id @default(uuid())
+  keep_last_n_backups    Int? // if set, only keep the last n backups, delete older ones
+  max_backup_age_in_days Int? // if set, delete backups older than this many days
+  created_by_id          String
+  created_by             User              @relation(fields: [created_by_id], references: [id])
+  cat                    DateTime          @default(now())
+  uat                    DateTime          @updatedAt
+  backupJobPolicies      BackupJobPolicy[]
+
+  @@map("backup_policies")
+}
+
+// multiple policies can be applied to a backup job, and a policy can be applied to multiple backup jobs
+model BackupJobPolicy {
+  id String @id @default(uuid())
+
+  backup_job_id String
+  backup_job    BackupJob @relation(fields: [backup_job_id], references: [id])
+
+  backup_policy_id String
+  backup_policy    BackupPolicy @relation(fields: [backup_policy_id], references: [id])
+
+  cat DateTime @default(now())
+  uat DateTime @updatedAt
+
+  @@map("backup_job_policies")
 }
