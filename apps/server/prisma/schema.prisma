@@ -47,6 +47,7 @@ model Agent {
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
+  agentCodes    AgentCode[]
   backupJobs    BackupJob[]
   agentSessions AgentSession[]
 
@@ -58,6 +59,8 @@ model AgentCode {
   id            String    @id @default(uuid())
   used_at       DateTime? // single use
   code          String    @unique
+  agent_id      String
+  agent         Agent     @relation(fields: [agent_id], references: [id])
   expires_at    DateTime?
   created_by_id String
   created_by    User      @relation(fields: [created_by_id], references: [id])

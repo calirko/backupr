@@ -18,10 +18,10 @@
     "bcrypt": "^6.0.0",
     "dotenv": "^17.4.2",
     "hono": "^4.12.14",
-    "jsonwebtoken": "^9.0.3"
+    "hono-rate-limiter": "^0.5.3"
   },
   "scripts": {
-    "dev": "bun run src/main.ts --watch",
+    "dev": "bun --watch run src/main.ts",
     "prisma:seed": "prisma db seed"
   },
   "prisma": {

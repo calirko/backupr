@@ -3,17 +3,60 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SignInIcon } from "@phosphor-icons/react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 export default function LoginPage() {
+  const navigate = useNavigate();
+
   async function onSubmit(form: React.SubmitEvent<HTMLFormElement>) {
     form.preventDefault()
     const data = new FormData(form.currentTarget);
     const email = data.get("email") as string;
     const password = data.get("password") as string;
 
-    console.log(email, password);
-    toast.info("TEST", { description: "TEST"})
+    if (!email || !password) {
+      toast.error("Please fill in all fields", {
+        description: "Both email and password are required",
+      });
+      return;
+    }
+
+    await requestLogin(email, password);
+  }
+
+  async function requestLogin(email: string, password: string) {
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Logged in successfully", {
+          description: data.message,
+        });
+
+        const { token } = data;
+        localStorage.setItem("token", token);
+        navigate("/dashboard");
+
+      } else {
+        toast.error("Login failed", {
+          description: data.error,
+        });
+        console.error(data.error);
+      }
+    } catch (error) {
+      toast.error("An error occurred", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+      console.error(error);
+    }
   }
 
   return (
@@ -38,7 +81,7 @@ export default function LoginPage() {
                <div className="grid gap-2">
                  <Label htmlFor="email">Email</Label>
                  <Input
-                   id="email"
+                   name="email"
                    type="email"
                    placeholder="m@example.com"
                    required
@@ -49,7 +92,7 @@ export default function LoginPage() {
                    <Label htmlFor="password">Password</Label>
 
                  </div>
-                 <Input id="password" type="password" required />
+                 <Input name="password" type="password" required />
                </div>
              </div>
            </form>

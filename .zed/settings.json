@@ -1,0 +1,34 @@
+{
+  "project_name": "Backupr",
+  "languages": {
+    "TypeScript": {
+      "formatter": {
+        "external": {
+          // consider `npx/pnpx/bunx @biomejs/biome` as an alternative, if you do not like to use a local binary
+          "command": "node_modules/.bin/biome",
+          "arguments": [
+            "format",
+            // --use-server // if you like to
+            // biome 1.5.3 just needs a file path with the right extension; the name doesn't matter
+            "--stdin-file-path=something.ts",
+            "<",
+            "{buffer_path}",
+          ],
+        },
+      },
+    },
+    "TSX": {
+      "formatter": {
+        "external": {
+          "command": "node_modules/.bin/biome",
+          "arguments": [
+            "format",
+            "--stdin-file-path=something.tsx",
+            "<",
+            "{buffer_path}",
+          ],
+        },
+      },
+    },
+  },
+}
