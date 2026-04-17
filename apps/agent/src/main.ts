@@ -37,7 +37,7 @@ class BackuprAgent {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					code: agentCode,
+					agentCode: agentCode,
 					name: os.hostname(),
 					info: {
 						platform: os.platform(),
