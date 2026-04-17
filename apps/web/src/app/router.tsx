@@ -5,6 +5,8 @@ import LoginPage          from "./(auth)/login/page";
 import AuthMiddleware     from "./(app)/middleware";
 import HomePage from "./page";
 import DashboardPage from "./(app)/dashboard/page";
+import AppLayout from "./(app)/layout";
+import AgentsPage from "./(app)/agents/page";
 
 const router = createBrowserRouter([
   {
@@ -17,7 +19,13 @@ const router = createBrowserRouter([
       {
         element: <AuthMiddleware />,
         children: [
-          { path: "dashboard", element: <DashboardPage /> },
+          {
+            element: <AppLayout />,
+            children: [
+              { path: "dashboard", element: <DashboardPage /> },
+              { path: "agents", element: <AgentsPage /> },
+            ],
+          },
         ],
       },
     ],
