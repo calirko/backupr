@@ -4,7 +4,7 @@ import { Password } from "./lib/password";
 import { Token, type TokenPayload } from "./lib/token";
 import { rateLimit } from "./lib/rate-limit";
 import { auth } from "./lib/auth";
-import generateAgentCode from "./lib/agent";
+import { generateAgentCode, generateAgentToken } from "./lib/agent";
 
 const db = prisma;
 
@@ -197,31 +197,34 @@ export default async function setupRoutes(app: Hono) {
 			return c.json({ error: "Invalid JSON" }, 400);
 		}
 
-		const { code, name, info } = json;
+		const { agentCode, name, info } = json;
 
-		if (!code || !name) {
+		if (!agentCode || !name) {
 			return c.json({ error: "Code and name are required" }, 400);
 		}
 
-		const agentCode = await db.agentCode.findUnique({
-			where: { code },
+		const agentCodeRecord = await db.agentCode.findUnique({
+			where: { code: agentCode },
 		});
 
-		if (!agentCode) {
+		if (!agentCodeRecord) {
 			return c.json({ error: "Invalid pairing code" }, 401);
 		}
 
-		if (agentCode.used_at) {
+		if (agentCodeRecord.used_at) {
 			return c.json({ error: "Code already used" }, 401);
 		}
 
-		if (agentCode.expires_at && new Date(agentCode.expires_at) < new Date()) {
+		if (
+			agentCodeRecord.expires_at &&
+			new Date(agentCodeRecord.expires_at) < new Date()
+		) {
 			return c.json({ error: "Code expired" }, 401);
 		}
 
 		const result = await db.$transaction(async (tx) => {
 			await tx.agentCode.update({
-				where: { id: agentCode.id },
+				where: { id: agentCodeRecord.id },
 				data: { used_at: new Date() },
 			});
 
@@ -229,11 +232,14 @@ export default async function setupRoutes(app: Hono) {
 				data: {
 					name,
 					info: info ?? {},
-					created_by_id: agentCode.created_by_id,
+					created_by_id: agentCodeRecord.created_by_id,
 				},
 			});
 
-			const token = "xxx";
+			const token = generateAgentToken({
+				agentName: agent.name,
+				agentId: agent.id,
+			});
 			const session = await tx.agentSession.create({
 				data: {
 					agent_id: agent.id,
