@@ -22,6 +22,7 @@ import { FloppyDiskIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { toast } from "sonner";
+import { InputPassword } from "../ui/input-password";
 
 export default function UserDialog({
 	open,
@@ -29,6 +30,7 @@ export default function UserDialog({
 	onConfirm,
 	userId,
 	defaultData,
+	readonly,
 }: {
 	open: boolean;
 	defaultData?: {
@@ -36,20 +38,31 @@ export default function UserDialog({
 		email: string;
 	};
 	userId?: string;
+	readonly?: boolean;
 	onClose: (result: boolean) => void;
 	onConfirm: () => void;
 }): React.JSX.Element {
 	const isMobile = useIsMobile();
 
-	async function updateUser({ name }: { name: string }) {
+	async function updateUser({
+		name,
+		password,
+	}: {
+		name: string;
+		password?: string;
+	}) {
 		try {
+			const updateData: { name: string; password?: string } = { name };
+			if (password) {
+				updateData.password = password;
+			}
 			const response = await fetch(`/api/users/${userId}`, {
 				method: "PATCH",
 				headers: {
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${localStorage.getItem("token")}`,
 				},
-				body: JSON.stringify({ name }),
+				body: JSON.stringify(updateData),
 			});
 			if (!response.ok) {
 				const error = await response.json();
@@ -120,8 +133,14 @@ export default function UserDialog({
 		}
 
 		if (userId) {
-			await updateUser({ name });
+			await updateUser({ name, password: password || undefined });
 		} else {
+			if (!email || !password) {
+				toast.warning("Email and password required", {
+					description: "Please enter both email and password for new users.",
+				});
+				return;
+			}
 			await createUser({ name, email, password });
 		}
 		onConfirm();
@@ -130,50 +149,116 @@ export default function UserDialog({
 	const content = (
 		<form onSubmit={handleConfirm} id="manage-user" className="space-y-4">
 			<div className="space-y-1.5">
-				<Label>Name</Label>
+				<Label required={!readonly}>Name</Label>
 				<Input
 					placeholder="Name"
 					name="name"
 					defaultValue={defaultData?.name}
+					disabled={readonly}
 				/>
 			</div>
 			<div className="space-y-1.5">
-				<Label>Email</Label>
+				<Label required={!readonly}>Email</Label>
 				<Input
 					placeholder="Email"
 					name="email"
 					defaultValue={defaultData?.email}
+					disabled={readonly}
 				/>
 			</div>
-			{userId ? (
-				<div></div>
-			) : (
+			{!readonly && !userId && (
 				<div className="space-y-1.5">
-					<Label>Password</Label>
-					<Input placeholder="Password" name="password" type="password" />
+					<Label required>Password</Label>
+					<InputPassword
+						placeholder="Password"
+						name="password"
+						type="password"
+						required={!userId}
+					/>
 				</div>
+			)}
+			{!readonly && userId && (
+				<>
+					<div className="space-y-1.5">
+						<Label>Password</Label>
+						<InputPassword
+							placeholder="Leave empty to keep current password"
+							name="password"
+							type="password"
+						/>
+					</div>
+					<div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+						<p className="text-xs text-blue-800 dark:text-blue-200">
+							<strong>Note:</strong> Leave the password field empty if you don't
+							want to change it. Only fill in this field if you want to set a
+							new password for this user.
+						</p>
+					</div>
+				</>
 			)}
 		</form>
 	);
+
+	const title = readonly ? "View User" : userId ? "Edit User" : "Add User";
+	const description = readonly
+		? "Viewing user details."
+		: userId
+			? "Edit the user's details."
+			: "Add a new user.";
 
 	if (isMobile) {
 		return (
 			<Drawer open={open} onOpenChange={onClose}>
 				<DrawerContent>
 					<DrawerHeader>
-						<DrawerTitle>{userId ? "Edit User" : "Add User"}</DrawerTitle>
-						<DrawerDescription>
-							{userId ? "Edit the user's details." : "Add a new user."}
-						</DrawerDescription>
+						<DrawerTitle>{title}</DrawerTitle>
+						<DrawerDescription>{description}</DrawerDescription>
 					</DrawerHeader>
 					{content}
 					<DrawerFooter>
 						<DrawerClose asChild>
 							<Button variant="outline">
 								<XSquareIcon />
-								Cancel
+								{readonly ? "Close" : "Cancel"}
 							</Button>
 						</DrawerClose>
+						{!readonly && (
+							<Button form="manage-user" type="submit">
+								{userId ? (
+									<>
+										<FloppyDiskIcon />
+										Save
+									</>
+								) : (
+									<>
+										<PlusIcon />
+										Add
+									</>
+								)}
+							</Button>
+						)}
+					</DrawerFooter>
+				</DrawerContent>
+			</Drawer>
+		);
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={onClose}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>{title}</DialogTitle>
+					<DialogDescription>{description}</DialogDescription>
+				</DialogHeader>
+				{content}
+				<DialogFooter>
+					<DialogClose asChild>
+						<Button variant="outline">
+							<XSquareIcon />
+							{readonly ? "Close" : "Cancel"}
+						</Button>
+					</DialogClose>
+					{!readonly && (
 						<Button form="manage-user" type="submit">
 							{userId ? (
 								<>
@@ -187,42 +272,7 @@ export default function UserDialog({
 								</>
 							)}
 						</Button>
-					</DrawerFooter>
-				</DrawerContent>
-			</Drawer>
-		);
-	}
-
-	return (
-		<Dialog open={open} onOpenChange={onClose}>
-			<DialogContent>
-				<DialogHeader>
-					<DialogTitle>{userId ? "Edit User" : "Add User"}</DialogTitle>
-					<DialogDescription>
-						{userId ? "Edit the user's details." : "Add a new user."}
-					</DialogDescription>
-				</DialogHeader>
-				{content}
-				<DialogFooter>
-					<DialogClose asChild>
-						<Button variant="outline">
-							<XSquareIcon />
-							Cancel
-						</Button>
-					</DialogClose>
-					<Button form="manage-user" type="submit">
-						{userId ? (
-							<>
-								<FloppyDiskIcon />
-								Save
-							</>
-						) : (
-							<>
-								<PlusIcon />
-								Add
-							</>
-						)}
-					</Button>
+					)}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

@@ -50,8 +50,6 @@ export default function UserDropdown() {
 			<DropdownMenuContent side="left">
 				<DropdownMenuGroup>
 					<DropdownMenuLabel>My Account</DropdownMenuLabel>
-					<DropdownMenuItem>Profile</DropdownMenuItem>
-					<DropdownMenuItem>Billing</DropdownMenuItem>
 				</DropdownMenuGroup>
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>

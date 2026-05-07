@@ -18,11 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
-import {
-	ArrowDownIcon,
-	DotsThreeCircleIcon,
-	DotsThreeOutlineIcon,
-} from "@phosphor-icons/react";
+import { ArrowDownIcon, DotsThree, DotsThreeIcon } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 
 export type TableAction =
@@ -187,7 +183,7 @@ export function RowDataActions({
 					variant={"ghost"}
 					size="sm"
 				>
-					<DotsThreeOutlineIcon />
+					<DotsThreeIcon />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent side="left">

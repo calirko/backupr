@@ -13,6 +13,8 @@
     "ws": "^8.20.0"
   },
   "scripts": {
-    "dev": "bun run --watch src/main.ts"
+    "dev": "bun run --watch src/main.ts",
+    "build:windows": "bun build --compile --target=bun-windows-x64 ./src/main.ts --outfile dist/backupr-agent.exe",
+    "build:linux": "bun build --compile --target=bun-linux-x64 ./src/main.ts --outfile dist/backupr-agent"
   }
 }

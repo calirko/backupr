@@ -32,6 +32,7 @@ export interface Column {
 	padding?: boolean;
 	width?: "auto" | "fit";
 	orderByKey?: string;
+	format?: (value: any) => React.ReactNode | string | number;
 }
 
 export default function Data({
@@ -110,16 +111,20 @@ export default function Data({
 							const value = row[col.key];
 							const isString = typeof value === "string";
 							const isNumber = typeof value === "number";
-							const isPrimitive = isString || isNumber;
+							const isBoolean = typeof value === "boolean";
+							const isPrimitive = isString || isNumber || isBoolean;
 							const stringValue = isPrimitive ? String(value) : null;
 							const shouldShowTooltip = stringValue && stringValue.length > 20;
+							const finalValue = col.format ? col.format(value) : value;
+							const isEmpty =
+								value === null || value === undefined || value === "";
 
 							return shouldShowTooltip ? (
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<div className="truncate select-text!">
-											{value ? (
-												value
+											{!isEmpty ? (
+												finalValue
 											) : (
 												<p className="text-muted-foreground text-xs">N / A</p>
 											)}
@@ -131,8 +136,8 @@ export default function Data({
 								</Tooltip>
 							) : (
 								<div className="truncate select-text!">
-									{value ? (
-										value
+									{!isEmpty ? (
+										finalValue
 									) : (
 										<p className="text-muted-foreground text-xs">N / A</p>
 									)}

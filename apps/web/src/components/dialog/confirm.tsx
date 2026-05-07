@@ -24,10 +24,14 @@ export default function ConfirmDialog({
 	open,
 	onClose,
 	onConfirm,
+	title,
+	description,
 }: {
 	open: boolean;
 	onClose: (result: boolean) => void;
 	onConfirm: () => void;
+	title?: string;
+	description?: string;
 }): React.JSX.Element {
 	const isMobile = useIsMobile();
 
@@ -36,9 +40,10 @@ export default function ConfirmDialog({
 			<Drawer open={open} onOpenChange={onClose}>
 				<DrawerContent>
 					<DrawerHeader>
-						<DrawerTitle>Confirm</DrawerTitle>
+						<DrawerTitle>{title || "Confirm"}</DrawerTitle>
 						<DrawerDescription>
-							Are you sure you want to perform this action? It cannot be undone.
+							{description ||
+								"Are you sure you want to perform this action? It cannot be undone."}
 						</DrawerDescription>
 					</DrawerHeader>
 					<DrawerFooter>
@@ -69,9 +74,10 @@ export default function ConfirmDialog({
 		<Dialog open={open} onOpenChange={onClose}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Confirm</DialogTitle>
+					<DialogTitle>{title || "Confirm"}</DialogTitle>
 					<DialogDescription>
-						Are you sure you want to perform this action? It cannot be undone.
+						{description ||
+							"Are you sure you want to perform this action? It cannot be undone."}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogFooter>

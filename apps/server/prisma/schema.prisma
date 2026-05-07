@@ -9,7 +9,8 @@ datasource db {
 
 model User {
   id         String   @id @default(uuid())
-  name       String
+  name       String?
+  username   String   @unique
   email      String   @unique
   password   String
   created_at DateTime @default(now())
@@ -39,11 +40,9 @@ model UserSession {
 model Agent {
   id            String   @id @default(uuid())
   name          String
-  info          Json     @default("{}") // ex ip, os, client version, etc
   created_by_id String
   is_active     Boolean  @default(true)
   created_by    User     @relation(fields: [created_by_id], references: [id])
-  last_seen     DateTime @default(now())
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
@@ -73,12 +72,14 @@ model AgentCode {
 // the session that the agent will use to connect and talk
 // doesnt expire
 model AgentSession {
-  id         String   @id @default(uuid())
-  agent_id   String
-  token      String   @unique
-  agent      Agent    @relation(fields: [agent_id], references: [id])
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id           String   @id @default(uuid())
+  agent_id     String
+  token        String   @unique
+  agent        Agent    @relation(fields: [agent_id], references: [id])
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  last_seen_at DateTime @default(now())
+  info         Json     @default("{}") // ex ip, os, client version, etc
 
   @@map("agent_sessions")
 }
@@ -86,6 +87,7 @@ model AgentSession {
 // the job for the backup
 model BackupJob {
   id                String            @id @default(uuid())
+  name              String
   cron              String // cron expression for when the backup job should run
   files             String[] // list of files/directories to backup
   use_password      Boolean           @default(false) // whether to use a password for the backup

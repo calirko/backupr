@@ -18,11 +18,13 @@
     "bcrypt": "^6.0.0",
     "dotenv": "^17.4.2",
     "hono": "^4.12.14",
-    "hono-rate-limiter": "^0.5.3"
+    "hono-rate-limiter": "^0.5.3",
+    "minio": "^8.0.7"
   },
   "scripts": {
     "dev": "bun --watch run src/main.ts",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "start": "bun run src/main.ts"
   },
   "prisma": {
     "seed": "bun run prisma/seed.ts"

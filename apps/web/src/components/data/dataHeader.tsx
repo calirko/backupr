@@ -22,7 +22,13 @@ import {
 	MagnifyingGlassIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "../ui/card";
 
 export type SearchField =
 	| {
@@ -374,17 +380,18 @@ export default function DataHeader({
 				<Card>
 					<CardHeader>
 						<CardTitle>Advanced Filters</CardTitle>
-						<CardContent>
-							<div className="grid grid-cols-3">
-								{filterFields.slice(1, filterFields.length).map((field) => (
-									<div key={field.name}>
-										<Label>{field.label}</Label>
-										{renderInput(field)}
-									</div>
-								))}
-							</div>
-						</CardContent>
+						<CardDescription>Search for other options</CardDescription>
 					</CardHeader>
+					<CardContent>
+						<div className="grid grid-cols-3 gap-2">
+							{filterFields.slice(1, filterFields.length).map((field) => (
+								<div key={field.name} className="grid gap-2">
+									<Label>{field.label}</Label>
+									{renderInput(field)}
+								</div>
+							))}
+						</div>
+					</CardContent>
 				</Card>
 			)}
 		</div>

@@ -1,4 +1,11 @@
-import { EyeIcon, PencilIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
+"use client";
+
+import {
+	EyeIcon,
+	PencilIcon,
+	PlusIcon,
+	XSquareIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import Data, { type Column } from "@/components/data/data";
@@ -7,38 +14,62 @@ import { Button } from "@/components/ui/button";
 import { useData } from "@/hooks/use-data";
 import type { TableAction } from "@/components/data/dataActions";
 import { useDialog } from "@/hooks/use-dialog";
+import BackupPolicyDialog from "@/components/dialog/backup-policy";
 import ConfirmDialog from "@/components/dialog/confirm";
-import UserDialog from "@/components/dialog/user";
 
-export default function UsersPage() {
-	const { filters, orderBy } = useData("users");
+export default function BackupPoliciesPage() {
+	const { filters, orderBy } = useData("backup-policies");
 	const { openDialog } = useDialog();
 	const [data, setData] = useState({
 		data: [],
 		total: 0,
 	});
 	const [loading, setLoading] = useState(false);
+
 	const filterFields = [
 		{
-			name: "name",
-			label: "Name",
-			type: "string" as const,
-			matching: "contains" as const,
+			name: "keep_last_n_backups",
+			label: "Keep Last N",
+			type: "number" as const,
+			matching: "equals" as const,
 		},
 		{
-			name: "email",
-			label: "Email",
-			type: "string" as const,
-			matching: "contains" as const,
+			name: "max_backup_age_in_days",
+			label: "Max Age (Days)",
+			type: "number" as const,
+			matching: "equals" as const,
+		},
+		{
+			name: "created_at",
+			label: "Created Date",
+			type: "date" as const,
+			matching: "between" as const,
 		},
 	] as SearchField[];
 
 	const columns = [
-		{ key: "name", label: "Name", orderable: true },
-		{ key: "email", label: "Email", orderable: true },
+		{ key: "id", label: "ID", orderable: true, width: "auto" as const },
+		{
+			key: "keep_last_n_backups",
+			label: "Keep Last N",
+			orderable: true,
+			format: (value) => (value ? `${value} backups` : "Unlimited"),
+		},
+		{
+			key: "max_backup_age_in_days",
+			label: "Max Age (Days)",
+			orderable: true,
+			format: (value) => (value ? `${value} days` : "Unlimited"),
+		},
 		{
 			key: "created_at",
 			label: "Created",
+			orderable: true,
+			format: (value) => new Date(value).toLocaleString(),
+		},
+		{
+			key: "updated_at",
+			label: "Updated",
 			orderable: true,
 			format: (value) => new Date(value).toLocaleString(),
 		},
@@ -50,9 +81,9 @@ export default function UsersPage() {
 			label: "View",
 			icon: <EyeIcon />,
 			onClick: (row) => {
-				openDialog(UserDialog, {
-					defaultData: { name: row.name, email: row.email },
-					userId: row.id,
+				openDialog(BackupPolicyDialog, {
+					defaultData: row,
+					policyId: row.id,
 					readonly: true,
 					onConfirm: () => {
 						fetchData();
@@ -65,9 +96,9 @@ export default function UsersPage() {
 			label: "Edit",
 			icon: <PencilIcon />,
 			onClick: (row) => {
-				openDialog(UserDialog, {
-					defaultData: { name: row.name, email: row.email },
-					userId: row.id,
+				openDialog(BackupPolicyDialog, {
+					defaultData: row,
+					policyId: row.id,
 					onConfirm: () => {
 						fetchData();
 					},
@@ -89,40 +120,39 @@ export default function UsersPage() {
 			variant: "destructive" as const,
 			onClick: (row) => {
 				openDialog(ConfirmDialog, {
-					title: "Delete User",
+					title: "Delete Backup Policy",
 					description:
-						"Are you sure you want to delete this user? This action cannot be undone.",
+						"Are you sure you want to delete this backup policy? This action cannot be undone.",
 					onConfirm: () => {
-						deleteUser(row.id);
+						deleteBackupPolicy(row.id);
 					},
 				});
 			},
 		},
 	] as TableAction[];
 
-	async function deleteUser(userId: string) {
+	async function deleteBackupPolicy(policyId: string) {
 		try {
-			const response = await fetch(`/api/users/${userId}`, {
+			const response = await fetch(`/api/backup-policies/${policyId}`, {
 				method: "DELETE",
 				headers: {
 					Authorization: `Bearer ${localStorage.getItem("token")}`,
 				},
 			});
 			if (response.ok) {
-				toast.success("User deleted successfully", {
-					description: "The user has been deleted successfully.",
+				toast.success("Backup policy deleted successfully", {
+					description: "The backup policy has been deleted.",
 				});
 				fetchData();
 			} else {
 				const error = await response.json();
-				toast.error("Error deleting user", {
-					description:
-						error instanceof Error ? error.message : String(error.error),
+				toast.error("Error deleting backup policy", {
+					description: error.error || "Unknown error",
 				});
 			}
 		} catch (error) {
 			console.error(error);
-			toast.error("Failed to delete user", {
+			toast.error("Failed to delete backup policy", {
 				description: error instanceof Error ? error.message : String(error),
 			});
 		}
@@ -136,25 +166,23 @@ export default function UsersPage() {
 				filters: encodeURIComponent(JSON.stringify(filters)),
 				orderBy: encodeURIComponent(JSON.stringify(orderBy)),
 			});
-			const response = await fetch(`/api/users?${params}`, {
+			const response = await fetch(`/api/backup-policies?${params}`, {
 				headers: {
 					Authorization: `Bearer ${localStorage.getItem("token")}`,
 				},
 			});
 			if (response.ok) {
 				const result = await response.json();
-				console.log(result.data);
 				setData({ ...data, data: result.data, total: result.total });
 			} else {
 				const error = await response.json();
-				toast.error("Error fetching users", {
-					description:
-						error instanceof Error ? error.message : String(error.error),
+				toast.error("Error fetching backup policies", {
+					description: error.error || "Unknown error",
 				});
 			}
 		} catch (error) {
 			console.error(error);
-			toast.error("Failed to fetch users", {
+			toast.error("Failed to fetch backup policies", {
 				description: error instanceof Error ? error.message : String(error),
 			});
 		} finally {
@@ -169,22 +197,22 @@ export default function UsersPage() {
 	return (
 		<div className="w-full grow px-14 pt-4 flex flex-col gap-6">
 			<div>
-				<h1 className="text-4xl font-black">Users</h1>
+				<h1 className="text-4xl font-black">Backup Policies</h1>
 				<p className="text-muted-foreground text-sm">
-					Create, edit, and manage users.
+					Manage your backup retention policies and cleanup rules.
 				</p>
 			</div>
 			<div className="flex-col flex gap-4">
-				<DataHeader filterFields={filterFields} name="users">
+				<DataHeader filterFields={filterFields} name="backup-policies">
 					<Button
 						onClick={() => {
-							openDialog(UserDialog, {
+							openDialog(BackupPolicyDialog, {
 								onConfirm: fetchData,
 							});
 						}}
 					>
 						<PlusIcon />
-						New User
+						New Policy
 					</Button>
 				</DataHeader>
 				<Data
@@ -193,7 +221,7 @@ export default function UsersPage() {
 					columns={columns}
 					data={data.data}
 					loading={loading}
-					name="users"
+					name="backup-policies"
 				/>
 			</div>
 		</div>
