@@ -4,27 +4,28 @@ services:
       context: .
       dockerfile: apps/server/Dockerfile
       args:
-        NODE_ENV: ${NODE_ENV:-production}
-        DATABASE_URL: ${DATABASE_URL}
-        SERVER_URL: ${SERVER_URL}
-        MINIO_ENDPOINT: ${MINIO_ENDPOINT}
-        MINIO_PORT: ${MINIO_PORT}
-        MINIO_USE_SSL: ${MINIO_USE_SSL}
-        MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-        MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-        MINIO_BUCKET: ${MINIO_BUCKET}
+        - DATABASE_URL=${DATABASE_URL}
+        - SERVER_URL=${SERVER_URL}
+        - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+        - MINIO_PORT=${MINIO_PORT}
+        - MINIO_USE_SSL=${MINIO_USE_SSL}
+        - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+        - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+        - MINIO_BUCKET=${MINIO_BUCKET}
+    env_file:
+      - .env
     container_name: backupr-server
     environment:
-      NODE_ENV: production
-      PORT: 5174
-      SERVER_URL: ${SERVER_URL}
-      DATABASE_URL: ${DATABASE_URL}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
-      MINIO_PORT: ${MINIO_PORT}
-      MINIO_USE_SSL: ${MINIO_USE_SSL}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-      MINIO_BUCKET: ${MINIO_BUCKET}
+      - NODE_ENV=production
+      - PORT=5174
+      - DATABASE_URL=${DATABASE_URL}
+      - SERVER_URL=${SERVER_URL}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_USE_SSL=${MINIO_USE_SSL}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET}
     networks:
       backupr_network:
         aliases:
@@ -52,9 +53,10 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NODE_ENV: ${NODE_ENV:-production}
-        API_URL: ${API_URL:-http://backupr-server:5174}
-        WS_URL: ${WS_URL:-ws://backupr-server:5174}
+        - API_URL=${API_URL:-http://backupr-server:5174}
+        - WS_URL=${WS_URL:-ws://backupr-server:5174}
+    env_file:
+      - .env
     container_name: backupr-web
     networks:
       backupr_network: {}
@@ -67,9 +69,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
     environment:
-      NODE_ENV: production
-      API_URL: http://backupr-server:5174
-      WS_URL: ws://backupr-server:5174
+      - NODE_ENV=production
+      - API_URL=${API_URL:-http://backupr-server:5174}
+      - WS_URL=${WS_URL:-ws://backupr-server:5174}
     healthcheck:
       test:
         [
