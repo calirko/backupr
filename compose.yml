@@ -73,4 +73,4 @@ networks:
     name: backupr_network
   web_network:
     external: true
-    name: ${WEB_NETWORK}
+    name: mkserver-shared
