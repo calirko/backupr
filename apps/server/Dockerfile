@@ -14,13 +14,31 @@ RUN bunx prisma generate --schema=apps/server/prisma/schema.prisma
 
 FROM oven/bun:1.3.11-slim
 
+ARG NODE_ENV=production
+ARG DATABASE_URL
+ARG SERVER_URL
+ARG MINIO_ENDPOINT
+ARG MINIO_PORT
+ARG MINIO_USE_SSL
+ARG MINIO_ACCESS_KEY
+ARG MINIO_SECRET_KEY
+ARG MINIO_BUCKET
+
+ENV NODE_ENV=$NODE_ENV \
+    DATABASE_URL=$DATABASE_URL \
+    SERVER_URL=$SERVER_URL \
+    MINIO_ENDPOINT=$MINIO_ENDPOINT \
+    MINIO_PORT=$MINIO_PORT \
+    MINIO_USE_SSL=$MINIO_USE_SSL \
+    MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY \
+    MINIO_SECRET_KEY=$MINIO_SECRET_KEY \
+    MINIO_BUCKET=$MINIO_BUCKET
+
 WORKDIR /app
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/server ./apps/server
 COPY --from=builder /app/package.json ./
-
-ENV NODE_ENV=production
 
 EXPOSE 5174
 

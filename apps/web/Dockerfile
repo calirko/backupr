@@ -1,5 +1,13 @@
 FROM oven/bun:1.3.11-slim
 
+ARG NODE_ENV=production
+ARG API_URL
+ARG WS_URL
+
+ENV NODE_ENV=$NODE_ENV \
+    API_URL=$API_URL \
+    WS_URL=$WS_URL
+
 WORKDIR /app
 
 COPY package.json bun.lock ./
