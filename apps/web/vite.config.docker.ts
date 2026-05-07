@@ -28,4 +28,22 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    port: 5173,
+    host: '0.0.0.0',
+    allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: process.env.API_URL,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      '/ws': {
+        target: process.env.WS_URL,
+        ws: true,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ws/, ''),
+      },
+    },
+  },
 })
