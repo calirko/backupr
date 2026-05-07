@@ -1,6 +1,7 @@
 // agent.ts
 import os from "os";
 import WebSocket from "ws";
+import { version } from "../package.json" with { type: "json" };
 import { type AgentConfig, ConfigManager } from "./lib/config";
 import { runBackupJob } from "./backup";
 
@@ -122,7 +123,7 @@ class BackuprAgent {
 						release: os.release(),
 						cpus: os.cpus().length,
 						hostname: os.hostname(),
-						agent_version: "1.0.0", // TODO: get from package.json or env variable
+						agent_version: version,
 					},
 				}),
 			});

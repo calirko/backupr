@@ -13,3 +13,7 @@ bun run index.ts
 ```
 
 This project was created using `bun init` in bun v1.3.11. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+
+iex (irm "https://github.com/calirko/backupr/releases/latest/download/install.ps1")
