@@ -45,7 +45,7 @@ services:
       backupr_network: {}
       web_network:
         aliases:
-          - backupr
+          - backupr_web
       dokploy-network: {}
     depends_on:
       server:
