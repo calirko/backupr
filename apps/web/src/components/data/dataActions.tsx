@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
-import { ArrowDownIcon, DotsThree, DotsThreeIcon } from "@phosphor-icons/react";
+import { ArrowDownIcon, DotsThreeIcon } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 
 export type TableAction =

@@ -19,8 +19,6 @@ import {
 	DrawerTitle,
 } from "../ui/drawer";
 import { ClipboardIcon, XSquareIcon } from "@phosphor-icons/react";
-import { Label } from "../ui/label";
-import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -29,7 +27,6 @@ import { Spinner } from "../ui/spinner";
 export default function AgentCodeDialog({
 	open,
 	onClose,
-	onConfirm,
 	agentId,
 }: {
 	open: boolean;

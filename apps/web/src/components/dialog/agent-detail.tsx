@@ -18,7 +18,7 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "../ui/drawer";
-import { XSquareIcon, CheckCircleIcon, ClockIcon } from "@phosphor-icons/react";
+import { XSquareIcon, CheckCircleIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Label } from "../ui/label";

@@ -77,7 +77,7 @@ export default function Data({
 
 	function getCellClass(
 		col: { padding?: boolean; width?: "auto" | "fit" },
-		isLast?: boolean,
+		_isLast?: boolean,
 	) {
 		const classes: string[] = [];
 
@@ -217,7 +217,7 @@ export default function Data({
 						<Table>
 							<TableHeader>
 								<TableRow>
-									{columns.map((col, index) => (
+									{columns.map((col, _index) => (
 										<TableHead key={col.key} align={col.align}>
 											{showOrderBy && col.orderable !== false ? (
 												<Button

@@ -1,11 +1,11 @@
 import {
-   createContext,
-   ReactNode,
-   useCallback,
-   useContext,
-   useEffect,
-   useRef,
-   useState,
+	createContext,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
 } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5174";
@@ -51,8 +51,12 @@ export function SocketProvider({
 	children: ReactNode;
 }) {
 	const wsRef = useRef<WebSocket | null>(null);
-	const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
+	const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+		null,
+	);
 	const reconnectAttemptsRef = useRef(0);
 	const shouldReconnectRef = useRef(true);
 	const [isConnected, setIsConnected] = useState(false);
@@ -73,7 +77,8 @@ export function SocketProvider({
 				setIsConnected(true);
 				reconnectAttemptsRef.current = 0;
 
-				if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+				if (heartbeatIntervalRef.current)
+					clearInterval(heartbeatIntervalRef.current);
 				heartbeatIntervalRef.current = setInterval(() => {
 					if (ws.readyState === WebSocket.OPEN) {
 						ws.send(JSON.stringify({ type: "ping" }));
@@ -96,10 +101,13 @@ export function SocketProvider({
 						MAX_RECONNECT_TIMEOUT_MS,
 					);
 					const delayMs = backoffMs + Math.random() * 1000;
-					console.log(`[socket] reconnecting in ${Math.round(delayMs)}ms (attempt ${reconnectAttemptsRef.current + 1})`);
+					console.log(
+						`[socket] reconnecting in ${Math.round(delayMs)}ms (attempt ${reconnectAttemptsRef.current + 1})`,
+					);
 					reconnectAttemptsRef.current++;
 
-					if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+					if (reconnectTimeoutRef.current)
+						clearTimeout(reconnectTimeoutRef.current);
 					reconnectTimeoutRef.current = setTimeout(() => connect(), delayMs);
 				}
 			};
@@ -139,8 +147,10 @@ export function SocketProvider({
 
 		return () => {
 			shouldReconnectRef.current = false;
-			if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-			if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+			if (reconnectTimeoutRef.current)
+				clearTimeout(reconnectTimeoutRef.current);
+			if (heartbeatIntervalRef.current)
+				clearInterval(heartbeatIntervalRef.current);
 			if (wsRef.current) {
 				wsRef.current.close();
 				wsRef.current = null;

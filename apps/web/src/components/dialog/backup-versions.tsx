@@ -203,7 +203,7 @@ export default function BackupVersionsDialog({
 
 	if (isMobile) {
 		return (
-			<Drawer open={open} onOpenChange={onClose}>
+			<Drawer open={open} onOpenChange={() => onClose()}>
 				<DrawerContent>
 					<DrawerHeader>
 						<DrawerTitle>{title}</DrawerTitle>
@@ -218,7 +218,7 @@ export default function BackupVersionsDialog({
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onClose}>
+		<Dialog open={open} onOpenChange={() => onClose()}>
 			<DialogContent className="max-w-2xl! w-full overflow-y-auto max-h-[60vh]">
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
