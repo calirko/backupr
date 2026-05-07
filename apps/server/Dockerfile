@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.11 AS builder
+FROM oven/bun:1.3.11
 
 WORKDIR /app
 
@@ -10,42 +10,13 @@ COPY apps/agent/package.json ./apps/agent/package.json
 RUN bun install --frozen-lockfile
 
 COPY apps/server ./apps/server
-RUN bunx prisma generate --schema=apps/server/prisma/schema.prisma
 
-FROM oven/bun:1.3.11-slim
-
-ARG NODE_ENV=production
-ARG DATABASE_URL
-ARG SERVER_URL
-ARG MINIO_ENDPOINT
-ARG MINIO_PORT
-ARG MINIO_USE_SSL
-ARG MINIO_ACCESS_KEY
-ARG MINIO_SECRET_KEY
-ARG MINIO_BUCKET
-
-ENV NODE_ENV=$NODE_ENV
-ENV DATABASE_URL=$DATABASE_URL
-ENV SERVER_URL=$SERVER_URL
-ENV MINIO_ENDPOINT=$MINIO_ENDPOINT
-ENV MINIO_PORT=$MINIO_PORT
-ENV MINIO_USE_SSL=$MINIO_USE_SSL
-ENV MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY
-ENV MINIO_SECRET_KEY=$MINIO_SECRET_KEY
-ENV MINIO_BUCKET=$MINIO_BUCKET
-
-WORKDIR /app
-
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/server ./apps/server
-COPY --from=builder /app/package.json ./
-COPY apps/server/entrypoint.sh ./entrypoint.sh
-
-RUN chmod +x ./entrypoint.sh
+RUN cd apps/server && bunx prisma generate
+RUN chmod +x apps/server/entrypoint.sh
 
 EXPOSE 5174
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD bun -e "fetch('http://localhost:5174/ping').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["sh", "apps/server/entrypoint.sh"]

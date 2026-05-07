@@ -1,15 +1,11 @@
 #!/bin/sh
 set -e
 
-echo "=== ENV CHECK ==="
-echo "NODE_ENV=$NODE_ENV"
-echo "DATABASE_URL=$DATABASE_URL"
-echo "SERVER_URL=$SERVER_URL"
-echo "MINIO_ENDPOINT=$MINIO_ENDPOINT"
-echo "=================="
+cd /app/apps/server
 
 echo "Running database migrations..."
-bunx prisma migrate deploy --schema=apps/server/prisma/schema.prisma
+bunx prisma migrate deploy
 
 echo "Starting server..."
+cd /app
 bun run apps/server/src/main.ts
