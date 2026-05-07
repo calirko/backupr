@@ -40,7 +40,6 @@ services:
       - .env
     environment:
       - NODE_ENV=production
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
     networks:
       backupr_network: {}
       web_network:
