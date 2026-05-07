@@ -1,4 +1,4 @@
-FROM oven/bun:1 AS builder
+FROM oven/bun:1.3.11 AS builder
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ COPY apps/server ./apps/server
 RUN bun install --frozen-lockfile
 RUN bunx prisma generate --schema=apps/server/prisma/schema.prisma
 
-FROM oven/bun:1-slim
+FROM oven/bun:1.3.11-slim
 
 WORKDIR /app
 
