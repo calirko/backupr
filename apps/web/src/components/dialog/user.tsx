@@ -35,6 +35,7 @@ export default function UserDialog({
 	open: boolean;
 	defaultData?: {
 		name: string;
+		username: string;
 		email: string;
 	};
 	userId?: string;
@@ -46,13 +47,15 @@ export default function UserDialog({
 
 	async function updateUser({
 		name,
+		username,
 		password,
 	}: {
 		name: string;
+		username: string;
 		password?: string;
 	}) {
 		try {
-			const updateData: { name: string; password?: string } = { name };
+			const updateData: { name: string; username: string; password?: string } = { name, username };
 			if (password) {
 				updateData.password = password;
 			}
@@ -84,10 +87,12 @@ export default function UserDialog({
 
 	async function createUser({
 		name,
+		username,
 		email,
 		password,
 	}: {
 		name: string;
+		username: string;
 		email: string;
 		password: string;
 	}) {
@@ -98,7 +103,7 @@ export default function UserDialog({
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${localStorage.getItem("token")}`,
 				},
-				body: JSON.stringify({ name, email, password }),
+				body: JSON.stringify({ name, username, email, password }),
 			});
 			if (!response.ok) {
 				const error = await response.json();
@@ -122,6 +127,7 @@ export default function UserDialog({
 		form.preventDefault();
 		const formData = new FormData(form.currentTarget);
 		const name = formData.get("name") as string;
+		const username = formData.get("username") as string;
 		const email = formData.get("email") as string;
 		const password = formData.get("password") as string;
 
@@ -132,8 +138,15 @@ export default function UserDialog({
 			return;
 		}
 
+		if (!username) {
+			toast.warning("Username is required", {
+				description: "Please enter a username for the user.",
+			});
+			return;
+		}
+
 		if (userId) {
-			await updateUser({ name, password: password || undefined });
+			await updateUser({ name, username, password: password || undefined });
 		} else {
 			if (!email || !password) {
 				toast.warning("Email and password required", {
@@ -141,7 +154,7 @@ export default function UserDialog({
 				});
 				return;
 			}
-			await createUser({ name, email, password });
+			await createUser({ name, username, email, password });
 		}
 		onConfirm();
 	}
@@ -154,6 +167,15 @@ export default function UserDialog({
 					placeholder="Name"
 					name="name"
 					defaultValue={defaultData?.name}
+					disabled={readonly}
+				/>
+			</div>
+			<div className="space-y-1.5">
+				<Label required={!readonly}>Username</Label>
+				<Input
+					placeholder="Username"
+					name="username"
+					defaultValue={defaultData?.username}
 					disabled={readonly}
 				/>
 			</div>

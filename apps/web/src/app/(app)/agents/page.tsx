@@ -31,11 +31,13 @@ export default function AgentsPage() {
 	const [loading, setLoading] = useState(false);
 	const filterFields = [
 		{
+			name: "name",
 			label: "Name",
 			type: "string",
 			matching: "contains",
 		},
 		{
+			name: "is_active",
 			label: "Active",
 			type: "boolean",
 			matching: "equals",

@@ -746,13 +746,21 @@ export default async function setupRoutes(app: Hono) {
 	// Download redirect — generates a fresh presigned URL and redirects
 	app.get("/api/backups/:id/download", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
-		const backup = await db.backup.findUnique({ where: { id } });
+		const backup = await db.backup.findUnique({
+			where: { id },
+			include: { backup_job: true },
+		});
 
 		if (!backup) return c.json({ error: "Backup not found" }, 404);
 		if (!backup.blob_key)
 			return c.json({ error: "No file stored for this backup" }, 404);
 
-		const url = await presignedDownloadUrl(backup.blob_key);
+		const filename = `${backup.backup_job.name}.7z`;
+		const url = await presignedDownloadUrl(
+			backup.blob_key,
+			undefined,
+			filename,
+		);
 		return c.redirect(url, 302);
 	});
 
@@ -837,7 +845,8 @@ export default async function setupRoutes(app: Hono) {
 			const nodeStream = Readable.fromWeb(body as any);
 			await uploadStream(key, nodeStream, size, contentType);
 
-			const url = await presignedDownloadUrl(key);
+			const filename = `${job.name}.7z`;
+			const url = await presignedDownloadUrl(key, undefined, filename);
 
 			const updated = await db.backup.update({
 				where: { id: backupRecord.id },

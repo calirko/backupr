@@ -302,11 +302,13 @@ export default function AgentJobsPage() {
 									variant="outline"
 									size="sm"
 									onClick={() => triggerBackup(job.id)}
-									disabled={agentBusy}
+									disabled={agentBusy || !job.is_active}
 									title={
-										agentBusy
-											? "Agent is busy or offline"
-											: "Trigger backup now"
+										!job.is_active
+											? "This job is inactive"
+											: agentBusy
+												? "Agent is busy or offline"
+												: "Trigger backup now"
 									}
 								>
 									<LightningIcon />

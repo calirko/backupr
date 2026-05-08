@@ -41,8 +41,14 @@ export async function uploadStream(
 export async function presignedDownloadUrl(
 	key: string,
 	expiresInSeconds = 604800,
+	filename?: string,
 ): Promise<string> {
-	return storage.presignedGetObject(BUCKET, key, expiresInSeconds);
+	const reqParams: Record<string, string> = {};
+	if (filename) {
+		reqParams["response-content-disposition"] =
+			`attachment; filename="${filename}"`;
+	}
+	return storage.presignedGetObject(BUCKET, key, expiresInSeconds, reqParams);
 }
 
 export async function removeObject(key: string): Promise<void> {

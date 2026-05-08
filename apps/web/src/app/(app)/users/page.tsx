@@ -26,6 +26,12 @@ export default function UsersPage() {
 			matching: "contains" as const,
 		},
 		{
+			name: "username",
+			label: "Username",
+			type: "string" as const,
+			matching: "contains" as const,
+		},
+		{
 			name: "email",
 			label: "Email",
 			type: "string" as const,
@@ -35,6 +41,7 @@ export default function UsersPage() {
 
 	const columns = [
 		{ key: "name", label: "Name", orderable: true },
+		{ key: "username", label: "Username", orderable: true },
 		{ key: "email", label: "Email", orderable: true },
 		{
 			key: "created_at",
@@ -51,7 +58,7 @@ export default function UsersPage() {
 			icon: <EyeIcon />,
 			onClick: (row) => {
 				openDialog(UserDialog, {
-					defaultData: { name: row.name, email: row.email },
+					defaultData: { name: row.name, username: row.username, email: row.email },
 					userId: row.id,
 					readonly: true,
 					onConfirm: () => {
@@ -66,7 +73,7 @@ export default function UsersPage() {
 			icon: <PencilIcon />,
 			onClick: (row) => {
 				openDialog(UserDialog, {
-					defaultData: { name: row.name, email: row.email },
+					defaultData: { name: row.name, username: row.username, email: row.email },
 					userId: row.id,
 					onConfirm: () => {
 						fetchData();
