@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Downloads the latest backupr-agent.exe from GitHub Releases and manages it
-    as a Windows service via NSSM.
+    as a Windows service via WinSW.
     The service runs as LocalSystem (no interactive login required) and starts automatically.
 
 .PARAMETER Action
@@ -35,9 +35,10 @@ $ServiceName = "backupr-agent"
 $InstallDir  = "C:\ProgramData\backupr"
 $AgentExe    = Join-Path $InstallDir "backupr-agent.exe"
 $ConfigFile  = Join-Path $InstallDir "backupr.conf"
-$NssmDir     = Join-Path $InstallDir "nssm"
-$NssmExe     = Join-Path $NssmDir "nssm.exe"
-$NssmUrl     = "https://nssm.cc/release/nssm-2.24.zip"
+$WinSwDir    = Join-Path $InstallDir "winsw"
+$WinSwExe    = Join-Path $WinSwDir "winsw.exe"
+$WinSwUrl    = "https://github.com/winsw/winsw/releases/latest/download/WinSW-x64.exe"
+$WinSwConfig = Join-Path $InstallDir "$ServiceName.xml"
 $SevenZipDir = Join-Path $InstallDir "7zip"
 $SevenZipExe = Join-Path $SevenZipDir "7z.exe"
 $SevenZipUrl = "https://www.7-zip.org/a/7z2409-x64.exe"
@@ -64,35 +65,36 @@ function Confirm-Admin {
     }
 }
 
-function Ensure-NssmPresent {
-    if (Test-Path $NssmExe) { return }
+function Ensure-WinSwPresent {
+    if (Test-Path $WinSwExe) { return }
 
-    Write-Host "  Downloading NSSM..." -ForegroundColor Yellow
-    $zipPath = Join-Path $env:TEMP "nssm.zip"
-    $null = New-Item -ItemType Directory -Force -Path $NssmDir
+    Write-Host "  Downloading WinSW..." -ForegroundColor Yellow
+    $null = New-Item -ItemType Directory -Force -Path $WinSwDir
 
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri $NssmUrl -OutFile $zipPath -UseBasicParsing
+    Invoke-WebRequest -Uri $WinSwUrl -OutFile $WinSwExe -UseBasicParsing
+    Write-Host "  WinSW saved to $WinSwExe" -ForegroundColor Green
+}
 
-    $extractDir = Join-Path $env:TEMP "nssm_extract"
-    Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
-
-    $found = Get-ChildItem -Path $extractDir -Filter "nssm.exe" -Recurse |
-             Where-Object { $_.FullName -match "win64" } |
-             Select-Object -First 1
-
-    if (-not $found) {
-        $found = Get-ChildItem -Path $extractDir -Filter "nssm.exe" -Recurse |
-                 Select-Object -First 1
-    }
-
-    if (-not $found) {
-        throw "Could not locate nssm.exe inside the downloaded archive."
-    }
-
-    Copy-Item $found.FullName -Destination $NssmExe -Force
-    Remove-Item $zipPath, $extractDir -Recurse -Force
-    Write-Host "  NSSM installed at $NssmExe" -ForegroundColor Green
+function Write-WinSwConfig {
+    param([string]$StartMode = "Manual")
+    $xml = @"
+<service>
+  <id>$ServiceName</id>
+  <name>Backupr Agent</name>
+  <description>Backupr backup agent service</description>
+  <executable>$AgentExe</executable>
+  <workingdirectory>$InstallDir</workingdirectory>
+  <startmode>$StartMode</startmode>
+  <env id="PATH" value="$SevenZipDir;%PATH%"/>
+  <log mode="append">
+    <logpath>$InstallDir</logpath>
+  </log>
+  <onfailure action="restart" delay="5000 ms"/>
+  <resetfailure>3600</resetfailure>
+</service>
+"@
+    $xml | Set-Content -Path $WinSwConfig -Encoding UTF8
 }
 
 function Ensure-AgentPresent {
@@ -140,26 +142,13 @@ function Action-Install {
         return
     }
 
-    Ensure-NssmPresent
+    Ensure-WinSwPresent
     Ensure-AgentPresent
     Ensure-SevenZipPresent
+    Write-WinSwConfig -StartMode "Manual"
 
-    & $NssmExe install $ServiceName $AgentExe
-    if ($LASTEXITCODE -ne 0) { throw "NSSM install failed (exit $LASTEXITCODE)" }
-
-    & $NssmExe set $ServiceName AppDirectory $InstallDir
-    & $NssmExe set $ServiceName ObjectName LocalSystem
-    & $NssmExe set $ServiceName Start SERVICE_DEMAND_START
-    & $NssmExe set $ServiceName AppRestartDelay 5000
-    & $NssmExe set $ServiceName AppThrottle 3600000
-    & $NssmExe set $ServiceName AppEnvironmentExtra "PATH=$SevenZipDir;%PATH%"
-
-    $logFile = Join-Path $InstallDir "backupr-agent.log"
-    $errFile = Join-Path $InstallDir "backupr-agent-err.log"
-    & $NssmExe set $ServiceName AppStdout $logFile
-    & $NssmExe set $ServiceName AppStderr $errFile
-    & $NssmExe set $ServiceName AppStdoutCreationDisposition 4
-    & $NssmExe set $ServiceName AppStderrCreationDisposition 4
+    & $WinSwExe install $WinSwConfig
+    if ($LASTEXITCODE -ne 0) { throw "WinSW install failed (exit $LASTEXITCODE)" }
 
     Write-Host ""
     Write-Host "  Service installed successfully." -ForegroundColor Green
@@ -209,8 +198,8 @@ function Action-Start {
         return
     }
 
-    & $NssmExe set $ServiceName Start SERVICE_AUTO_START
-    & $NssmExe start $ServiceName
+    sc.exe config $ServiceName start= auto | Out-Null
+    & $WinSwExe start $WinSwConfig
     Start-Sleep -Seconds 1
     $svc = Get-Service -Name $ServiceName
     $color = if ($svc.Status -eq "Running") { "Green" } else { "Yellow" }
@@ -225,7 +214,7 @@ function Action-Stop {
         return
     }
 
-    & $NssmExe stop $ServiceName
+    & $WinSwExe stop $WinSwConfig
     Write-Host "  Service stopped." -ForegroundColor Yellow
 }
 
@@ -243,8 +232,7 @@ function Action-Remove {
         return
     }
 
-    & $NssmExe stop $ServiceName
-    & $NssmExe remove $ServiceName confirm
+    & $WinSwExe uninstall $WinSwConfig
     Write-Host "  Service removed." -ForegroundColor Yellow
     Write-Host "  Files in $InstallDir were left in place. Delete manually if needed." -ForegroundColor DarkGray
 }
@@ -255,7 +243,7 @@ function Action-Status {
     Write-Host "  Install dir : $InstallDir"
     Write-Host "  Config file : $(if (Test-Path $ConfigFile) { $ConfigFile } else { '(not found)' })"
     Write-Host "  Agent binary: $(if (Test-Path $AgentExe) { $AgentExe } else { '(not found)' })"
-    Write-Host "  NSSM        : $(if (Test-Path $NssmExe) { $NssmExe } else { '(not found)' })"
+    Write-Host "  WinSW       : $(if (Test-Path $WinSwExe) { $WinSwExe } else { '(not found)' })"
     Write-Host "  7-Zip       : $(if (Test-Path $SevenZipExe) { $SevenZipExe } else { '(not found)' })"
 
     if (Get-ServiceExists) {
