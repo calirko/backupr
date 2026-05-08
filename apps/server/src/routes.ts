@@ -3,7 +3,7 @@ import { generateAgentCode, generateAgentToken } from "./lib/agent";
 import { auth } from "./lib/auth";
 import { Password } from "./lib/password";
 import { prisma } from "./lib/prisma";
-import { rateLimit } from "./lib/rate-limit";
+import { authRateLimit, rateLimit } from "./lib/rate-limit";
 import { presignedDownloadUrl, uploadStream } from "./lib/storage";
 import { Token, type TokenPayload } from "./lib/token";
 
@@ -16,7 +16,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// user
-	app.post("auth/login", rateLimit, async (c) => {
+	app.post("auth/login", authRateLimit, async (c) => {
 		let json;
 		try {
 			json = await c.req.json();
