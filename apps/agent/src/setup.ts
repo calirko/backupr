@@ -50,7 +50,14 @@ export async function runSetup(agentCode: string): Promise<void> {
 			throw new Error("Server response did not include a token.");
 		}
 
-		await ConfigManager.update({ serverUrl, agentToken: data.token });
+		// Derive the WebSocket base URL: replace the /api path suffix with /ws
+		// so the agent uses the dedicated WS proxy rather than the HTTP proxy.
+		// Falls back gracefully for bare origins (e.g. http://localhost:5174).
+		const wsUrl = serverUrl
+			.replace(/^http/, "ws")
+			.replace(/\/api\/?$/, "/ws");
+
+		await ConfigManager.update({ serverUrl, wsUrl, agentToken: data.token });
 
 		console.log(
 			"\x1b[32m[Setup] Success! Agent registered and token saved.\x1b[0m",

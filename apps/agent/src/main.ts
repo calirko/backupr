@@ -51,7 +51,7 @@ class BackuprAgent {
 		this.config = await ConfigManager.load();
 		this.shouldReconnect = true;
 
-		if (!this.config.agentToken || !this.config.serverUrl) {
+		if (!this.config.agentToken || !this.config.serverUrl || !this.config.wsUrl) {
 			console.error(
 				"\x1b[31m[Error] Agent is not configured. Run: agent setup <agentCode>\x1b[0m",
 			);
@@ -75,9 +75,9 @@ class BackuprAgent {
 	}
 
 	private connect() {
-		const wsUrl =
-			`${this.config.serverUrl!.replace(/^http/, "ws")}/agent/ws` +
-			`?token=${this.config.agentToken}`;
+		const wsBase =
+			this.config.wsUrl ?? this.config.serverUrl!.replace(/^http/, "ws");
+		const wsUrl = `${wsBase}/agent/ws?token=${this.config.agentToken}`;
 
 		console.log(`[Agent] Connecting to ${wsUrl}...`);
 		this.ws = new WebSocket(wsUrl);

@@ -5,6 +5,7 @@ import path from "node:path";
 
 export interface AgentConfig {
 	serverUrl?: string;
+	wsUrl?: string;
 	agentToken?: string;
 }
 

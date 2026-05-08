@@ -40,8 +40,6 @@ services:
       - .env
     environment:
       - NODE_ENV=production
-      - API_URL=http://backupr-server:5174
-      - WS_URL=ws://backupr-server:5174
     networks:
       backupr_network: {}
       web_network:
@@ -53,13 +51,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "bun",
-          "-e",
-          "fetch('http://localhost:5173').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))",
-        ]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5173/"]
       interval: 30s
       timeout: 10s
       retries: 3
