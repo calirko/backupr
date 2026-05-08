@@ -38,7 +38,7 @@ $ConfigFile  = Join-Path $InstallDir "backupr.conf"
 $WinSwDir    = Join-Path $InstallDir "winsw"
 $WinSwExe    = Join-Path $WinSwDir "winsw.exe"
 $WinSwUrl    = "https://github.com/winsw/winsw/releases/latest/download/WinSW-x64.exe"
-$WinSwConfig = Join-Path $InstallDir "$ServiceName.xml"
+$WinSwConfig = Join-Path $WinSwDir "winsw.xml"
 $SevenZipDir = Join-Path $InstallDir "7zip"
 $SevenZipExe = Join-Path $SevenZipDir "7z.exe"
 $SevenZipUrl = "https://www.7-zip.org/a/7z2409-x64.exe"
@@ -147,7 +147,12 @@ function Action-Install {
     Ensure-SevenZipPresent
     Write-WinSwConfig -StartMode "Manual"
 
-    & $WinSwExe install $WinSwConfig
+    Push-Location $WinSwDir
+    try {
+        & $WinSwExe install
+    } finally {
+        Pop-Location
+    }
     if ($LASTEXITCODE -ne 0) { throw "WinSW install failed (exit $LASTEXITCODE)" }
 
     Write-Host ""
@@ -199,7 +204,8 @@ function Action-Start {
     }
 
     sc.exe config $ServiceName start= auto | Out-Null
-    & $WinSwExe start $WinSwConfig
+    Push-Location $WinSwDir
+    try { & $WinSwExe start } finally { Pop-Location }
     Start-Sleep -Seconds 1
     $svc = Get-Service -Name $ServiceName
     $color = if ($svc.Status -eq "Running") { "Green" } else { "Yellow" }
@@ -214,7 +220,8 @@ function Action-Stop {
         return
     }
 
-    & $WinSwExe stop $WinSwConfig
+    Push-Location $WinSwDir
+    try { & $WinSwExe stop } finally { Pop-Location }
     Write-Host "  Service stopped." -ForegroundColor Yellow
 }
 
@@ -232,7 +239,8 @@ function Action-Remove {
         return
     }
 
-    & $WinSwExe uninstall $WinSwConfig
+    Push-Location $WinSwDir
+    try { & $WinSwExe uninstall } finally { Pop-Location }
     Write-Host "  Service removed." -ForegroundColor Yellow
     Write-Host "  Files in $InstallDir were left in place. Delete manually if needed." -ForegroundColor DarkGray
 }
