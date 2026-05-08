@@ -1,6 +1,6 @@
 import { upgradeWebSocket } from "hono/bun";
-import { prisma } from "./lib/prisma";
 import { handleBackupStatusUpdate } from "./backup";
+import { prisma } from "./lib/prisma";
 
 const db = prisma;
 

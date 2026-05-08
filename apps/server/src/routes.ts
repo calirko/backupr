@@ -11,12 +11,12 @@ const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
 
 export default async function setupRoutes(app: Hono) {
-	app.get("/ping", (c) => {
+	app.get("/api/ping", (c) => {
 		return c.json({ message: "pong" });
 	});
 
 	// user
-	app.post("auth/login", authRateLimit, async (c) => {
+	app.post("/api/auth/login", authRateLimit, async (c) => {
 		let json;
 		try {
 			json = await c.req.json();
@@ -79,13 +79,13 @@ export default async function setupRoutes(app: Hono) {
 		});
 	});
 
-	app.get("auth/me", rateLimit, auth, async (c) => {
+	app.get("/api/auth/me", rateLimit, auth, async (c) => {
 		const user = c.get("user");
 		return c.json({ user });
 	});
 
 	// gets dashboard data
-	app.get("/dashboard", rateLimit, auth, async (c) => {
+	app.get("/api/dashboard", rateLimit, auth, async (c) => {
 		const [
 			totalAgents,
 			activeAgents,
@@ -204,7 +204,7 @@ export default async function setupRoutes(app: Hono) {
 		});
 	});
 
-	app.get("/agents/:id/code", rateLimit, async (c) => {
+	app.get("/api/agents/:id/code", rateLimit, async (c) => {
 		const id = c.req.param("id");
 		const agent = await db.agent.findUnique({ where: { id } });
 		if (!agent) return c.json({ error: "Agent not found" }, 404);
@@ -255,7 +255,7 @@ export default async function setupRoutes(app: Hono) {
 		});
 	});
 
-	app.post("/agents/pair", rateLimit, async (c) => {
+	app.post("/api/agents/pair", rateLimit, async (c) => {
 		let json;
 
 		try {
@@ -339,7 +339,7 @@ export default async function setupRoutes(app: Hono) {
 		});
 	});
 
-	app.get("/agents", rateLimit, auth, async (c) => {
+	app.get("/api/agents", rateLimit, auth, async (c) => {
 		const { filters, orderBy, skip, take } = c.req.query();
 		const parsedFilters = filters
 			? JSON.parse(decodeURIComponent(filters))
@@ -388,7 +388,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Create Agent
-	app.post("/agents", rateLimit, async (c) => {
+	app.post("/api/agents", rateLimit, async (c) => {
 		let json;
 		try {
 			json = await c.req.json();
@@ -411,7 +411,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Update Agent
-	app.patch("/agents/:id", rateLimit, auth, async (c) => {
+	app.patch("/api/agents/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		let json;
 		try {
@@ -428,7 +428,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Disable/Enable Agent (Toggle)
-	app.patch("/agents/:id/toggle", rateLimit, auth, async (c) => {
+	app.patch("/api/agents/:id/toggle", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		const agent = await db.agent.findUnique({ where: { id } });
 		if (!agent) return c.json({ error: "Agent not found" }, 404);
@@ -441,7 +441,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Disable Agent
-	app.post("/agents/:id/disable", rateLimit, auth, async (c) => {
+	app.post("/api/agents/:id/disable", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		const agent = await db.agent.findUnique({ where: { id } });
 		if (!agent) return c.json({ error: "Agent not found" }, 404);
@@ -454,7 +454,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Get Agent Details with Sessions
-	app.get("/agents/:id", rateLimit, auth, async (c) => {
+	app.get("/api/agents/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		const agent = await db.agent.findUnique({
 			where: { id },
@@ -485,7 +485,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Delete Agent
-	app.delete("/agents/:id", rateLimit, auth, async (c) => {
+	app.delete("/api/agents/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		await db.agent.delete({ where: { id } });
 		return c.json({ message: "Agent deleted" });
@@ -496,7 +496,7 @@ export default async function setupRoutes(app: Hono) {
 	 */
 
 	// List Users (Paginated)
-	app.get("/users", rateLimit, auth, async (c) => {
+	app.get("/api/users", rateLimit, auth, async (c) => {
 		const { skip, take } = c.req.query();
 		const s = skip ? parseInt(skip) : undefined;
 		const t = take ? parseInt(take) : undefined;
@@ -513,7 +513,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Create User
-	app.post("/users", rateLimit, auth, async (c) => {
+	app.post("/api/users", rateLimit, auth, async (c) => {
 		let json;
 		try {
 			json = await c.req.json();
@@ -534,7 +534,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Update User
-	app.patch("/users/:id", rateLimit, auth, async (c) => {
+	app.patch("/api/users/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		let json;
 		try {
@@ -556,7 +556,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Delete User
-	app.delete("/users/:id", rateLimit, auth, async (c) => {
+	app.delete("/api/users/:id", rateLimit, auth, async (c) => {
 		const tokenPayload = await Token.verify(
 			c.req.header("Authorization")?.split(" ")[1] ?? "",
 		);
@@ -574,7 +574,7 @@ export default async function setupRoutes(app: Hono) {
 	 */
 
 	// List Backup Jobs
-	app.get("/backup-jobs", rateLimit, auth, async (c) => {
+	app.get("/api/backup-jobs", rateLimit, auth, async (c) => {
 		const { filters, orderBy, skip, take } = c.req.query();
 		const parsedFilters = filters
 			? JSON.parse(decodeURIComponent(filters))
@@ -613,7 +613,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Create Backup Job
-	app.post("/backup-jobs", rateLimit, auth, async (c) => {
+	app.post("/api/backup-jobs", rateLimit, auth, async (c) => {
 		let json;
 		try {
 			json = await c.req.json();
@@ -645,7 +645,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Update Backup Job
-	app.patch("/backup-jobs/:id", rateLimit, auth, async (c) => {
+	app.patch("/api/backup-jobs/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		let json;
 		try {
@@ -674,7 +674,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Delete Backup Job
-	app.delete("/backup-jobs/:id", rateLimit, auth, async (c) => {
+	app.delete("/api/backup-jobs/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		try {
 			await db.backupJob.delete({ where: { id } });
@@ -685,7 +685,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Manually trigger a backup for a job
-	app.post("/backup-jobs/:id/backup", rateLimit, auth, async (c) => {
+	app.post("/api/backup-jobs/:id/backup", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 
 		try {
@@ -711,7 +711,7 @@ export default async function setupRoutes(app: Hono) {
 	 */
 
 	// List Backups (filterable by backup_job_id)
-	app.get("/backups", rateLimit, auth, async (c) => {
+	app.get("/api/backups", rateLimit, auth, async (c) => {
 		const { filters, orderBy, skip, take } = c.req.query();
 		const parsedFilters = filters
 			? JSON.parse(decodeURIComponent(filters))
@@ -744,7 +744,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Download redirect — generates a fresh presigned URL and redirects
-	app.get("/backups/:id/download", rateLimit, auth, async (c) => {
+	app.get("/api/backups/:id/download", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		const backup = await db.backup.findUnique({ where: { id } });
 
@@ -760,7 +760,7 @@ export default async function setupRoutes(app: Hono) {
 	 * AGENT — upload endpoint (authenticated with AgentSession token)
 	 */
 
-	app.post("/agent/upload", async (c) => {
+	app.post("/api/agent/upload", async (c) => {
 		// Auth: agent session token
 		const token =
 			c.req.header("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
@@ -876,7 +876,7 @@ export default async function setupRoutes(app: Hono) {
 	 */
 
 	// List All Backup Job Policies
-	app.get("/backup-policies", rateLimit, auth, async (c) => {
+	app.get("/api/backup-policies", rateLimit, auth, async (c) => {
 		const { filters, orderBy, skip, take } = c.req.query();
 		const parsedFilters = filters
 			? JSON.parse(decodeURIComponent(filters))
@@ -903,7 +903,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Create Backup Job Policy
-	app.post("/backup-policies", rateLimit, auth, async (c) => {
+	app.post("/api/backup-policies", rateLimit, auth, async (c) => {
 		let json;
 		try {
 			json = await c.req.json();
@@ -923,7 +923,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Update Backup Job Policy
-	app.patch("/backup-policies/:id", rateLimit, auth, async (c) => {
+	app.patch("/api/backup-policies/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		let json;
 		try {
@@ -940,7 +940,7 @@ export default async function setupRoutes(app: Hono) {
 	});
 
 	// Delete Backup Job Policy
-	app.delete("/backup-policies/:id", rateLimit, auth, async (c) => {
+	app.delete("/api/backup-policies/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		try {
 			await db.backupPolicy.delete({ where: { id } });

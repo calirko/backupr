@@ -8,7 +8,6 @@ import {
 	useState,
 } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5174";
 const RECONNECT_TIMEOUT_MS = 5000;
 const MAX_RECONNECT_TIMEOUT_MS = 30000;
 const HEARTBEAT_INTERVAL_MS = 30000;
@@ -65,7 +64,8 @@ export function SocketProvider({
 	const connect = useCallback(() => {
 		if (!shouldReconnectRef.current) return;
 
-		const wsUrl = API_URL.replace(/^http/, "ws") + `/web/ws?token=${token}`;
+		const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+		const wsUrl = `${wsProtocol}//${window.location.host}/api/web/ws?token=${token}`;
 		console.log("[socket] connecting...");
 
 		try {
