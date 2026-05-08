@@ -57,23 +57,23 @@ services:
       retries: 3
       start_period: 15s
 
-  backupr_proxy:
-    build:
-      context: .
-      dockerfile: apps/proxy/Dockerfile
-    container_name: backupr_proxy
-    networks:
-      backupr_network: {}
-      web_network:
-        aliases:
-          - backupr_proxy
-      dokploy-network: {}
-    depends_on:
-      web:
-        condition: service_healthy
-      server:
-        condition: service_healthy
-    restart: unless-stopped
+  # backupr_proxy:
+  #   build:
+  #     context: .
+  #     dockerfile: apps/proxy/Dockerfile
+  #   container_name: backupr_proxy
+  #   networks:
+  #     backupr_network: {}
+  #     web_network:
+  #       aliases:
+  #         - backupr_proxy
+  #     dokploy-network: {}
+  #   depends_on:
+  #     web:
+  #       condition: service_healthy
+  #     server:
+  #       condition: service_healthy
+  #   restart: unless-stopped
 
 networks:
   backupr_network:
