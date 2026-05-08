@@ -1,23 +1,24 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import {
-	Card,
-	CardHeader,
-	CardTitle,
-	CardContent,
-	CardFooter,
-	CardAction,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useSocket } from "@/hooks/use-socket";
-import type { AgentStatus } from "@/hooks/use-socket";
 import {
 	ArrowRightIcon,
 	MagnifyingGlassIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+	Card,
+	CardAction,
+	CardContent,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import type { AgentStatus } from "@/hooks/use-socket";
+import { useSocket } from "@/hooks/use-socket";
+import { Spinner } from "@/components/ui/spinner";
 
 interface Agent {
 	id: string;
@@ -130,9 +131,7 @@ export default function BackupsPage() {
 				</div>
 			</div>
 
-			{loading && (
-				<p className="text-sm text-muted-foreground">Loading agents...</p>
-			)}
+			{loading && <Spinner className="self-center" />}
 			{!loading && visibleAgents.length === 0 && (
 				<p className="text-sm text-muted-foreground">No agents found.</p>
 			)}

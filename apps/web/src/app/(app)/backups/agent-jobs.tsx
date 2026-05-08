@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -229,9 +230,7 @@ export default function AgentJobsPage() {
 				</div>
 			</div>
 
-			{loading && (
-				<p className="text-sm text-muted-foreground">Loading jobs...</p>
-			)}
+			{loading && <Spinner className="self-center" />}
 			{!loading && visibleJobs.length === 0 && (
 				<p className="text-sm text-muted-foreground">
 					No backup jobs configured for this agent.

@@ -38,6 +38,9 @@ $ConfigFile  = Join-Path $InstallDir "backupr.conf"
 $NssmDir     = Join-Path $InstallDir "nssm"
 $NssmExe     = Join-Path $NssmDir "nssm.exe"
 $NssmUrl     = "https://nssm.cc/release/nssm-2.24.zip"
+$SevenZipDir = Join-Path $InstallDir "7zip"
+$SevenZipExe = Join-Path $SevenZipDir "7z.exe"
+$SevenZipUrl = "https://www.7-zip.org/a/7z2409-x64.exe"
 
 # --- Helpers ------------------------------------------------------------------
 
@@ -100,6 +103,29 @@ function Ensure-AgentPresent {
     Write-Host "  Agent binary saved to $AgentExe" -ForegroundColor Green
 }
 
+function Ensure-SevenZipPresent {
+    if (Test-Path $SevenZipExe) { return }
+
+    Write-Host "  Downloading 7-Zip..." -ForegroundColor Yellow
+    $null = New-Item -ItemType Directory -Force -Path $SevenZipDir
+
+    $installer = Join-Path $env:TEMP "7z-setup.exe"
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri $SevenZipUrl -OutFile $installer -UseBasicParsing
+
+    $proc = Start-Process -FilePath $installer -ArgumentList "/S /D=`"$SevenZipDir`"" -Wait -PassThru
+    Remove-Item $installer -Force
+
+    if ($proc.ExitCode -ne 0) {
+        throw "7-Zip installer failed (exit $($proc.ExitCode))"
+    }
+    if (-not (Test-Path $SevenZipExe)) {
+        throw "7-Zip installer ran but 7z.exe not found at $SevenZipExe"
+    }
+
+    Write-Host "  7-Zip installed at $SevenZipDir" -ForegroundColor Green
+}
+
 function Get-ServiceExists {
     return [bool](Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)
 }
@@ -116,6 +142,7 @@ function Action-Install {
 
     Ensure-NssmPresent
     Ensure-AgentPresent
+    Ensure-SevenZipPresent
 
     & $NssmExe install $ServiceName $AgentExe
     if ($LASTEXITCODE -ne 0) { throw "NSSM install failed (exit $LASTEXITCODE)" }
@@ -125,6 +152,7 @@ function Action-Install {
     & $NssmExe set $ServiceName Start SERVICE_DEMAND_START
     & $NssmExe set $ServiceName AppRestartDelay 5000
     & $NssmExe set $ServiceName AppThrottle 3600000
+    & $NssmExe set $ServiceName AppEnvironmentExtra "PATH=$SevenZipDir;%PATH%"
 
     $logFile = Join-Path $InstallDir "backupr-agent.log"
     $errFile = Join-Path $InstallDir "backupr-agent-err.log"
@@ -228,6 +256,7 @@ function Action-Status {
     Write-Host "  Config file : $(if (Test-Path $ConfigFile) { $ConfigFile } else { '(not found)' })"
     Write-Host "  Agent binary: $(if (Test-Path $AgentExe) { $AgentExe } else { '(not found)' })"
     Write-Host "  NSSM        : $(if (Test-Path $NssmExe) { $NssmExe } else { '(not found)' })"
+    Write-Host "  7-Zip       : $(if (Test-Path $SevenZipExe) { $SevenZipExe } else { '(not found)' })"
 
     if (Get-ServiceExists) {
         $svc = Get-Service -Name $ServiceName
