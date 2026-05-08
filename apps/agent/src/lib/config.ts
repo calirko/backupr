@@ -6,7 +6,6 @@ import path from "node:path";
 export interface AgentConfig {
 	serverUrl?: string;
 	agentToken?: string;
-	agentCode?: string;
 }
 
 export class ConfigManager {
@@ -25,7 +24,7 @@ export class ConfigManager {
 				`\x1b[33m[Config] Created config file: ${this.FILE_PATH}\x1b[0m`,
 			);
 			console.log(
-				`\x1b[33m[Config] Add your agentCode to the file and restart.\x1b[0m`,
+				`\x1b[33m[Config] Run: agent setup <agentCode> to configure.\x1b[0m`,
 			);
 			return {};
 		}

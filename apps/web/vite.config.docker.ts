@@ -18,6 +18,7 @@ export default defineConfig({
       '/api': {
         target: process.env.API_URL,
         changeOrigin: true,
+        ws: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/ws': {
@@ -36,6 +37,7 @@ export default defineConfig({
       '/api': {
         target: process.env.API_URL,
         changeOrigin: true,
+        ws: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/ws': {

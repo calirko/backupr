@@ -1,6 +1,6 @@
 {
   "name": "agent",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "module": "index.ts",
   "type": "module",
   "private": true,
@@ -15,7 +15,7 @@
   },
   "scripts": {
     "dev": "bun run --watch src/main.ts",
-    "build:windows": "bun build --compile --target=bun-windows-x64 ./src/main.ts --outfile dist/backupr-agent.exe",
-    "build:linux": "bun build --compile --target=bun-linux-x64 ./src/main.ts --outfile dist/backupr-agent"
+    "build:windows": "bun build --compile --target=bun-windows-x64 --icon=./public/icon.png ./src/main.ts --outfile dist/backupr-agent.exe",
+    "build:linux": "bun build --compile --target=bun-linux-x64 --icon=./public/icon.png ./src/main.ts --outfile dist/backupr-agent"
   }
 }

@@ -122,7 +122,7 @@ function Action-Install {
 
     & $NssmExe set $ServiceName AppDirectory $InstallDir
     & $NssmExe set $ServiceName ObjectName LocalSystem
-    & $NssmExe set $ServiceName Start SERVICE_AUTO_START
+    & $NssmExe set $ServiceName Start SERVICE_DEMAND_START
     & $NssmExe set $ServiceName AppRestartDelay 5000
     & $NssmExe set $ServiceName AppThrottle 3600000
 
@@ -141,7 +141,10 @@ function Action-Install {
 function Action-Setup {
     Write-Header "Configuring Backupr Agent"
 
-    $null = New-Item -ItemType Directory -Force -Path $InstallDir
+    if (-not (Test-Path $AgentExe)) {
+        Write-Warning "Agent binary not found at $AgentExe. Run 'install' first."
+        return
+    }
 
     Write-Host ""
     Write-Host "  Paste your agent code from the Backupr web UI and press Enter:" -ForegroundColor Yellow
@@ -153,12 +156,21 @@ function Action-Setup {
         return
     }
 
-    $config = @{ agentCode = $code } | ConvertTo-Json
-    Set-Content -Path $ConfigFile -Value $config -Encoding UTF8
-
     Write-Host ""
-    Write-Host "  Config saved to $ConfigFile" -ForegroundColor Green
-    Write-Host "  Start (or restart) the service to apply: .\install.ps1 -Action start" -ForegroundColor Cyan
+    Push-Location $InstallDir
+    try {
+        & $AgentExe setup $code
+    } finally {
+        Pop-Location
+    }
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host ""
+        Write-Host "  Setup complete. Start the service with: .\install.ps1 -Action start" -ForegroundColor Cyan
+    } else {
+        Write-Host ""
+        Write-Warning "Setup failed (exit $LASTEXITCODE). Check the output above."
+    }
 }
 
 function Action-Start {

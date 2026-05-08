@@ -1,9 +1,19 @@
 // agent.ts
-import os from "os";
 import WebSocket from "ws";
-import { version } from "../package.json" with { type: "json" };
 import { type AgentConfig, ConfigManager } from "./lib/config";
 import { runBackupJob } from "./backup";
+import { runSetup } from "./setup";
+
+const [, , subcommand, subcommandArg] = process.argv;
+
+if (subcommand === "setup") {
+	if (!subcommandArg) {
+		console.error("\x1b[31m[Setup] Usage: agent setup <agentCode>\x1b[0m");
+		process.exit(1);
+	}
+	await runSetup(subcommandArg);
+	process.exit(0);
+}
 
 const RECONNECT_TIMEOUT_MS = 5000; // Start with 5 seconds
 const MAX_RECONNECT_TIMEOUT_MS = 30000; // Cap at 30 seconds
@@ -41,34 +51,9 @@ class BackuprAgent {
 		this.config = await ConfigManager.load();
 		this.shouldReconnect = true;
 
-		// ── State machine ────────────────────────────────────────────────────────
-		//
-		//  No agentCode AND no agentToken → nothing to work with, tell user & exit
-		//  agentCode present, no agentToken → try to pair (may retry on failure)
-		//  agentToken present → skip pairing, go straight to connect
-		//
-		// ────────────────────────────────────────────────────────────────────────
-
-		if (!this.config.agentCode && !this.config.agentToken) {
-			console.error(
-				"\x1b[31m[Error] No agentCode found in backupr.conf. " +
-					"Add the code provided by the server and restart.\x1b[0m",
-			);
-			process.exit(1);
-		}
-
-		if (this.config.agentCode && !this.config.agentToken) {
-			// Pairing will exit the process on failure, so if we reach the line
-			// after this call we know it succeeded.
-			await this.attemptPairing();
-		}
-
-		// Re-read config — agentToken is now populated after a successful pairing
-		// (or it was already there from a previous run).
 		if (!this.config.agentToken || !this.config.serverUrl) {
 			console.error(
-				"\x1b[31m[Error] Agent is not fully configured " +
-					"(missing agentToken or serverUrl).\x1b[0m",
+				"\x1b[31m[Error] Agent is not configured. Run: agent setup <agentCode>\x1b[0m",
 			);
 			process.exit(1);
 		}
@@ -87,76 +72,6 @@ class BackuprAgent {
 			}
 			process.exit(0);
 		});
-	}
-
-	private async attemptPairing() {
-		console.log("[Pairing] Attempting to pair with server...");
-
-		let decoded: { serverUrl: string; agentCode: string };
-
-		try {
-			decoded = JSON.parse(atob(this.config.agentCode!));
-
-			if (!decoded.serverUrl || !decoded.agentCode) {
-				throw new Error("Decoded payload is missing serverUrl or agentCode.");
-			}
-		} catch (error) {
-			console.error(
-				"\x1b[31m[Pairing] Invalid agentCode (could not decode):\x1b[0m",
-				error instanceof Error ? error.message : error,
-			);
-			process.exit(1);
-		}
-
-		const { serverUrl, agentCode } = decoded;
-
-		try {
-			const response = await fetch(`${serverUrl}/agents/pair`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					agentCode,
-					name: os.hostname(),
-					info: {
-						platform: os.platform(),
-						arch: os.arch(),
-						release: os.release(),
-						cpus: os.cpus().length,
-						hostname: os.hostname(),
-						agent_version: version,
-					},
-				}),
-			});
-
-			const data = await response.json();
-
-			if (!response.ok) {
-				throw new Error(data.error || `Server returned ${response.status}`);
-			}
-
-			if (!data.token) {
-				throw new Error("Server response did not include a token.");
-			}
-
-			this.config = await ConfigManager.update({
-				serverUrl,
-				agentToken: data.token,
-				agentCode: undefined, // remove from file; pairing is done
-			});
-
-			console.log(
-				"\x1b[32m[Pairing] Success! Agent registered and token saved.\x1b[0m",
-			);
-		} catch (error) {
-			console.error(
-				"\x1b[31m[Pairing] Failed:\x1b[0m",
-				error instanceof Error ? error.message : error,
-			);
-			// agentCode is intentionally NOT cleared here so the user can fix
-			// whatever went wrong (server down, code expired, etc.) and just
-			// restart the agent without editing the config file again.
-			process.exit(1);
-		}
 	}
 
 	private connect() {
