@@ -323,7 +323,6 @@ export default function DashboardPage() {
 					</CardContent>
 				</Card>
 
-
 				{/* ── Rows 2-3, col 1-2: Backup activity chart ── */}
 
 				<Card className="col-span-2 row-span-2">
@@ -406,24 +405,6 @@ export default function DashboardPage() {
 								<p className="text-xs text-muted-foreground">No data yet.</p>
 							)}
 						</div>
-					</CardContent>
-				</Card>
-
-				{/* ── Row 3, col 1-2: Storage by Job ── */}
-
-				<Card className="col-span-2">
-					<CardHeader>
-						<CardTitle>Storage by Job</CardTitle>
-						<CardDescription>
-							Completed backup size per job · {formatBytes(totalStorageBytes)}{" "}
-							total
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<StorageByJobChart
-							data={data?.storage_by_job ?? []}
-							totalBytes={totalStorageBytes}
-						/>
 					</CardContent>
 				</Card>
 
