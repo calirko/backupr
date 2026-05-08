@@ -503,7 +503,7 @@ export default async function setupRoutes(app: Hono) {
 
 		const [data, total] = await Promise.all([
 			db.user.findMany({
-				select: { id: true, email: true, created_at: true, name: true },
+				select: { id: true, email: true, created_at: true, name: true, username: true },
 				skip: s,
 				take: t,
 			}),
@@ -521,13 +521,13 @@ export default async function setupRoutes(app: Hono) {
 			return c.json({ error: "Invalid JSON" }, 400);
 		}
 
-		const { name, email, password } = json;
-		if (!email || !password || !name)
+		const { name, username, email, password } = json;
+		if (!email || !password || !name || !username)
 			return c.json({ error: "Missing fields" }, 400);
 
 		const hashedPassword = await Password.encrypt(password);
 		const user = await db.user.create({
-			data: { name, email, password: hashedPassword },
+			data: { name, username, email, password: hashedPassword },
 			select: { id: true, email: true },
 		});
 		return c.json(user, 201);
