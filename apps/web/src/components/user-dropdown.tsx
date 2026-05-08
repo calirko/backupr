@@ -1,4 +1,4 @@
-import * as jwt_decode from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import {
@@ -23,10 +23,13 @@ export default function UserDropdown() {
 	useEffect(() => {
 		const token = localStorage.getItem("token");
 		if (token) {
-			const decoded: any = jwt_decode.jwtDecode(token);
-			const avatarUrl = getGravatarImageUrl(decoded.email);
-			console.log(avatarUrl);
-			setPayload({ ...decoded, avatar: avatarUrl });
+			const decoded: any = jwtDecode(token);
+			const avatarUrl = getGravatarImageUrl(decoded.user?.email);
+			setPayload({
+				name: decoded.user?.name || "",
+				email: decoded.user?.email || "",
+				avatar: avatarUrl || "",
+			});
 		}
 	}, []);
 
