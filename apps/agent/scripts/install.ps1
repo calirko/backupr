@@ -86,7 +86,7 @@ function Write-WinSwConfig {
   <executable>$AgentExe</executable>
   <workingdirectory>$InstallDir</workingdirectory>
   <startmode>$StartMode</startmode>
-  <env id="PATH" value="$SevenZipDir;%PATH%"/>
+  <env name="PATH" value="$SevenZipDir;%PATH%"/>
   <log mode="append">
     <logpath>$InstallDir</logpath>
   </log>
