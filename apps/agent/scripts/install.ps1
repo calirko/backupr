@@ -181,6 +181,7 @@ function Action-Start {
         return
     }
 
+    & $NssmExe set $ServiceName Start SERVICE_AUTO_START
     & $NssmExe start $ServiceName
     Start-Sleep -Seconds 1
     $svc = Get-Service -Name $ServiceName
