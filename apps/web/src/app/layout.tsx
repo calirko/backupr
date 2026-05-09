@@ -1,11 +1,11 @@
 // RootLayout.tsx
 import { Outlet } from "react-router-dom";
 import "../main.css";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { Toaster } from "@/components/ui/sonner";
-import GridBackground from "@/components/grid-background";
-import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { CheckSquareIcon, InfoIcon, XSquareIcon } from "@phosphor-icons/react";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import GridBackground from "@/components/grid-background";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function RootLayout() {
 	return (

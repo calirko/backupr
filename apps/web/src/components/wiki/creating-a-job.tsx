@@ -2,7 +2,6 @@ import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import {
 	Copy,
 	Eye,
-	FloppyDisk,
 	Pencil,
 	Plus,
 	TestTube,
@@ -19,7 +18,8 @@ interface Props {
 const content = {
 	en: {
 		title: "Creating a Backup Job",
-		subtitle: "How to define a backup job with a schedule, files, and settings.",
+		subtitle:
+			"How to define a backup job with a schedule, files, and settings.",
 		overviewTitle: "What is a backup job?",
 		overviewDesc:
 			"A backup job defines what to back up, when, and how. Each job targets a specific agent and runs on a cron schedule. When triggered, the agent compresses the listed paths into a 7z archive and uploads it to the server.",
@@ -55,7 +55,7 @@ const content = {
 			{
 				label: "Retention Policy",
 				required: false,
-				desc: "Attach a policy to automatically delete old backups for this job. Choose \"No policy\" to keep all backups.",
+				desc: 'Attach a policy to automatically delete old backups for this job. Choose "No policy" to keep all backups.',
 			},
 			{
 				label: "Password Protection",
@@ -76,17 +76,33 @@ const content = {
 		],
 		actionsTitle: "Row actions",
 		actions: [
-			{ name: "Test Job", desc: "Trigger the job immediately, outside of the schedule. Useful to verify the agent can reach the files and that compression works." },
-			{ name: "View", desc: "Inspect the job configuration in read-only mode." },
-			{ name: "Edit", desc: "Update any field. Changes take effect on the next run." },
-			{ name: "Duplicate", desc: "Copy the job configuration into a new job. The agent field is cleared so you can target a different machine." },
-			{ name: "Delete", desc: "Permanently removes the job and its schedule. Existing backups are not deleted." },
+			{
+				name: "Test Job",
+				desc: "Trigger the job immediately, outside of the schedule. Useful to verify the agent can reach the files and that compression works.",
+			},
+			{
+				name: "View",
+				desc: "Inspect the job configuration in read-only mode.",
+			},
+			{
+				name: "Edit",
+				desc: "Update any field. Changes take effect on the next run.",
+			},
+			{
+				name: "Duplicate",
+				desc: "Copy the job configuration into a new job. The agent field is cleared so you can target a different machine.",
+			},
+			{
+				name: "Delete",
+				desc: "Permanently removes the job and its schedule. Existing backups are not deleted.",
+			},
 		],
 		deleteWarning: "Deletion is permanent and cannot be undone.",
 	},
 	"pt-br": {
 		title: "Criando um Job de Backup",
-		subtitle: "Como definir um job de backup com agendamento, arquivos e configurações.",
+		subtitle:
+			"Como definir um job de backup com agendamento, arquivos e configurações.",
 		overviewTitle: "O que é um job de backup?",
 		overviewDesc:
 			"Um job de backup define o que fazer backup, quando e como. Cada job é direcionado a um agente específico e roda em um agendamento cron. Quando acionado, o agente comprime os caminhos listados em um arquivo 7z e o envia ao servidor.",
@@ -143,11 +159,26 @@ const content = {
 		],
 		actionsTitle: "Ações da linha",
 		actions: [
-			{ name: "Testar Job", desc: "Aciona o job imediatamente, fora do agendamento. Útil para verificar se o agente consegue acessar os arquivos e se a compressão funciona." },
-			{ name: "Ver", desc: "Inspeciona a configuração do job em modo somente leitura." },
-			{ name: "Editar", desc: "Atualiza qualquer campo. As alterações entram em vigor na próxima execução." },
-			{ name: "Duplicar", desc: "Copia a configuração do job para um novo job. O campo de agente é limpo para que você possa direcionar a uma máquina diferente." },
-			{ name: "Excluir", desc: "Remove permanentemente o job e seu agendamento. Backups existentes não são excluídos." },
+			{
+				name: "Testar Job",
+				desc: "Aciona o job imediatamente, fora do agendamento. Útil para verificar se o agente consegue acessar os arquivos e se a compressão funciona.",
+			},
+			{
+				name: "Ver",
+				desc: "Inspeciona a configuração do job em modo somente leitura.",
+			},
+			{
+				name: "Editar",
+				desc: "Atualiza qualquer campo. As alterações entram em vigor na próxima execução.",
+			},
+			{
+				name: "Duplicar",
+				desc: "Copia a configuração do job para um novo job. O campo de agente é limpo para que você possa direcionar a uma máquina diferente.",
+			},
+			{
+				name: "Excluir",
+				desc: "Remove permanentemente o job e seu agendamento. Backups existentes não são excluídos.",
+			},
 		],
 		deleteWarning: "A exclusão é permanente e não pode ser desfeita.",
 	},
@@ -165,7 +196,13 @@ function MockSelect({ label, value }: { label: string; value: string }) {
 	);
 }
 
-function MockInput({ label, placeholder }: { label: string; placeholder: string }) {
+function MockInput({
+	label,
+	placeholder,
+}: {
+	label: string;
+	placeholder: string;
+}) {
 	return (
 		<div className="flex flex-col gap-1">
 			<label className="text-xs font-medium">{label}</label>
@@ -245,15 +282,14 @@ export function CreatingAJobPage({ nextPage, onNext, lang }: Props) {
 							label={c.fields[1].label}
 							placeholder={lang === "en" ? "Daily Backup" : "Backup Diário"}
 						/>
-						<MockInput
-							label={c.fields[2].label}
-							placeholder="0 2 * * *"
-						/>
+						<MockInput label={c.fields[2].label} placeholder="0 2 * * *" />
 						<MockTextarea
 							label={c.fields[3].label}
-							value={lang === "en"
-								? "C:\\Users\\admin\\Documents\nD:\\Projects"
-								: "C:\\Users\\admin\\Documentos\nD:\\Projetos"}
+							value={
+								lang === "en"
+									? "C:\\Users\\admin\\Documents\nD:\\Projects"
+									: "C:\\Users\\admin\\Documentos\nD:\\Projetos"
+							}
 						/>
 						<MockSelect
 							label={c.fields[4].label}
@@ -350,19 +386,34 @@ export function CreatingAJobPage({ nextPage, onNext, lang }: Props) {
 						<span className="font-medium text-foreground mr-2">
 							{lang === "en" ? "Daily Backup" : "Backup Diário"}
 						</span>
-						<button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none">
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+						>
 							<TestTube size={12} />
 						</button>
-						<button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none">
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+						>
 							<Eye size={12} />
 						</button>
-						<button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none">
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+						>
 							<Pencil size={12} />
 						</button>
-						<button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none">
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+						>
 							<Copy size={12} />
 						</button>
-						<button type="button" className="inline-flex items-center gap-1 rounded border border-destructive text-destructive px-2 py-1 pointer-events-none">
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border border-destructive text-destructive px-2 py-1 pointer-events-none"
+						>
 							<XSquare size={12} />
 						</button>
 					</div>

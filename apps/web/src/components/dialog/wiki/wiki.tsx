@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CreatingAJobPage } from "@/components/wiki/creating-a-job";
 import { HowItWorksPage } from "@/components/wiki/how-it-works";
-import { InstallingAgentWindowsPage } from "@/components/wiki/installing-agent-windows";
 import { IntroductionPage } from "@/components/wiki/introduction";
 import { MakingBackupsPage } from "@/components/wiki/making-backups";
 import { ManagingAgentsPage } from "@/components/wiki/managing-agents";
@@ -24,13 +23,41 @@ interface WikiPage {
 }
 
 const pages: WikiPage[] = [
-	{ id: "introduction", names: { en: "Introduction", "pt-br": "Introdução" }, component: IntroductionPage },
-	{ id: "how-it-works", names: { en: "How It Works", "pt-br": "Como Funciona" }, component: HowItWorksPage },
-	{ id: "managing-users", names: { en: "Managing Users", "pt-br": "Usuários" }, component: ManagingUsersPage },
-	{ id: "policies", names: { en: "Policies", "pt-br": "Políticas" }, component: PoliciesPage },
-	{ id: "managing-agents", names: { en: "Managing Agents", "pt-br": "Agentes" }, component: ManagingAgentsPage },
-	{ id: "creating-a-job", names: { en: "Creating a Job", "pt-br": "Criando um Job" }, component: CreatingAJobPage },
-	{ id: "making-backups", names: { en: "Making Backups", "pt-br": "Fazendo Backups" }, component: MakingBackupsPage },
+	{
+		id: "introduction",
+		names: { en: "Introduction", "pt-br": "Introdução" },
+		component: IntroductionPage,
+	},
+	{
+		id: "how-it-works",
+		names: { en: "How It Works", "pt-br": "Como Funciona" },
+		component: HowItWorksPage,
+	},
+	{
+		id: "managing-users",
+		names: { en: "Managing Users", "pt-br": "Usuários" },
+		component: ManagingUsersPage,
+	},
+	{
+		id: "policies",
+		names: { en: "Policies", "pt-br": "Políticas" },
+		component: PoliciesPage,
+	},
+	{
+		id: "managing-agents",
+		names: { en: "Managing Agents", "pt-br": "Agentes" },
+		component: ManagingAgentsPage,
+	},
+	{
+		id: "creating-a-job",
+		names: { en: "Creating a Job", "pt-br": "Criando um Job" },
+		component: CreatingAJobPage,
+	},
+	{
+		id: "making-backups",
+		names: { en: "Making Backups", "pt-br": "Fazendo Backups" },
+		component: MakingBackupsPage,
+	},
 ];
 
 export default function WikiDialog({
