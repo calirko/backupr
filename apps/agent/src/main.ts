@@ -1,5 +1,7 @@
 // agent.ts
 
+process.title = "Backupr";
+
 import * as fs from "fs";
 import WebSocket from "ws";
 import { runBackupJob } from "./backup";
