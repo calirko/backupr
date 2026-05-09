@@ -126,10 +126,15 @@ function TestJobContent({ jobId }: { jobId: string }) {
 						label="Date Triggered"
 						value={new Date(result.date_triggered).toLocaleString()}
 					/>
-					<InfoRow label="Time Elapsed" value={`${result.time_elapsed_ms} ms`} />
+					<InfoRow
+						label="Time Elapsed"
+						value={`${result.time_elapsed_ms} ms`}
+					/>
 					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50">
 						<div className="flex items-center gap-1.5 shrink-0">
-							<span className="text-xs text-muted-foreground">Storage Required</span>
+							<span className="text-xs text-muted-foreground">
+								Storage Required
+							</span>
 							<Tooltip>
 								<TooltipTrigger asChild>
 									<button className="inline-flex items-center justify-center">
@@ -137,84 +142,116 @@ function TestJobContent({ jobId }: { jobId: string }) {
 									</button>
 								</TooltipTrigger>
 								<TooltipContent side="right" className="text-xs max-w-xs">
-									Original files + temp copy + compressed archive (all exist on disk simultaneously)
+									Original files + temp copy + compressed archive (all exist on
+									disk simultaneously)
 								</TooltipContent>
 							</Tooltip>
 						</div>
-						<span className="text-xs text-right">{formatBytes(result.storage_required)}</span>
+						<span className="text-xs text-right">
+							{formatBytes(result.storage_required)}
+						</span>
 					</div>
-				<InfoRow
-					label="Files / Directories"
-					value={
-						result.files_found ? (
-							<span className="flex items-center gap-1 justify-end">
-								<CheckSquareIcon
-									className="size-3.5"
-									style={{ color: "var(--greenish)" }}
-								/>
-								{result.file_count} configured
-							</span>
-						) : (
-							<span className="flex items-center gap-1 justify-end text-destructive">
-								<XSquareIcon className="size-3.5" />
-								None configured
-							</span>
-						)
-					}
-				/>
-				<InfoRow
-					label="Agent Status"
-					value={
-						<ConnectionStatus
-							status={result.agent_online ? "connected" : "disconnected"}
-						/>
-					}
-				/>
-			</div>
+					<InfoRow
+						label="Files / Directories"
+						value={
+							result.files_found ? (
+								<span className="flex items-center gap-1 justify-end">
+									<CheckSquareIcon
+										className="size-3.5"
+										style={{ color: "var(--greenish)" }}
+									/>
+									{result.file_count} configured
+								</span>
+							) : (
+								<span className="flex items-center gap-1 justify-end text-destructive">
+									<XSquareIcon className="size-3.5" />
+									None configured
+								</span>
+							)
+						}
+					/>
+					<InfoRow
+						label="Agent Status"
+						value={
+							<ConnectionStatus
+								status={result.agent_online ? "connected" : "disconnected"}
+							/>
+						}
+					/>
+				</div>
 
-			{(result.path_results ?? result.files.map((f) => ({ path: f, exists: true, readable: true, type: "unknown" as const, size_bytes: 0 }))).length > 0 && (
-				<div>
-					<p className="text-xs text-muted-foreground mb-1.5">
-						Configured paths
-					</p>
-					<ul className="space-y-1">
-						{(result.path_results ?? result.files.map((f) => ({ path: f, exists: true, readable: true, type: "unknown" as const, size_bytes: 0 }))).map((pr) => (
-							<li
-								key={pr.path}
-								className={`dynround text-xs font-mono px-2 py-1.5 ${pr.exists && pr.readable ? "bg-muted" : "bg-destructive/10 border border-destructive/20"}`}
+				{(
+					result.path_results ??
+					result.files.map((f) => ({
+						path: f,
+						exists: true,
+						readable: true,
+						type: "unknown" as const,
+						size_bytes: 0,
+					}))
+				).length > 0 && (
+					<div>
+						<p className="text-xs text-muted-foreground mb-1.5">
+							Configured paths
+						</p>
+						<ul className="space-y-1">
+							{(
+								result.path_results ??
+								result.files.map((f) => ({
+									path: f,
+									exists: true,
+									readable: true,
+									type: "unknown" as const,
+									size_bytes: 0,
+									error: undefined,
+								}))
+							).map((pr) => (
+								<li
+									key={pr.path}
+									className={`dynround text-xs font-mono px-2 py-1.5 ${pr.exists && pr.readable ? "bg-muted" : "bg-destructive/10 border border-destructive/20"}`}
+								>
+									<div className="flex items-center justify-between gap-2">
+										<span
+											className={
+												pr.exists && pr.readable ? "" : "text-destructive"
+											}
+										>
+											{pr.path}
+										</span>
+										{pr.exists && pr.readable && pr.size_bytes > 0 && (
+											<span className="text-muted-foreground shrink-0">
+												{formatBytes(pr.size_bytes)}
+											</span>
+										)}
+										{(!pr.exists || !pr.readable) && (
+											<XSquareIcon className="size-3.5 text-destructive shrink-0" />
+										)}
+									</div>
+									{pr.error && (
+										<p className="text-destructive mt-0.5 font-sans">
+											{pr.error}
+										</p>
+									)}
+								</li>
+							))}
+						</ul>
+					</div>
+				)}
+
+				{result.critical_info.length > 0 && (
+					<div className="space-y-1.5">
+						{result.critical_info.map((msg) => (
+							<div
+								key={msg}
+								className="dynround flex items-start gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/20 px-3 py-2"
 							>
-								<div className="flex items-center justify-between gap-2">
-									<span className={pr.exists && pr.readable ? "" : "text-destructive"}>{pr.path}</span>
-									{pr.exists && pr.readable && pr.size_bytes > 0 && (
-										<span className="text-muted-foreground shrink-0">{formatBytes(pr.size_bytes)}</span>
-									)}
-									{(!pr.exists || !pr.readable) && (
-										<XSquareIcon className="size-3.5 text-destructive shrink-0" />
-									)}
-								</div>
-								{pr.error && (
-									<p className="text-destructive mt-0.5 font-sans">{pr.error}</p>
-								)}
-							</li>
+								<WarningIcon className="size-3.5 mt-0.5 shrink-0" />
+								{msg}
+							</div>
 						))}
-					</ul>
-				</div>
-			)}
-
-			{result.critical_info.length > 0 && (
-				<div className="space-y-1.5">
-					{result.critical_info.map((msg) => (
-						<div
-							key={msg}
-							className="dynround flex items-start gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/20 px-3 py-2"
-						>
-							<WarningIcon className="size-3.5 mt-0.5 shrink-0" />
-							{msg}
-						</div>
-					))}
-				</div>
-			)}
-		</div>
+					</div>
+				)}
+			</div>
 		</TooltipProvider>
 	);
 }
