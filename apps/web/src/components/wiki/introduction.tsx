@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import { PageNav } from "./page-nav";
+import pkg from "../../../package.json";
 
 interface Props {
 	nextPage: { id: string; name: string } | null;
@@ -96,6 +98,14 @@ const content = {
 
 export function IntroductionPage({ nextPage, onNext, lang }: Props) {
 	const c = content[lang];
+	const [serverVersion, setServerVersion] = useState<string | null>(null);
+
+	useEffect(() => {
+		fetch("/api/ping")
+			.then((r) => r.json())
+			.then((d) => setServerVersion(d.version ?? null))
+			.catch(() => setServerVersion(null));
+	}, []);
 
 	return (
 		<div className="flex flex-col gap-5">
@@ -104,6 +114,15 @@ export function IntroductionPage({ nextPage, onNext, lang }: Props) {
 					<img src="/icon.png" className="h-30" />
 					<h1 className="text-7xl font-black">Backupr</h1>
 				</div>
+			</div>
+			<div className="flex items-center gap-1.5 text-[12px] text-muted-foreground/50 select-none font-mono justify-center">
+				<span>web v{pkg.version}</span>
+				{serverVersion !== null && (
+					<>
+						<span>·</span>
+						<span>server v{serverVersion}</span>
+					</>
+				)}
 			</div>
 			<div>
 				<h2 className="text-base font-semibold">{c.title}</h2>

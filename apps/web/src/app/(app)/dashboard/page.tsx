@@ -11,6 +11,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import WikiDialog from "@/components/dialog/wiki/wiki";
 import { useSocket } from "@/hooks/use-socket";
 
 interface DashboardData {
@@ -188,6 +189,7 @@ function StorageByJobChart({
 
 export default function DashboardPage() {
 	const [data, setData] = useState<DashboardData | null>(null);
+	const [wikiOpen, setWikiOpen] = useState(false);
 	const { agentStatuses } = useSocket();
 	const navigate = useNavigate();
 
@@ -213,6 +215,10 @@ export default function DashboardPage() {
 
 	useEffect(() => {
 		fetchData();
+		if (!localStorage.getItem("backupr_wiki_seen")) {
+			localStorage.setItem("backupr_wiki_seen", "1");
+			setWikiOpen(true);
+		}
 	}, []);
 
 	const onlineCount = agentStatuses.filter(
@@ -251,6 +257,8 @@ export default function DashboardPage() {
 	const totalStorageBytes = Number(data?.stats?.total_size_bytes ?? 0);
 
 	return (
+		<>
+		<WikiDialog open={wikiOpen} onClose={() => setWikiOpen(false)} />
 		<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6 justify-center">
 			<div className="absolute top-18">
 				<h1 className="text-4xl font-black">Dashboard</h1>
@@ -514,5 +522,6 @@ export default function DashboardPage() {
 				</Card>
 			</div>
 		</div>
+		</>
 	);
 }
