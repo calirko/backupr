@@ -1,13 +1,24 @@
 import { Hono } from "hono";
 import { websocket } from "hono/bun";
 import { ensureBucket } from "./lib/storage";
-import setupRoutes from "./routes";
 import { scheduler } from "./scheduler";
 import upgradeAgentWebSocket from "./ws.agent";
 import upgradeWebWebSocket from "./ws.web";
+import userRoutes from "./routes/users";
+import agentRoutes from "./routes/agents";
+import backupPolicyRoutes from "./routes/backup-policies";
+import backupJobRoutes from "./routes/backup-jobs";
+import backupRoutes from "./routes/backups";
+import generalRoutes from "./routes/general";
 
 const app = new Hono();
-setupRoutes(app);
+userRoutes(app);
+agentRoutes(app);
+backupPolicyRoutes(app);
+backupJobRoutes(app);
+backupRoutes(app);
+generalRoutes(app);
+
 app.get("/api/agent/ws", upgradeAgentWebSocket);
 app.get("/api/web/ws", upgradeWebWebSocket);
 

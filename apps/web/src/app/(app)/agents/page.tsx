@@ -6,17 +6,21 @@ import AgentCodeDialog from "@/components/dialog/agent-code";
 import AgentDetailDialog from "@/components/dialog/agent-detail";
 import ConfirmDialog from "@/components/dialog/confirm";
 import { Button } from "@/components/ui/button";
+import {
+	ConnectionStatus,
+	type AgentConnectionStatus,
+} from "@/components/ui/connection-status";
 import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
 import { useSocket } from "@/hooks/use-socket";
 import {
+	CodeSimpleIcon,
 	EyeIcon,
 	PackageIcon,
 	PencilIcon,
 	PlusIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
-import { QrCodeIcon } from "@phosphor-icons/react/dist/ssr";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -27,6 +31,7 @@ export default function AgentsPage() {
 	const [data, setData] = useState({
 		data: [],
 		total: 0,
+		absoluteTotal: 0,
 	});
 	const [loading, setLoading] = useState(false);
 	const filterFields = [
@@ -39,53 +44,39 @@ export default function AgentsPage() {
 		{
 			name: "is_active",
 			label: "Active",
-			type: "boolean",
+			type: "select",
 			matching: "equals",
+			options: [
+				{ value: "true", label: "Yes" },
+				{ value: "false", label: "No" },
+			],
+		},
+		{
+			name: "created_by",
+			label: "Created By",
+			type: "string",
+			matching: "contains",
+		},
+		{
+			name: "created_at",
+			label: "Created Date",
+			type: "date",
+			matching: "between",
 		},
 	] as SearchField[];
 
-	const getAgentStatus = (agentId: string) => {
+	const getAgentStatus = (agentId: string): AgentConnectionStatus => {
 		const status = agentStatuses.find((s) => s.agentId === agentId);
-		if (!status) return { label: "No Status", color: "text-muted-foreground" };
-
-		const lastSeen = new Date(status.lastSeen || 0);
-		const now = new Date();
-		const staleThreshold = 60000; // 60 seconds
-		const isStale = now.getTime() - lastSeen.getTime() > staleThreshold;
-
-		if (status.status === "disconnected" || status.status === "inactive") {
-			return {
-				label: "Disconnected",
-				color: "text-muted-foreground",
-			};
-		}
-
-		if (isStale) {
-			return { label: "Stale", color: "bg-yellow-500" };
-		}
-
-		if (status.currentJob?.status === "running") {
-			return {
-				label: `Running Backup`,
-				color: "bg-blue-300",
-			};
-		}
-
-		if (status.jobQueue && status.jobQueue.length > 0) {
-			return {
-				label: `${status.jobQueue.length} in Queue`,
-				color: "bg-blue-300",
-			};
-		}
-
-		if (status.status === "connected") {
-			return {
-				label: "Connected",
-				color: "text-green-200",
-			};
-		}
-
-		return { label: "Unknown", color: "text-muted-foreground" };
+		if (!status) return "none";
+		if (status.status === "disconnected" || status.status === "inactive")
+			return "disconnected";
+		const isStale =
+			Date.now() - new Date(status.lastSeen || 0).getTime() > 60000;
+		if (isStale) return "stale";
+		if (status.currentJob?.status === "running") return "running";
+		if (status.jobQueue && status.jobQueue.length > 0) return "queued";
+		if (status.status === "connected") return "connected";
+		return "unknown";
 	};
 
 	function formatBytes(bytes: number | null | undefined): string {
@@ -113,15 +104,15 @@ export default function AgentsPage() {
 			key: "id",
 			label: "Status",
 			orderable: false,
-			format: (value) => {
-				const { label, color } = getAgentStatus(value);
-				return <span className={`${color} text-xs`}>{label}</span>;
-			},
+			format: (value) => (
+				<ConnectionStatus status={getAgentStatus(value)} type="long" />
+			),
 		},
 		{
 			key: "created_by",
 			label: "Created By",
-			orderable: false,
+			orderable: true,
+			orderByKey: "created_by.name",
 			format: (value) => value?.name ?? "—",
 		},
 		{
@@ -148,7 +139,7 @@ export default function AgentsPage() {
 		{
 			id: "gen-code",
 			label: "Generate Code",
-			icon: <QrCodeIcon />,
+			icon: <CodeSimpleIcon />,
 			// disabled: (row) => getAgentStatus(row.id).label !== "No Status",
 			onClick: (row) => {
 				openDialog(AgentCodeDialog, {
@@ -264,7 +255,12 @@ export default function AgentsPage() {
 			if (response.ok) {
 				const result = await response.json();
 				console.log(result.data);
-				setData({ ...data, data: result.data, total: result.total });
+				setData({
+					...data,
+					data: result.data,
+					total: result.total,
+					absoluteTotal: result.absoluteTotal,
+				});
 			} else {
 				const error = await response.json();
 				toast.error("Error fetching agents", {
@@ -309,6 +305,7 @@ export default function AgentsPage() {
 				</DataHeader>
 				<Data
 					showOrderBy
+					absoluteTotal={data.absoluteTotal}
 					actions={actions}
 					columns={columns}
 					data={data.data}

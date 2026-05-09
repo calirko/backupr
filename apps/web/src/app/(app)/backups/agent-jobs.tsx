@@ -24,6 +24,7 @@ import {
 } from "@phosphor-icons/react";
 import { Input } from "@/components/ui/input";
 import { useSocket } from "@/hooks/use-socket";
+import { BACKUP_STATUS_LABEL, BACKUP_STATUS_STYLE } from "@/lib/backup-status";
 
 interface BackupJob {
 	id: string;
@@ -57,12 +58,6 @@ function formatRelative(dateStr: string | null | undefined): string {
 	return `${Math.floor(hours / 24)}d ago`;
 }
 
-function lastStatusColor(status: string) {
-	if (status === "COMPLETED") return "text-green-200";
-	if (status === "FAILED") return "text-destructive";
-	if (status === "IN_PROGRESS") return "text-blue-200";
-	return "text-muted-foreground";
-}
 
 export default function AgentJobsPage() {
 	const { agentId } = useParams<{ agentId: string }>();
@@ -253,7 +248,8 @@ export default function AgentJobsPage() {
 								<CardTitle>{job.name}</CardTitle>
 								<CardAction>
 									<span
-										className={`text-xs font-medium ${job.is_active ? "text-green-200" : "text-destructive"}`}
+										className="text-xs font-medium"
+										style={job.is_active ? { color: "var(--greenish)" } : { color: "var(--destructive)" }}
 									>
 										{job.is_active ? "Active" : "Inactive"}
 									</span>
@@ -282,8 +278,8 @@ export default function AgentJobsPage() {
 								{last && (
 									<div className="flex justify-between text-xs">
 										<span className="text-muted-foreground">Last status</span>
-										<span className={lastStatusColor(last.status)}>
-											{last.status}
+										<span style={BACKUP_STATUS_STYLE[last.status as keyof typeof BACKUP_STATUS_STYLE] ?? {}}>
+											{BACKUP_STATUS_LABEL[last.status as keyof typeof BACKUP_STATUS_LABEL] ?? last.status}
 										</span>
 									</div>
 								)}

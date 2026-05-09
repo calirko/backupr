@@ -5,6 +5,7 @@ import {
 	EyeIcon,
 	PencilIcon,
 	PlusIcon,
+	TestTubeIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
@@ -17,6 +18,7 @@ import type { TableAction } from "@/components/data/dataActions";
 import { useDialog } from "@/hooks/use-dialog";
 import BackupJobDialog from "@/components/dialog/backup-job";
 import ConfirmDialog from "@/components/dialog/confirm";
+import TestJobDialog from "@/components/dialog/test-job";
 
 export default function BackupJobsPage() {
 	const { filters, orderBy } = useData("backup-jobs");
@@ -24,6 +26,7 @@ export default function BackupJobsPage() {
 	const [data, setData] = useState({
 		data: [],
 		total: 0,
+		absoluteTotal: 0,
 	});
 	const [loading, setLoading] = useState(false);
 
@@ -95,9 +98,38 @@ export default function BackupJobsPage() {
 			orderable: true,
 			format: (value) => new Date(value).toLocaleString(),
 		},
+		{
+			key: "updated_at",
+			label: "Updated",
+			orderable: true,
+			format: (value) => new Date(value).toLocaleString(),
+		},
 	] as Column[];
 
 	const actions = [
+		{
+			id: "action",
+			label: "Actions",
+		},
+		{
+			id: "test",
+			label: "Test Job",
+			icon: <TestTubeIcon />,
+			onClick: (row) => {
+				openDialog(TestJobDialog, {
+					jobId: row.id,
+					jobName: row.name,
+				});
+			},
+		},
+		{
+			id: "divider",
+			divider: true,
+		},
+		{
+			id: "mange",
+			label: "Manage",
+		},
 		{
 			id: "view",
 			label: "View",
@@ -223,7 +255,12 @@ export default function BackupJobsPage() {
 						policy: policyParts.length ? policyParts.join(" · ") : null,
 					};
 				});
-				setData({ ...data, data: prettyData, total: result.total });
+				setData({
+					...data,
+					data: prettyData,
+					total: result.total,
+					absoluteTotal: result.absoluteTotal,
+				});
 			} else {
 				const error = await response.json();
 				toast.error("Error fetching backup jobs", {
@@ -272,6 +309,7 @@ export default function BackupJobsPage() {
 					data={data.data}
 					loading={loading}
 					name="backup-jobs"
+					absoluteTotal={data.absoluteTotal}
 				/>
 			</div>
 		</div>

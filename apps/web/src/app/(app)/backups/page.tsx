@@ -19,6 +19,10 @@ import { Input } from "@/components/ui/input";
 import type { AgentStatus } from "@/hooks/use-socket";
 import { useSocket } from "@/hooks/use-socket";
 import { Spinner } from "@/components/ui/spinner";
+import {
+	ConnectionStatus,
+	type AgentConnectionStatus,
+} from "@/components/ui/connection-status";
 
 interface Agent {
 	id: string;
@@ -26,24 +30,21 @@ interface Agent {
 	is_active: boolean;
 }
 
-function getAgentStatus(agentStatuses: AgentStatus[], agentId: string) {
+function getAgentStatus(
+	agentStatuses: AgentStatus[],
+	agentId: string,
+): AgentConnectionStatus {
 	const status = agentStatuses.find((s) => s.agentId === agentId);
-	if (!status) return { label: "Offline", color: "text-muted-foreground" };
-
-	const lastSeen = new Date(status.lastSeen ?? 0);
-	const isStale = Date.now() - lastSeen.getTime() > 60000;
-
-	if (status.status === "disconnected" || status.status === "inactive") {
-		return { label: "Offline", color: "text-destructive" };
-	}
-	if (isStale) return { label: "Stale", color: "text-yellow-500" };
-	if (status.currentJob?.status === "running") {
-		return { label: "Backup Running", color: "text-blue-200" };
-	}
-	if (status.status === "connected") {
-		return { label: "Online", color: "text-green-200" };
-	}
-	return { label: "Unknown", color: "text-muted-foreground" };
+	if (!status) return "none";
+	if (status.status === "disconnected" || status.status === "inactive")
+		return "disconnected";
+	const isStale =
+		Date.now() - new Date(status.lastSeen ?? 0).getTime() > 60000;
+	if (isStale) return "stale";
+	if (status.currentJob?.status === "running") return "running";
+	if (status.jobQueue && status.jobQueue.length > 0) return "queued";
+	if (status.status === "connected") return "connected";
+	return "unknown";
 }
 
 export default function BackupsPage() {
@@ -53,6 +54,7 @@ export default function BackupsPage() {
 	const [appliedSearch, setAppliedSearch] = useState("");
 	const { agentStatuses } = useSocket();
 	const navigate = useNavigate();
+	const [absoluteTotal, setAbsoluteTotal] = useState(0);
 
 	async function fetchAgents() {
 		setLoading(true);
@@ -63,6 +65,7 @@ export default function BackupsPage() {
 			if (response.ok) {
 				const result = await response.json();
 				setAgents(result.data);
+				setAbsoluteTotal(result.absoluteTotal);
 			} else {
 				const err = await response.json();
 				toast.error("Failed to load agents", { description: err.error });
@@ -138,15 +141,13 @@ export default function BackupsPage() {
 
 			<div className="grid grid-cols-3 gap-4">
 				{visibleAgents.map((agent) => {
-					const { label, color } = getAgentStatus(agentStatuses, agent.id);
+					const status = getAgentStatus(agentStatuses, agent.id);
 					return (
 						<Card key={agent.id}>
 							<CardHeader>
 								<CardTitle>{agent.name}</CardTitle>
 								<CardAction>
-									<span className={`text-xs font-medium ${color}`}>
-										{label}
-									</span>
+									<ConnectionStatus status={status} type="long" />
 								</CardAction>
 							</CardHeader>
 							<CardContent>
@@ -168,6 +169,13 @@ export default function BackupsPage() {
 					);
 				})}
 			</div>
+			{appliedSearch && (
+				<div className="h-4 w-full flex items-center justify-center">
+					<p className="text-xs text-muted-foreground">
+						Showing {visibleAgents.length} of {absoluteTotal} agents
+					</p>
+				</div>
+			)}
 		</div>
 	);
 }

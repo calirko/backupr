@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/bun": "^1.3.12",
     "@types/jsonwebtoken": "^9.0.7",
     "prisma": "^7.7.0"
@@ -22,6 +23,7 @@
     "minio": "^8.0.7"
   },
   "scripts": {
+    "lint": "tsc --noEmit",
     "dev": "bun --watch run src/main.ts",
     "prisma:seed": "prisma db seed",
     "start": "bun run src/main.ts"

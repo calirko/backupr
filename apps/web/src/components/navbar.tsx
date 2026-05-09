@@ -1,26 +1,27 @@
 import {
-	ComputerTowerIcon,
+	HardDrivesIcon,
 	HouseIcon,
-	NotePencilIcon,
-	PackageIcon,
+	RulerIcon,
+	StackIcon,
 	TimerIcon,
 	UserIcon,
 } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
 import UserDropdown from "./user-dropdown";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const NAV_ITEMS = [
 	{ label: "Dashboard", path: "/dashboard", icon: <HouseIcon /> },
-	{ label: "Agents", path: "/agents", icon: <ComputerTowerIcon /> },
-	{ label: "Backups", path: "/backups", icon: <PackageIcon /> },
+	{ label: "Backups", path: "/backups", icon: <StackIcon /> },
+	{ label: "Agents", path: "/agents", icon: <HardDrivesIcon /> },
 	{ label: "Jobs", path: "/backup-jobs", icon: <TimerIcon /> },
-	{ label: "Policies", path: "/backup-policies", icon: <NotePencilIcon /> },
+	{ label: "Policies", path: "/backup-policies", icon: <RulerIcon /> },
 	{ label: "Users", path: "/users", icon: <UserIcon /> },
 ];
 
 export default function Navbar() {
 	const navigate = useNavigate();
+	const location = useLocation();
 
 	return (
 		<nav className="w-full h-14 border-b bg-background">
@@ -35,7 +36,7 @@ export default function Navbar() {
 								{NAV_ITEMS.map((item) => (
 									<div key={item.path} className="h-full flex items-center">
 										<div
-											className={`h-full flex items-center border-r gap-1 ${item.path === window.location.pathname ? "" : "text-muted-foreground"}`}
+											className={`h-full flex items-center border-r gap-1 ${item.path === location.pathname ? "" : "text-muted-foreground"}`}
 										>
 											<Button
 												variant="ghost"

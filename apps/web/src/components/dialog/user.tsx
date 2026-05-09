@@ -23,6 +23,7 @@ import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { toast } from "sonner";
 import { InputPassword } from "../ui/input-password";
+import { NoticeCard } from "../notice-card";
 
 export default function UserDialog({
 	open,
@@ -55,7 +56,8 @@ export default function UserDialog({
 		password?: string;
 	}) {
 		try {
-			const updateData: { name: string; username: string; password?: string } = { name, username };
+			const updateData: { name: string; username: string; password?: string } =
+				{ name, username };
 			if (password) {
 				updateData.password = password;
 			}
@@ -209,13 +211,11 @@ export default function UserDialog({
 							type="password"
 						/>
 					</div>
-					<div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3">
-						<p className="text-xs text-blue-800 dark:text-blue-200">
-							<strong>Note:</strong> Leave the password field empty if you don't
-							want to change it. Only fill in this field if you want to set a
-							new password for this user.
-						</p>
-					</div>
+					<NoticeCard>
+						<strong>Note:</strong> Leave the password field empty if you don't
+						want to change it. Only fill in this field if you want to set a new
+						password for this user.
+					</NoticeCard>
 				</>
 			)}
 		</form>

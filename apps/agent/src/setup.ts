@@ -23,7 +23,7 @@ export async function runSetup(agentCode: string): Promise<void> {
 	const { serverUrl, agentCode: code } = decoded;
 
 	try {
-		const response = await fetch(`${serverUrl}/agents/pair`, {
+		const response = await fetch(`${serverUrl}/api/agents/pair`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({

@@ -15,7 +15,7 @@ const getClientIp = (c: Context): string => {
 	});
 
 	return (
-		c.req.header("x-forwarded-for")?.split(",")[0].trim() ??
+		c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
 		c.req.header("x-real-ip") ??
 		getConnInfo(c).remote.address ??
 		"unknown"

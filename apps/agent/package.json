@@ -15,6 +15,7 @@
   },
   "scripts": {
     "dev": "bun run --watch src/main.ts",
+    "setup": "bun run src/main.ts setup",
     "build:windows": "bun build --compile --target=bun-windows-x64 --icon=./public/icon.png ./src/main.ts --outfile dist/backupr-agent.exe",
     "build:linux": "bun build --compile --target=bun-linux-x64 --icon=./public/icon.png ./src/main.ts --outfile dist/backupr-agent"
   }

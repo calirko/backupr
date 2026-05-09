@@ -4,7 +4,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSocket } from "@/hooks/use-socket";
 import {
 	Dialog,
+	DialogClose,
 	DialogContent,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 	DialogDescription,
@@ -25,12 +27,21 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { DownloadSimpleIcon } from "@phosphor-icons/react";
+import {
+	ClipboardIcon,
+	DownloadSimpleIcon,
+	WarningIcon,
+} from "@phosphor-icons/react";
 import Badge from "../ui/badge";
+import {
+	type BackupStatus,
+	BACKUP_STATUS_BADGE_VARIANT,
+	BACKUP_STATUS_LABEL,
+} from "@/lib/backup-status";
 
 interface BackupVersion {
 	id: string;
-	status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+	status: BackupStatus;
 	size_bytes: string | null;
 	started_at: string | null;
 	completed_at: string | null;
@@ -48,25 +59,64 @@ function formatBytes(bytes: string | null | undefined): string {
 	return `${(n / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
-function StatusBadge({ status }: { status: BackupVersion["status"] }) {
+function StatusBadge({ status }: { status: BackupStatus }) {
 	return (
-		<Badge
-			variant={
-				status === "COMPLETED"
-					? "success"
-					: status === "FAILED"
-						? "error"
-						: "default"
-			}
-		>
-			{status}
+		<Badge variant={BACKUP_STATUS_BADGE_VARIANT[status]}>
+			{BACKUP_STATUS_LABEL[status]}
 		</Badge>
+	);
+}
+
+function BackupErrorDialog({
+	error,
+	open,
+	onClose,
+}: {
+	error: string;
+	open: boolean;
+	onClose: () => void;
+}) {
+	return (
+		<Dialog open={open} onOpenChange={onClose}>
+			<DialogContent className="max-w-lg">
+				<DialogHeader>
+					<DialogTitle className="flex items-center gap-2 text-destructive">
+						Backup Error
+					</DialogTitle>
+					<DialogDescription>
+						This backup failed with the following error.
+					</DialogDescription>
+				</DialogHeader>
+				<pre className="dynround border border-destructive/20 bg-destructive/5 p-3 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+					{error}
+				</pre>
+				<DialogFooter className="gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => {
+							navigator.clipboard.writeText(error);
+							toast.success("Error copied");
+						}}
+					>
+						<ClipboardIcon />
+						Copy
+					</Button>
+					<DialogClose asChild>
+						<Button size="sm" variant={"outline"}>
+							Close
+						</Button>
+					</DialogClose>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
 function BackupVersionsTable({ backupJobId }: { backupJobId: string }) {
 	const [backups, setBackups] = useState<BackupVersion[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [errorDialog, setErrorDialog] = useState<string | null>(null);
 	const { agentStatuses } = useSocket();
 
 	const load = useCallback(async () => {
@@ -133,56 +183,118 @@ function BackupVersionsTable({ backupJobId }: { backupJobId: string }) {
 	}
 
 	return (
-		<Table>
-			<TableHeader>
-				<TableRow>
-					<TableHead>Started</TableHead>
-					<TableHead>Status</TableHead>
-					<TableHead>Size</TableHead>
-					<TableHead />
-				</TableRow>
-			</TableHeader>
-			<TableBody>
-				{backups.map((b) => {
-					const liveStatus = agentStatuses
-						.flatMap((a) => (a.currentJob?.id === b.id ? [a.currentJob] : []))
-						.at(0)?.statusMessage;
-					return (
-						<TableRow key={b.id}>
-							<TableCell className="text-xs">
-								{b.started_at ? new Date(b.started_at).toLocaleString() : "—"}
-							</TableCell>
-							<TableCell>
-								<div className="flex flex-col gap-0.5">
-									<StatusBadge status={b.status} />
-									{liveStatus && (
-										<span className="text-xs text-muted-foreground font-mono">
-											{liveStatus}
-										</span>
+		<>
+			{errorDialog !== null && (
+				<BackupErrorDialog
+					error={errorDialog}
+					open
+					onClose={() => setErrorDialog(null)}
+				/>
+			)}
+			<Table>
+				<TableHeader>
+					<TableRow>
+						<TableHead>Started</TableHead>
+						<TableHead>Finished</TableHead>
+						<TableHead>Status</TableHead>
+						<TableHead>Size</TableHead>
+						<TableHead>Password</TableHead>
+						<TableHead />
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					{backups.map((b) => {
+						const liveStatus = agentStatuses
+							.flatMap((a) => (a.currentJob?.id === b.id ? [a.currentJob] : []))
+							.at(0)?.statusMessage;
+						return (
+							<TableRow key={b.id}>
+								<TableCell className="text-xs">
+									{b.started_at ? new Date(b.started_at).toLocaleString() : "—"}
+								</TableCell>
+								<TableCell className="text-xs">
+									{b.completed_at
+										? new Date(b.completed_at).toLocaleString()
+										: "—"}
+								</TableCell>
+								<TableCell>
+									<div className="flex flex-col gap-0.5">
+										<StatusBadge status={b.status} />
+										{liveStatus && (
+											<span className="text-xs text-muted-foreground font-mono">
+												{liveStatus}
+											</span>
+										)}
+									</div>
+								</TableCell>
+								<TableCell className="text-xs text-muted-foreground">
+									{formatBytes(b.size_bytes)}
+								</TableCell>
+								<TableCell className="text-xs">
+									{b.requires_password ? (
+										<span>Yes</span>
+									) : (
+										<span className="text-muted-foreground">No</span>
 									)}
-								</div>
-							</TableCell>
-							<TableCell className="text-xs text-muted-foreground">
-								{formatBytes(b.size_bytes)}
-							</TableCell>
-							<TableCell>
-								{b.url ? (
-									<Button size="sm" variant="outline" asChild>
-										<a href={b.url} target="_blank" rel="noreferrer" download>
-											<DownloadSimpleIcon />
-										</a>
-									</Button>
-								) : (
-									<Button size="sm" variant="outline" disabled>
-										<DownloadSimpleIcon />
-									</Button>
-								)}
-							</TableCell>
-						</TableRow>
-					);
-				})}
-			</TableBody>
-		</Table>
+								</TableCell>
+								<TableCell align="right">
+									<div className="flex items-center justify-end gap-1">
+										{b.status === "FAILED" ? (
+											<Button
+												size="sm"
+												variant="destructive"
+												style={{
+													width: "77px",
+												}}
+												onClick={() =>
+													setErrorDialog(
+														b.error ?? "No error details available.",
+													)
+												}
+											>
+												<WarningIcon />
+												Error
+											</Button>
+										) : (
+											<>
+												{b.url ? (
+													<Button size="sm" variant="outline" asChild>
+														<a
+															href={b.url}
+															target="_blank"
+															rel="noreferrer"
+															download
+														>
+															<DownloadSimpleIcon />
+														</a>
+													</Button>
+												) : (
+													<Button size="sm" variant="outline" disabled>
+														<DownloadSimpleIcon />
+													</Button>
+												)}
+												<Button
+													size="sm"
+													variant="outline"
+													disabled={!b.url}
+													onClick={() => {
+														if (!b.url) return;
+														navigator.clipboard.writeText(b.url);
+														toast.success("Link copied");
+													}}
+												>
+													<ClipboardIcon />
+												</Button>
+											</>
+										)}
+									</div>
+								</TableCell>
+							</TableRow>
+						);
+					})}
+				</TableBody>
+			</Table>
+		</>
 	);
 }
 
@@ -219,7 +331,7 @@ export default function BackupVersionsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={() => onClose()}>
-			<DialogContent className="max-w-2xl! w-full overflow-y-auto max-h-[60vh]">
+			<DialogContent className="max-w-4xl! w-full overflow-y-auto max-h-[60vh]">
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
 					<DialogDescription>{description}</DialogDescription>

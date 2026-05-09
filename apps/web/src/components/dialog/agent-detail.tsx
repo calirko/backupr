@@ -18,10 +18,15 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "../ui/drawer";
-import { XSquareIcon, CheckCircleIcon } from "@phosphor-icons/react";
+import { XSquareIcon, CheckSquareIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Label } from "../ui/label";
+import { useSocket } from "@/hooks/use-socket";
+import {
+	ConnectionStatus,
+	type AgentConnectionStatus,
+} from "../ui/connection-status";
 
 interface AgentSession {
 	id: string;
@@ -66,8 +71,25 @@ export default function AgentDetailDialog({
 	onClose: (result: boolean) => void;
 }): React.JSX.Element {
 	const isMobile = useIsMobile();
+	const { agentStatuses } = useSocket();
 	const [data, setData] = useState<AgentDetailData | null>(null);
 	const [loading, setLoading] = useState(false);
+
+	function resolveConnectionStatus(): AgentConnectionStatus {
+		const status = agentStatuses.find((s) => s.agentId === agentId);
+		if (!status) return "none";
+		if (status.status === "disconnected" || status.status === "inactive")
+			return "disconnected";
+		const isStale =
+			Date.now() - new Date(status.lastSeen || 0).getTime() > 60000;
+		if (isStale) return "stale";
+		if (status.currentJob?.status === "running") return "running";
+		if (status.jobQueue && status.jobQueue.length > 0) return "queued";
+		if (status.status === "connected") return "connected";
+		return "unknown";
+	}
+
+	const connectionStatus = resolveConnectionStatus();
 
 	useEffect(() => {
 		if (open && agentId) {
@@ -131,12 +153,15 @@ export default function AgentDetailDialog({
 						<Label className="text-muted-foreground">Status</Label>
 						<p className="font-medium">
 							{data?.is_active ? (
-								<span className="text-green-200 flex items-center gap-1">
-									<CheckCircleIcon size={16} />
+								<span
+									className="flex items-center gap-1"
+									style={{ color: "var(--greenish)" }}
+								>
+									<CheckSquareIcon size={16} />
 									Active
 								</span>
 							) : (
-								<span className="text-destructiveflex items-center gap-1">
+								<span className="text-destructive flex items-center gap-1">
 									<XSquareIcon size={16} />
 									Inactive
 								</span>
@@ -284,7 +309,10 @@ export default function AgentDetailDialog({
 								</div>
 								<div>
 									{job.is_active ? (
-										<span className="text-green-200 text-xs font-medium">
+										<span
+											className="text-xs font-medium"
+											style={{ color: "var(--greenish)" }}
+										>
 											Active
 										</span>
 									) : (
@@ -310,7 +338,10 @@ export default function AgentDetailDialog({
 			<Drawer open={open} onOpenChange={onClose}>
 				<DrawerContent>
 					<DrawerHeader>
-						<DrawerTitle>Agent Details</DrawerTitle>
+						<DrawerTitle className="flex items-center gap-3">
+							Agent Details
+							<ConnectionStatus status={connectionStatus} type="long" />
+						</DrawerTitle>
 						<DrawerDescription>
 							View agent information, sessions, and pending codes
 						</DrawerDescription>
@@ -339,7 +370,10 @@ export default function AgentDetailDialog({
 		<Dialog open={open} onOpenChange={onClose}>
 			<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
 				<DialogHeader>
-					<DialogTitle>Agent Details</DialogTitle>
+					<DialogTitle className="flex items-center gap-3">
+						Agent Details
+						<ConnectionStatus status={connectionStatus} type="long" />
+					</DialogTitle>
 					<DialogDescription>
 						View agent information, sessions, and pending codes
 					</DialogDescription>

@@ -77,7 +77,7 @@ class BackuprAgent {
 	private connect() {
 		const wsBase =
 			this.config.wsUrl ?? this.config.serverUrl!.replace(/^http/, "ws");
-		const wsUrl = `${wsBase}/agent/ws?token=${this.config.agentToken}`;
+		const wsUrl = `${wsBase}/api/agent/ws?token=${this.config.agentToken}`;
 
 		console.log(`[Agent] Connecting to ${wsUrl}...`);
 		this.ws = new WebSocket(wsUrl);

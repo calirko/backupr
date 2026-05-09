@@ -22,6 +22,7 @@ import { FloppyDiskIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { toast } from "sonner";
+import { NoticeCard } from "../notice-card";
 
 interface BackupPolicyData {
 	keep_last_n_backups?: number | null;
@@ -180,13 +181,11 @@ export default function BackupPolicyDialog({
 				</p>
 			</div>
 
-			<div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3">
-				<p className="text-xs text-blue-800 dark:text-blue-200">
-					<strong>Note:</strong> You can set both rules. The policy will apply
-					whichever condition would result in more backup retention. At least
-					one rule must be configured.
-				</p>
-			</div>
+			<NoticeCard>
+				<strong>Note:</strong> You can set both rules. The policy will apply
+				whichever condition would result in more backup retention. At least one
+				rule must be configured.
+			</NoticeCard>
 		</form>
 	);
 

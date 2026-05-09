@@ -29,6 +29,7 @@ model UserSession {
   id         String   @id @default(uuid())
   token      String   @unique
   user_id    String
+  info       Json     @default("{}") // browser, os, ip, other relevant info.
   user       User     @relation(fields: [user_id], references: [id])
   expires_at DateTime
   created_at DateTime @default(now())

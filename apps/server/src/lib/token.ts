@@ -3,7 +3,7 @@ import { decode, sign, verify } from "hono/jwt";
 export interface TokenPayload {
 	user: {
 		id: string;
-		name: string;
+		name: string | null;
 		email: string;
 	};
 	exp: number;

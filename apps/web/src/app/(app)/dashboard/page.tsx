@@ -78,14 +78,17 @@ function getLast7Days(): string[] {
 
 function StatusDot({ status }: { status: string }) {
 	const colors: Record<string, string> = {
-		COMPLETED: "bg-green-300",
-		FAILED: "bg-red-300",
-		IN_PROGRESS: "bg-blue-300",
-		PENDING: "bg-muted-foreground",
+		COMPLETED: "var(--greenish)",
+		FAILED: "var(--destructive)",
+		IN_PROGRESS: "var(--blueish)",
+		PENDING: "var(muted-foreground)",
 	};
 	return (
 		<span
-			className={`inline-block w-2 h-2 shrink-0 ${colors[status] ?? "bg-muted-foreground"}`}
+			className={`inline-block w-2 h-2 shrink-0`}
+			style={{
+				backgroundColor: colors[status],
+			}}
 		/>
 	);
 }
@@ -377,14 +380,16 @@ export default function DashboardPage() {
 					<CardContent className="flex items-center gap-8">
 						<div className="shrink-0">
 							<h2
+								style={{
+									color:
+										successRate !== null && successRate >= 80
+											? "var(--greenish)"
+											: successRate !== null && successRate >= 50
+												? "var(--yellowish)"
+												: undefined,
+								}}
 								className={`text-4xl font-black ${
-									successRate === null
-										? "text-muted-foreground"
-										: successRate >= 80
-											? "text-green-200"
-											: successRate >= 50
-												? "text-yellow-200"
-												: "text-destructive"
+									successRate === null && "text-muted-foreground"
 								}`}
 							>
 								{successRate !== null ? `${successRate}%` : "—"}

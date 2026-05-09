@@ -23,6 +23,7 @@ export default function BackupPoliciesPage() {
 	const [data, setData] = useState({
 		data: [],
 		total: 0,
+		absoluteTotal: 0,
 	});
 	const [loading, setLoading] = useState(false);
 
@@ -45,10 +46,15 @@ export default function BackupPoliciesPage() {
 			type: "date" as const,
 			matching: "between" as const,
 		},
+		{
+			name: "created_by",
+			label: "Created By",
+			type: "string" as const,
+			matching: "contains" as const,
+		},
 	] as SearchField[];
 
 	const columns = [
-		{ key: "id", label: "ID", orderable: true, width: "auto" as const },
 		{
 			key: "keep_last_n_backups",
 			label: "Keep Last N",
@@ -60,6 +66,13 @@ export default function BackupPoliciesPage() {
 			label: "Max Age (Days)",
 			orderable: true,
 			format: (value) => (value ? `${value} days` : "Unlimited"),
+		},
+		{
+			key: "created_by",
+			label: "Created By",
+			orderable: true,
+			orderByKey: "created_by.name",
+			format: (value) => value?.name ?? "—",
 		},
 		{
 			key: "created_at",
@@ -173,7 +186,12 @@ export default function BackupPoliciesPage() {
 			});
 			if (response.ok) {
 				const result = await response.json();
-				setData({ ...data, data: result.data, total: result.total });
+				setData({
+					...data,
+					data: result.data,
+					total: result.total,
+					absoluteTotal: result.absoluteTotal,
+				});
 			} else {
 				const error = await response.json();
 				toast.error("Error fetching backup policies", {
@@ -222,6 +240,7 @@ export default function BackupPoliciesPage() {
 					data={data.data}
 					loading={loading}
 					name="backup-policies"
+					absoluteTotal={data.absoluteTotal}
 				/>
 			</div>
 		</div>

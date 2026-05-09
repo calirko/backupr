@@ -43,16 +43,20 @@ export default function Data({
 	showOrderBy,
 	name,
 	footer,
+	showIndex = true,
+	absoluteTotal = -1,
 }: {
 	columns: Column[];
+	absoluteTotal?: number;
 	data: any[];
 	loading?: boolean;
 	actions?: TableAction[];
 	showOrderBy?: boolean;
 	name: string;
 	footer?: Record<string, React.ReactNode | string | number>;
+	showIndex?: boolean;
 }) {
-	const { orderBy, setOrderBy, selectedRows } = useData(name);
+	const { orderBy, setOrderBy, selectedRows, filters } = useData(name);
 	const bottomDivRef = useRef<HTMLDivElement>(null);
 	const [showBottomDiv, setShowBottomDiv] = useState(true);
 
@@ -97,6 +101,14 @@ export default function Data({
 				key={row.id}
 				className={`${striped && "bg-table-row"} ${selectedRows.find((e: Row) => e.id === row.id) ? "bg-sidebar" : ""} text-xs`}
 			>
+				{showIndex && (
+					<TableCell
+						align="center"
+						className="p-0! w-8 text-xs text-muted-foreground"
+					>
+						{data.indexOf(row) + 1}
+					</TableCell>
+				)}
 				{columns.map((col, index) => (
 					<TableCell
 						key={col.key}
@@ -200,108 +212,122 @@ export default function Data({
 		}
 	}
 
+	console.log("filters", filters);
+
 	return (
-		<Card className="p-0">
-			<CardContent className="p-0 overflow-auto flex flex-col items-center justify-center">
-				{loading ? (
-					<div className="flex justify-center items-center h-20 text-muted-foreground">
-						<Spinner />
-					</div>
-				) : data.length === 0 ? (
-					<div className="py-4 flex gap-2 items-center text-muted-foreground h-20">
-						<XSquareIcon />
-						<p>No data available.</p>
-					</div>
-				) : (
-					<>
-						<Table>
-							<TableHeader>
-								<TableRow>
-									{columns.map((col, _index) => (
-										<TableHead key={col.key} align={col.align}>
-											{showOrderBy && col.orderable !== false ? (
-												<Button
-													className="-ml-1 p-1 text-xs text-muted-foreground font-semibold h-fit has-[>svg]:px-1"
-													variant={"ghost"}
-													disabled={loading}
-													onClick={() => {
-														toggleOrderBy(col?.orderByKey || col.key);
-													}}
-													onContextMenu={() => {
-														const orderKey = col?.orderByKey || col.key;
-														if (
-															getNestedValue(orderBy, orderKey) ||
-															Object.keys(orderBy).length > 0
-														)
-															setOrderBy({});
-													}}
-												>
-													{col.label}
-													{(() => {
-														const orderKey = col?.orderByKey || col.key;
-														const orderValue = getNestedValue(
-															orderBy,
-															orderKey,
-														);
-														return orderValue ? (
-															orderValue === "asc" ? (
-																<ArrowUpIcon />
-															) : (
-																<ArrowDownIcon />
+		<>
+			<Card className="p-0">
+				<CardContent className="p-0 overflow-auto flex flex-col items-center justify-center">
+					{loading ? (
+						<div className="flex justify-center items-center h-20 text-muted-foreground">
+							<Spinner />
+						</div>
+					) : data.length === 0 ? (
+						<div className="py-4 flex gap-2 items-center text-muted-foreground h-20">
+							<XSquareIcon />
+							<p>No data available.</p>
+						</div>
+					) : (
+						<>
+							<Table>
+								<TableHeader>
+									<TableRow>
+										{showIndex && (
+											<TableHead align="left" className="p-0! w-8" />
+										)}
+										{columns.map((col, _index) => (
+											<TableHead key={col.key} align={col.align}>
+												{showOrderBy && col.orderable !== false ? (
+													<Button
+														className="-ml-1 p-1 text-xs text-muted-foreground font-semibold h-fit has-[>svg]:px-1"
+														variant={"ghost"}
+														disabled={loading}
+														onClick={() => {
+															toggleOrderBy(col?.orderByKey || col.key);
+														}}
+														onContextMenu={() => {
+															const orderKey = col?.orderByKey || col.key;
+															if (
+																getNestedValue(orderBy, orderKey) ||
+																Object.keys(orderBy).length > 0
 															)
-														) : (
-															""
-														);
-													})()}
-												</Button>
-											) : (
-												<span className="text-muted-foreground font-semibold text-xs">
-													{col.label}
-												</span>
-											)}
-										</TableHead>
-									))}
-									{actions && actions.length > 0 && (
-										<TableHead align="right" className="p-2! w-8" />
-									)}
-								</TableRow>
-							</TableHeader>
-							{data.length > 0 && !loading ? (
-								<TableBody>
-									{data.map((row, index) =>
-										checkActions({ row, striped: index % 2 === 0 }),
-									)}
-								</TableBody>
-							) : (
-								<TableBody />
+																setOrderBy({});
+														}}
+													>
+														{col.label}
+														{(() => {
+															const orderKey = col?.orderByKey || col.key;
+															const orderValue = getNestedValue(
+																orderBy,
+																orderKey,
+															);
+															return orderValue ? (
+																orderValue === "asc" ? (
+																	<ArrowUpIcon />
+																) : (
+																	<ArrowDownIcon />
+																)
+															) : (
+																""
+															);
+														})()}
+													</Button>
+												) : (
+													<span className="text-muted-foreground font-semibold text-xs">
+														{col.label}
+													</span>
+												)}
+											</TableHead>
+										))}
+										{actions && actions.length > 0 && (
+											<TableHead align="right" className="p-2! w-8" />
+										)}
+									</TableRow>
+								</TableHeader>
+								{data.length > 0 && !loading ? (
+									<TableBody>
+										{data.map((row, index) =>
+											checkActions({ row, striped: index % 2 === 0 }),
+										)}
+									</TableBody>
+								) : (
+									<TableBody />
+								)}
+								{footer && data.length > 0 && !loading && (
+									<TableFooter>
+										{columns.map((col, index) => (
+											<TableCell
+												key={col.key}
+												align={col.align}
+												className={`${getCellClass(
+													col,
+													index === columns.length - 1 &&
+														(!actions || actions.length === 0),
+												)} text-xs`}
+											>
+												{footer?.[col?.key] || ""}
+											</TableCell>
+										))}
+										{actions && actions.length > 0 && (
+											<TableCell className="p-2! w-8" />
+										)}
+									</TableFooter>
+								)}
+							</Table>
+							{showBottomDiv && (
+								<div ref={bottomDivRef} className="grow w-full border-t" />
 							)}
-							{footer && data.length > 0 && !loading && (
-								<TableFooter>
-									{columns.map((col, index) => (
-										<TableCell
-											key={col.key}
-											align={col.align}
-											className={`${getCellClass(
-												col,
-												index === columns.length - 1 &&
-													(!actions || actions.length === 0),
-											)} text-xs`}
-										>
-											{footer?.[col?.key] || ""}
-										</TableCell>
-									))}
-									{actions && actions.length > 0 && (
-										<TableCell className="p-2! w-8" />
-									)}
-								</TableFooter>
-							)}
-						</Table>
-						{showBottomDiv && (
-							<div ref={bottomDivRef} className="grow w-full border-t" />
-						)}
-					</>
-				)}
-			</CardContent>
-		</Card>
+						</>
+					)}
+				</CardContent>
+			</Card>
+			{Object.keys(filters).length > 0 && absoluteTotal !== -1 && (
+				<div className="flex w-full h-4 items-center justify-center">
+					<p className="text-muted-foreground text-xs">
+						Showing {data.length} of {absoluteTotal} rows
+					</p>
+				</div>
+			)}
+		</>
 	);
 }

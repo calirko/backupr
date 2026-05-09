@@ -167,7 +167,10 @@ async function triggerBackup(jobId: string): Promise<void> {
 		if (message.includes("not online")) {
 			console.log(`[Scheduler] Skipping job ${jobId}: agent not online.`);
 		} else {
-			console.error(`[Scheduler] Failed to initiate backup for job ${jobId}:`, message);
+			console.error(
+				`[Scheduler] Failed to initiate backup for job ${jobId}:`,
+				message,
+			);
 		}
 	}
 }
@@ -202,7 +205,13 @@ function isCronDue(
 		return false;
 	}
 
-	const [minuteField, hourField, domField, monthField, dowField] = fields;
+	const [minuteField, hourField, domField, monthField, dowField] = fields as [
+		string,
+		string,
+		string,
+		string,
+		string,
+	];
 
 	const minute = now.getMinutes();
 	const hour = now.getHours();
@@ -252,7 +261,9 @@ function cronFieldMatches(
 
 	// Step: */n or start/n
 	if (field.includes("/")) {
-		const [rangeOrStar, stepStr] = field.split("/");
+		const parts = field.split("/");
+		if (parts.length !== 2) return false;
+		const [rangeOrStar, stepStr] = parts as [string, string];
 		const step = parseInt(stepStr, 10);
 		if (isNaN(step) || step <= 0) return false;
 
@@ -261,11 +272,18 @@ function cronFieldMatches(
 
 		if (rangeOrStar !== "*") {
 			if (rangeOrStar.includes("-")) {
-				const [a, b] = rangeOrStar.split("-").map(Number);
-				rangeMin = a;
-				rangeMax = b;
+				const rangeParts = rangeOrStar.split("-").map(Number);
+				if (
+					rangeParts.length !== 2 ||
+					isNaN(rangeParts[0] as number) ||
+					isNaN(rangeParts[1] as number)
+				)
+					return false;
+				rangeMin = rangeParts[0] as number;
+				rangeMax = rangeParts[1] as number;
 			} else {
 				rangeMin = parseInt(rangeOrStar, 10);
+				if (isNaN(rangeMin)) return false;
 			}
 		}
 
@@ -277,7 +295,14 @@ function cronFieldMatches(
 
 	// Range: n-m
 	if (field.includes("-")) {
-		const [a, b] = field.split("-").map(Number);
+		const rangeParts = field.split("-").map(Number);
+		if (
+			rangeParts.length !== 2 ||
+			isNaN(rangeParts[0] as number) ||
+			isNaN(rangeParts[1] as number)
+		)
+			return false;
+		const [a, b] = rangeParts as [number, number];
 		return value >= a && value <= b;
 	}
 
@@ -304,7 +329,9 @@ async function timeoutStaleBackups(): Promise<void> {
 	});
 
 	if (count > 0) {
-		console.log(`[Scheduler] Marked ${count} stale backup(s) as FAILED (timeout).`);
+		console.log(
+			`[Scheduler] Marked ${count} stale backup(s) as FAILED (timeout).`,
+		);
 	}
 }
 
@@ -339,12 +366,18 @@ async function enforceRetentionPolicies(): Promise<void> {
 		const keepLastN = policies
 			.map((p) => p.keep_last_n_backups)
 			.filter((v): v is number => v !== null)
-			.reduce<number | null>((min, v) => (min === null ? v : Math.min(min, v)), null);
+			.reduce<number | null>(
+				(min, v) => (min === null ? v : Math.min(min, v)),
+				null,
+			);
 
 		const maxAgeDays = policies
 			.map((p) => p.max_backup_age_in_days)
 			.filter((v): v is number => v !== null)
-			.reduce<number | null>((min, v) => (min === null ? v : Math.min(min, v)), null);
+			.reduce<number | null>(
+				(min, v) => (min === null ? v : Math.min(min, v)),
+				null,
+			);
 
 		// Collect IDs to delete (only COMPLETED backups are eligible)
 		const toDelete = new Set<string>();

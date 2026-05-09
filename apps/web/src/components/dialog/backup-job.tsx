@@ -33,6 +33,7 @@ import {
 } from "../ui/select";
 import { Checkbox } from "../ui/checkbox";
 import { Textarea } from "../ui/textarea";
+import { NoticeCard } from "../notice-card";
 
 interface Agent {
 	id: string;
@@ -196,7 +197,7 @@ export default function BackupJobDialog({
 		const filesInput = formData.get("files") as string;
 		const isActive = formData.get("is_active") === "on";
 		const password = usePassword
-			? ((formData.get("password") as string) || undefined)
+			? (formData.get("password") as string) || undefined
 			: undefined;
 		const compressionLevel = parseInt(
 			formData.get("compression_level") as string,
@@ -204,8 +205,7 @@ export default function BackupJobDialog({
 		);
 		const name = formData.get("name") as string;
 		const rawPolicyId = formData.get("policy_id") as string;
-		const policyId =
-			rawPolicyId && rawPolicyId !== "none" ? rawPolicyId : null;
+		const policyId = rawPolicyId && rawPolicyId !== "none" ? rawPolicyId : null;
 
 		if (!cron || !agentId || !filesInput || !name) {
 			toast.warning("Required fields missing", {
@@ -337,14 +337,12 @@ export default function BackupJobDialog({
 			</div>
 
 			<div>
-				<div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3">
-					<p className="text-xs text-blue-800 dark:text-blue-200">
-						<strong>Note:</strong> Compression level 0 is fastest but results in
-						larger backup files. Level 9 provides maximum compression but may
-						take significantly longer, and cause system instability during
-						backup. Level 5 is a good balance for most use cases.
-					</p>
-				</div>
+				<NoticeCard>
+					<strong>Note:</strong> Compression level 0 is fastest but results in
+					larger backup files. Level 9 provides maximum compression but may take
+					significantly longer, and cause system instability during backup.
+					Level 5 is a good balance for most use cases.
+				</NoticeCard>
 			</div>
 
 			<div className="space-y-1.5">

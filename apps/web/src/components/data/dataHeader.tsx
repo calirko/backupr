@@ -312,7 +312,7 @@ export default function DataHeader({
 						}}
 					>
 						<SelectTrigger className="w-full">
-							<SelectValue placeholder="Selecione uma Opção" />
+							<SelectValue placeholder="Select an option" />
 						</SelectTrigger>
 						<SelectContent>
 							{field.options.map((option) => (

@@ -1,4 +1,9 @@
-import { EyeIcon, PencilIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
+import {
+	EyeIcon,
+	PencilIcon,
+	PlusIcon,
+	XSquareIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import Data, { type Column } from "@/components/data/data";
@@ -16,6 +21,7 @@ export default function UsersPage() {
 	const [data, setData] = useState({
 		data: [],
 		total: 0,
+		absoluteTotal: 0,
 	});
 	const [loading, setLoading] = useState(false);
 	const filterFields = [
@@ -37,6 +43,12 @@ export default function UsersPage() {
 			type: "string" as const,
 			matching: "contains" as const,
 		},
+		{
+			name: "created_at",
+			label: "Created Date",
+			type: "date" as const,
+			matching: "between" as const,
+		},
 	] as SearchField[];
 
 	const columns = [
@@ -49,6 +61,12 @@ export default function UsersPage() {
 			orderable: true,
 			format: (value) => new Date(value).toLocaleString(),
 		},
+		{
+			key: "updated_at",
+			label: "Updated",
+			orderable: true,
+			format: (value) => new Date(value).toLocaleString(),
+		},
 	] as Column[];
 
 	const actions = [
@@ -58,7 +76,11 @@ export default function UsersPage() {
 			icon: <EyeIcon />,
 			onClick: (row) => {
 				openDialog(UserDialog, {
-					defaultData: { name: row.name, username: row.username, email: row.email },
+					defaultData: {
+						name: row.name,
+						username: row.username,
+						email: row.email,
+					},
 					userId: row.id,
 					readonly: true,
 					onConfirm: () => {
@@ -73,7 +95,11 @@ export default function UsersPage() {
 			icon: <PencilIcon />,
 			onClick: (row) => {
 				openDialog(UserDialog, {
-					defaultData: { name: row.name, username: row.username, email: row.email },
+					defaultData: {
+						name: row.name,
+						username: row.username,
+						email: row.email,
+					},
 					userId: row.id,
 					onConfirm: () => {
 						fetchData();
@@ -151,7 +177,12 @@ export default function UsersPage() {
 			if (response.ok) {
 				const result = await response.json();
 				console.log(result.data);
-				setData({ ...data, data: result.data, total: result.total });
+				setData({
+					...data,
+					data: result.data,
+					total: result.total,
+					absoluteTotal: result.absoluteTotal,
+				});
 			} else {
 				const error = await response.json();
 				toast.error("Error fetching users", {
@@ -201,6 +232,7 @@ export default function UsersPage() {
 					data={data.data}
 					loading={loading}
 					name="users"
+					absoluteTotal={data.absoluteTotal}
 				/>
 			</div>
 		</div>
