@@ -287,6 +287,7 @@ async function uploadBackupArchive(
 	archivePath: string,
 	backupId: string,
 	jobId: string,
+	requiresPassword: boolean,
 	onPct?: (pct: number) => void,
 ): Promise<void> {
 	const config = await ConfigManager.load();
@@ -340,14 +341,14 @@ async function uploadBackupArchive(
 		},
 	});
 
-	const response = await fetch(`${config.serverUrl}/agent/upload`, {
+	const response = await fetch(`${config.serverUrl}/api/agent/upload`, {
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${config.agentToken}`,
 			"X-Backup-Id": backupId,
 			"X-Backup-Job-Id": jobId,
 			"Content-Length": fileSize.toString(),
-			"X-Requires-Password": "false",
+			"X-Requires-Password": requiresPassword ? "true" : "false",
 			"Content-Type": "application/octet-stream",
 		},
 		body,
@@ -384,9 +385,14 @@ export async function runBackupJob(
 			`[Backup] Starting compression (level ${level}, input ${formatBytes(inputSizeBytes)})...`,
 		);
 		onProgress?.("compressing 0%");
-		await compressWithProgress(archivePath, inputSizeBytes, sevenZipArgs, (pct) => {
-			onProgress?.(`compressing ${pct}%`);
-		});
+		await compressWithProgress(
+			archivePath,
+			inputSizeBytes,
+			sevenZipArgs,
+			(pct) => {
+				onProgress?.(`compressing ${pct}%`);
+			},
+		);
 
 		const archiveSize = fs.statSync(archivePath).size;
 		const compressSec = (Date.now() - startCompress) / 1000;
@@ -397,7 +403,7 @@ export async function runBackupJob(
 
 		const startUpload = Date.now();
 		onProgress?.("uploading 0%");
-		await uploadBackupArchive(archivePath, job.id, job.jobId, (pct) => {
+		await uploadBackupArchive(archivePath, job.id, job.jobId, job.use_password, (pct) => {
 			onProgress?.(`uploading ${pct}%`);
 		});
 		const uploadSec = (Date.now() - startUpload) / 1000;

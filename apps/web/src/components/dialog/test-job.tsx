@@ -208,7 +208,7 @@ function TestJobContent({ jobId }: { jobId: string }) {
 							).map((pr) => (
 								<li
 									key={pr.path}
-									className={`dynround text-xs font-mono px-2 py-1.5 ${pr.exists && pr.readable ? "bg-muted" : "bg-destructive/10 border border-destructive/20"}`}
+									className={`dynround text-xs px-2 py-1.5 ${pr.exists && pr.readable ? "bg-muted" : "bg-destructive/10 border border-destructive/20"}`}
 								>
 									<div className="flex items-center justify-between gap-2">
 										<span

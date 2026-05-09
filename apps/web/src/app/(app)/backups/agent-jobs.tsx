@@ -16,6 +16,7 @@ import { useDialog } from "@/hooks/use-dialog";
 import BackupVersionsDialog from "@/components/dialog/backup-versions";
 import {
 	ArrowLeftIcon,
+	CheckSquareIcon,
 	ClockClockwiseIcon,
 	DownloadSimpleIcon,
 	LightningIcon,
@@ -30,6 +31,10 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+	ConnectionStatus,
+	type AgentConnectionStatus,
+} from "@/components/ui/connection-status";
 
 interface BackupJob {
 	id: string;
@@ -61,6 +66,22 @@ function formatRelative(dateStr: string | null | undefined): string {
 	const hours = Math.floor(mins / 60);
 	if (hours < 24) return `${hours}h ago`;
 	return `${Math.floor(hours / 24)}d ago`;
+}
+
+function getAgentStatus(
+	agentStatuses: ReturnType<typeof useSocket>["agentStatuses"],
+	agentId: string,
+): AgentConnectionStatus {
+	const status = agentStatuses.find((s) => s.agentId === agentId);
+	if (!status) return "none";
+	if (status.status === "disconnected" || status.status === "inactive")
+		return "disconnected";
+	const isStale = Date.now() - new Date(status.lastSeen ?? 0).getTime() > 60000;
+	if (isStale) return "stale";
+	if (status.currentJob?.status === "running") return "running";
+	if (status.jobQueue && status.jobQueue.length > 0) return "queued";
+	if (status.status === "connected") return "connected";
+	return "unknown";
 }
 
 export default function AgentJobsPage() {
@@ -114,11 +135,7 @@ export default function AgentJobsPage() {
 	function triggerBackup(jobId: string) {
 		send({ type: "trigger_backup", jobId });
 		toast.info("Backup queued");
-
-		// reload jobs after a short delay to reflect the new backup
-		setTimeout(() => {
-			fetchData();
-		}, 500);
+		setTimeout(() => fetchData(), 500);
 	}
 
 	async function downloadLatest(jobId: string) {
@@ -133,11 +150,10 @@ export default function AgentJobsPage() {
 			});
 			if (res.ok) {
 				const result = await res.json();
-				console.log("Latest backup result:", result);
 				const latest = result.data[0];
 				if (latest?.url) {
 					window.open(latest.url, "_blank");
-				} else if (latest.status === "IN_PROGRESS") {
+				} else if (latest?.status === "IN_PROGRESS") {
 					toast.error(
 						"Latest backup is still in progress. Please wait for it to complete before downloading.",
 					);
@@ -196,7 +212,15 @@ export default function AgentJobsPage() {
 					<ArrowLeftIcon size={14} />
 					Backups
 				</button>
-				<h1 className="text-4xl font-black">{agent?.name ?? "—"}</h1>
+				<div className="flex items-center gap-3">
+					<h1 className="text-4xl font-black">{agent?.name ?? "—"}</h1>
+					<span className="mt-0.5">
+						<ConnectionStatus
+							status={getAgentStatus(agentStatuses, agentId ?? "")}
+							type="long"
+						/>
+					</span>
+				</div>
 				<p className="text-muted-foreground text-sm">
 					Backup jobs configured for this agent.
 				</p>
@@ -236,7 +260,7 @@ export default function AgentJobsPage() {
 				</p>
 			)}
 
-			<div className="grid grid-cols-3 gap-4">
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 				{visibleJobs.map((job) => {
 					const last = job.backups?.[0] ?? null;
 					const agentStatus = agentStatuses.find((s) => s.agentId === agentId);
@@ -249,62 +273,108 @@ export default function AgentJobsPage() {
 					return (
 						<Card key={job.id}>
 							<CardHeader>
-								<CardTitle>{job.name}</CardTitle>
+								<CardTitle className="truncate">{job.name}</CardTitle>
 								<CardAction>
-									<span
-										className="text-xs font-medium"
-										style={
-											job.is_active
-												? { color: "var(--greenish)" }
-												: { color: "var(--destructive)" }
-										}
-									>
-										{job.is_active ? "Active" : "Inactive"}
-									</span>
+									{job.is_active ? (
+										<CheckSquareIcon
+											size={16}
+											style={{ color: "var(--greenish)" }}
+										/>
+									) : (
+										<XSquareIcon size={16} className="text-destructive" />
+									)}
 								</CardAction>
-								<CardDescription>{job.cron}</CardDescription>
+								<CardDescription className="font-mono text-xs">
+									{job.cron}
+								</CardDescription>
 							</CardHeader>
 
-							<CardContent className="flex flex-col gap-2">
-								<div className="flex justify-between text-xs">
-									<span className="text-muted-foreground">Files</span>
-									<span>
-										{job.files.length} item
-										{job.files.length !== 1 ? "s" : ""}
-									</span>
-								</div>
-								<div className="flex justify-between text-xs">
-									<span className="text-muted-foreground">Total backups</span>
-									<span>{job._count?.backups ?? 0}</span>
-								</div>
-								<div className="flex justify-between text-xs">
-									<span className="text-muted-foreground">Last run</span>
-									<span>{formatRelative(last?.started_at)}</span>
-								</div>
-								{last && (
-									<div className="flex justify-between text-xs">
-										<span className="text-muted-foreground">Last status</span>
+							<CardContent>
+								<div className="space-y-0">
+									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+										<span className="text-xs text-muted-foreground shrink-0">
+											Status
+										</span>
 										<span
+											className="text-xs text-right"
 											style={
-												BACKUP_STATUS_STYLE[
-													last.status as keyof typeof BACKUP_STATUS_STYLE
-												] ?? {}
+												job.is_active ? { color: "var(--greenish)" } : undefined
 											}
 										>
-											{BACKUP_STATUS_LABEL[
-												last.status as keyof typeof BACKUP_STATUS_LABEL
-											] ?? last.status}
+											{job.is_active ? (
+												"Active"
+											) : (
+												<span className="text-destructive">Inactive</span>
+											)}
 										</span>
 									</div>
-								)}
-								{liveStatusMessage && (
-									<div className="flex justify-between text-xs">
-										<span className="text-muted-foreground">Progress</span>
-										<span className="font-mono text-blue-200">
-											{liveStatusMessage}
+									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+										<span className="text-xs text-muted-foreground shrink-0">
+											Files
+										</span>
+										<span className="text-xs text-right">
+											{job.files.length} item{job.files.length !== 1 ? "s" : ""}
 										</span>
 									</div>
-								)}
+									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+										<span className="text-xs text-muted-foreground shrink-0">
+											Total Backups
+										</span>
+										<span className="text-xs text-right">
+											{job._count?.backups ?? 0}
+										</span>
+									</div>
+									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+										<span className="text-xs text-muted-foreground shrink-0">
+											Last Run
+										</span>
+										<span className="text-xs text-right">
+											{formatRelative(last?.started_at)}
+										</span>
+									</div>
+									{last && (
+										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+											<span className="text-xs text-muted-foreground shrink-0">
+												Last Status
+											</span>
+											<span
+												className="text-xs text-right"
+												style={
+													BACKUP_STATUS_STYLE[
+														last.status as keyof typeof BACKUP_STATUS_STYLE
+													] ?? {}
+												}
+											>
+												{BACKUP_STATUS_LABEL[
+													last.status as keyof typeof BACKUP_STATUS_LABEL
+												] ?? last.status}
+											</span>
+										</div>
+									)}
+									{job.use_password && (
+										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+											<span className="text-xs text-muted-foreground shrink-0">
+												Encrypted
+											</span>
+											<span
+												className="text-xs text-right"
+												style={{ color: "var(--greenish)" }}
+											>
+												Yes
+											</span>
+										</div>
+									)}
+									{liveStatusMessage && (
+										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+											<span className="text-xs text-muted-foreground shrink-0">
+												Progress
+											</span>
+											<span className="text-xs text-right text-blue-200">
+												{liveStatusMessage}
+											</span>
+										</div>
+									)}
+								</div>
 							</CardContent>
 
 							<CardFooter className="gap-2">
@@ -315,14 +385,6 @@ export default function AgentJobsPage() {
 											size="sm"
 											onClick={() => triggerBackup(job.id)}
 											disabled={agentBusy || !job.is_active}
-											aria-description="trigger backup now"
-											title={
-												!job.is_active
-													? "This job is inactive"
-													: agentBusy
-														? "Agent is busy or offline"
-														: "Trigger backup now"
-											}
 										>
 											<LightningIcon />
 										</Button>

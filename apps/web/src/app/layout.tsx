@@ -11,7 +11,7 @@ export default function RootLayout() {
 	return (
 		<>
 			<GridBackground />
-			<div className="h-dvh dark text-foreground relative z-10">
+			<div className="h-dvh dark text-foreground relative z-10 ">
 				<TooltipProvider>
 					<Outlet />
 					<Toaster

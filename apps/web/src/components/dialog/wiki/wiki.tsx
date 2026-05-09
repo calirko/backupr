@@ -85,7 +85,10 @@ export default function WikiDialog({
 			>
 				<div className="flex flex-1 min-h-0">
 					{/* Sidebar */}
-					<div className="flex flex-col gap-1 w-52 min-w-52 shrink-0 bg-muted/50 border-r p-3 overflow-y-auto">
+					<div
+						id="wiki-sidebar"
+						className="flex flex-col gap-1 w-52 min-w-52 shrink-0 bg-muted/50 border-r p-3 overflow-y-auto"
+					>
 						<DialogTitle className="pb-2">Help & Manual</DialogTitle>
 						{pages.map((page) => (
 							<Button
@@ -124,7 +127,7 @@ export default function WikiDialog({
 					</div>
 
 					{/* Content */}
-					<div className="flex-1 min-h-0 p-4 overflow-y-auto">
+					<div id="wiki-content" className="flex-1 min-h-0 p-4 overflow-y-auto">
 						<Page
 							nextPage={
 								nextPage ? { id: nextPage.id, name: pageName(nextPage) } : null

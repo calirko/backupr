@@ -16,6 +16,7 @@ import type { TableAction } from "@/components/data/dataActions";
 import { useDialog } from "@/hooks/use-dialog";
 import BackupPolicyDialog from "@/components/dialog/backup-policy";
 import ConfirmDialog from "@/components/dialog/confirm";
+import ErrorDialog from "@/components/dialog/error";
 
 export default function BackupPoliciesPage() {
 	const { filters, orderBy } = useData("backup-policies");
@@ -159,9 +160,17 @@ export default function BackupPoliciesPage() {
 				fetchData();
 			} else {
 				const error = await response.json();
-				toast.error("Error deleting backup policy", {
-					description: error.error || "Unknown error",
-				});
+				if (response.status === 409) {
+					openDialog(ErrorDialog, {
+						title: "Cannot Delete Policy",
+						description: "This policy cannot be deleted while it is in use.",
+						message: error.error || "Unknown error",
+					});
+				} else {
+					toast.error("Error deleting backup policy", {
+						description: error.error || "Unknown error",
+					});
+				}
 			}
 		} catch (error) {
 			console.error(error);

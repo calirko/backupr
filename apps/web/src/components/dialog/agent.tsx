@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import {
 	Dialog,
 	DialogClose,
@@ -33,12 +35,14 @@ export default function AgentDialog({
 	open: boolean;
 	defaultData?: {
 		name: string;
+		is_active?: boolean;
 	};
 	agentId?: string;
 	onClose: (result: boolean) => void;
 	onConfirm: () => void;
 }): React.JSX.Element {
 	const isMobile = useIsMobile();
+	const [isActive, setIsActive] = useState(defaultData?.is_active ?? true);
 
 	async function updateAgent({ name }: { name: string }) {
 		try {
@@ -48,7 +52,7 @@ export default function AgentDialog({
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${localStorage.getItem("token")}`,
 				},
-				body: JSON.stringify({ name }),
+				body: JSON.stringify({ name, is_active: isActive }),
 			});
 			if (!response.ok) {
 				const error = await response.json();
@@ -117,7 +121,7 @@ export default function AgentDialog({
 	}
 
 	const content = (
-		<form onSubmit={handleConfirm} id="manage-agent">
+		<form onSubmit={handleConfirm} id="manage-agent" className="space-y-4">
 			<div className="space-y-1.5">
 				<Label>Name</Label>
 				<Input
@@ -126,6 +130,16 @@ export default function AgentDialog({
 					defaultValue={defaultData?.name}
 				/>
 			</div>
+			{agentId && (
+				<div className="flex items-center gap-2">
+					<Checkbox
+						id="is_active"
+						checked={isActive}
+						onCheckedChange={(checked) => setIsActive(checked === true)}
+					/>
+					<Label htmlFor="is_active">Active</Label>
+				</div>
+			)}
 		</form>
 	);
 

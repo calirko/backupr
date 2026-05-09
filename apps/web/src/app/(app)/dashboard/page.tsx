@@ -258,270 +258,274 @@ export default function DashboardPage() {
 
 	return (
 		<>
-		<WikiDialog open={wikiOpen} onClose={() => setWikiOpen(false)} />
-		<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6 justify-center">
-			<div className="absolute top-18">
-				<h1 className="text-4xl font-black">Dashboard</h1>
-				<p className="text-muted-foreground text-sm">
-					Overview of your agents and backup status.
-				</p>
-			</div>
-			<div className="grid grid-cols-4 gap-4 w-full">
-				{/* ── Row 1: 2 stat cards + storage-by-job chart ── */}
+			<WikiDialog open={wikiOpen} onClose={() => setWikiOpen(false)} />
+			<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6 pb-6">
+				<div>
+					<h1 className="text-4xl font-black">Dashboard</h1>
+					<p className="text-muted-foreground text-sm">
+						Overview of your agents and backup status.
+					</p>
+				</div>
+				<div className="grid grid-cols-4 gap-4 w-full">
+					{/* ── Row 1: 2 stat cards + storage-by-job chart ── */}
 
-				<Card>
-					<CardHeader>
-						<CardTitle>Storage Used</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<h2 className="text-3xl font-black">
-							{formatBytes(data?.stats?.total_size_bytes)}
-						</h2>
-						<p className="text-muted-foreground text-xs mt-0.5">
-							{data?.stats?.total_backups ?? "—"} backups total
-						</p>
-					</CardContent>
-					<CardFooter>
-						<Button
-							variant="outline"
-							className="w-full"
-							onClick={() => navigate("/backups")}
-						>
-							<ArrowRightIcon />
-							View Backups
-						</Button>
-					</CardFooter>
-				</Card>
-
-				<Card>
-					<CardHeader>
-						<CardTitle>Failed Backups</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<h2
-							className={`text-3xl font-black ${failedCount > 0 ? "text-destructive" : ""}`}
-						>
-							{failedCount}
-						</h2>
-						<p className="text-muted-foreground text-xs mt-0.5">
-							in the last 7 days
-						</p>
-					</CardContent>
-					<CardFooter>
-						<Button
-							variant="outline"
-							className="w-full"
-							onClick={() => navigate("/backups")}
-						>
-							<ArrowRightIcon />
-							View Backups
-						</Button>
-					</CardFooter>
-				</Card>
-
-				<Card className="col-span-2">
-					<CardHeader>
-						<CardTitle>Storage by Job</CardTitle>
-						<CardDescription>
-							Completed backup size per job · {formatBytes(totalStorageBytes)}{" "}
-							total
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<StorageByJobChart
-							data={data?.storage_by_job ?? []}
-							totalBytes={totalStorageBytes}
-						/>
-					</CardContent>
-				</Card>
-
-				{/* ── Rows 2-3, col 1-2: Backup activity chart ── */}
-
-				<Card className="col-span-2 row-span-2">
-					<CardHeader>
-						<CardTitle>Backup Activity</CardTitle>
-						<CardDescription>Daily backup count · last 7 days</CardDescription>
-					</CardHeader>
-					<CardContent className="h-full">
-						<BackupDayChart data={chartData} />
-					</CardContent>
-				</Card>
-
-				{/* ── Row 2, col 3-4: Recent backups ── */}
-
-				<Card className="col-span-2">
-					<CardHeader>
-						<CardTitle>Recent Backups</CardTitle>
-					</CardHeader>
-					<CardContent>
-						{recentBackups.length === 0 ? (
-							<p className="text-sm text-muted-foreground">
-								No recent backups.
+					<Card>
+						<CardHeader>
+							<CardTitle>Storage Used</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<h2 className="text-3xl font-black">
+								{formatBytes(data?.stats?.total_size_bytes)}
+							</h2>
+							<p className="text-muted-foreground text-xs mt-0.5">
+								{data?.stats?.total_backups ?? "—"} backups total
 							</p>
-						) : (
-							<div className="flex flex-col gap-2.5">
-								{recentBackups.map((b) => (
-									<div key={b.id} className="flex items-center gap-2 text-xs">
-										<StatusDot status={b.status} />
-										<span className="font-medium flex-1 truncate">
-											{b.agent_name}
+						</CardContent>
+						<CardFooter>
+							<Button
+								variant="outline"
+								className="w-full"
+								onClick={() => navigate("/backups")}
+							>
+								<ArrowRightIcon />
+								View Backups
+							</Button>
+						</CardFooter>
+					</Card>
+
+					<Card>
+						<CardHeader>
+							<CardTitle>Failed Backups</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<h2
+								className={`text-3xl font-black ${failedCount > 0 ? "text-destructive" : ""}`}
+							>
+								{failedCount}
+							</h2>
+							<p className="text-muted-foreground text-xs mt-0.5">
+								in the last 7 days
+							</p>
+						</CardContent>
+						<CardFooter>
+							<Button
+								variant="outline"
+								className="w-full"
+								onClick={() => navigate("/backups")}
+							>
+								<ArrowRightIcon />
+								View Backups
+							</Button>
+						</CardFooter>
+					</Card>
+
+					<Card className="col-span-2">
+						<CardHeader>
+							<CardTitle>Storage by Job</CardTitle>
+							<CardDescription>
+								Completed backup size per job · {formatBytes(totalStorageBytes)}{" "}
+								total
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<StorageByJobChart
+								data={data?.storage_by_job ?? []}
+								totalBytes={totalStorageBytes}
+							/>
+						</CardContent>
+					</Card>
+
+					{/* ── Rows 2-3, col 1-2: Backup activity chart ── */}
+
+					<Card className="col-span-2 row-span-2">
+						<CardHeader>
+							<CardTitle>Backup Activity</CardTitle>
+							<CardDescription>
+								Daily backup count · last 7 days
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="h-full">
+							<BackupDayChart data={chartData} />
+						</CardContent>
+					</Card>
+
+					{/* ── Row 2, col 3-4: Recent backups ── */}
+
+					<Card className="col-span-2">
+						<CardHeader>
+							<CardTitle>Recent Backups</CardTitle>
+						</CardHeader>
+						<CardContent>
+							{recentBackups.length === 0 ? (
+								<p className="text-sm text-muted-foreground">
+									No recent backups.
+								</p>
+							) : (
+								<div className="flex flex-col gap-2.5">
+									{recentBackups.map((b) => (
+										<div key={b.id} className="flex items-center gap-2 text-xs">
+											<StatusDot status={b.status} />
+											<span className="font-medium flex-1 truncate">
+												{b.agent_name}
+											</span>
+											<span className="text-muted-foreground shrink-0">
+												{formatBytes(b.size_bytes)}
+											</span>
+											<span className="text-muted-foreground shrink-0 w-14 text-right">
+												{formatRelative(b.started_at)}
+											</span>
+										</div>
+									))}
+								</div>
+							)}
+						</CardContent>
+					</Card>
+
+					{/* ── Row 3, col 3-4: Backup health ── */}
+
+					<Card className="col-span-2">
+						<CardHeader>
+							<CardTitle>Backup Health</CardTitle>
+							<CardDescription>Based on the last 10 backups</CardDescription>
+						</CardHeader>
+						<CardContent className="flex items-center gap-8">
+							<div className="shrink-0">
+								<h2
+									style={{
+										color:
+											successRate !== null && successRate >= 80
+												? "var(--greenish)"
+												: successRate !== null && successRate >= 50
+													? "var(--yellowish)"
+													: undefined,
+									}}
+									className={`text-4xl font-black ${
+										successRate === null && "text-muted-foreground"
+									}`}
+								>
+									{successRate !== null ? `${successRate}%` : "—"}
+								</h2>
+								<p className="text-xs text-muted-foreground">success rate</p>
+							</div>
+							<div className="flex flex-col gap-1.5">
+								{statusBreakdown.map(({ status, count }) => (
+									<div key={status} className="flex items-center gap-2 text-xs">
+										<StatusDot status={status} />
+										<span className="text-muted-foreground capitalize">
+											{status.toLowerCase().replace("_", " ")}
 										</span>
-										<span className="text-muted-foreground shrink-0">
-											{formatBytes(b.size_bytes)}
-										</span>
-										<span className="text-muted-foreground shrink-0 w-14 text-right">
-											{formatRelative(b.started_at)}
-										</span>
+										<span className="font-medium">{count}</span>
 									</div>
 								))}
+								{statusBreakdown.length === 0 && (
+									<p className="text-xs text-muted-foreground">No data yet.</p>
+								)}
 							</div>
-						)}
-					</CardContent>
-				</Card>
+						</CardContent>
+					</Card>
 
-				{/* ── Row 3, col 3-4: Backup health ── */}
+					{/* ── Row 4: Agents, Active Jobs, Users, Policies ── */}
 
-				<Card className="col-span-2">
-					<CardHeader>
-						<CardTitle>Backup Health</CardTitle>
-						<CardDescription>Based on the last 10 backups</CardDescription>
-					</CardHeader>
-					<CardContent className="flex items-center gap-8">
-						<div className="shrink-0">
-							<h2
-								style={{
-									color:
-										successRate !== null && successRate >= 80
-											? "var(--greenish)"
-											: successRate !== null && successRate >= 50
-												? "var(--yellowish)"
-												: undefined,
-								}}
-								className={`text-4xl font-black ${
-									successRate === null && "text-muted-foreground"
-								}`}
-							>
-								{successRate !== null ? `${successRate}%` : "—"}
+					<Card>
+						<CardHeader>
+							<CardTitle>Agents</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<h2 className="text-3xl font-black">
+								{onlineCount}
+								<span className="text-muted-foreground text-xl font-normal">
+									/{data?.stats?.total_agents ?? "—"}
+								</span>
 							</h2>
-							<p className="text-xs text-muted-foreground">success rate</p>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							{statusBreakdown.map(({ status, count }) => (
-								<div key={status} className="flex items-center gap-2 text-xs">
-									<StatusDot status={status} />
-									<span className="text-muted-foreground capitalize">
-										{status.toLowerCase().replace("_", " ")}
-									</span>
-									<span className="font-medium">{count}</span>
-								</div>
-							))}
-							{statusBreakdown.length === 0 && (
-								<p className="text-xs text-muted-foreground">No data yet.</p>
-							)}
-						</div>
-					</CardContent>
-				</Card>
+							<p className="text-muted-foreground text-xs mt-0.5">
+								online right now
+							</p>
+						</CardContent>
+						<CardFooter>
+							<Button
+								variant="outline"
+								className="w-full"
+								onClick={() => navigate("/agents")}
+							>
+								<ArrowRightIcon />
+								Manage Agents
+							</Button>
+						</CardFooter>
+					</Card>
 
-				{/* ── Row 4: Agents, Active Jobs, Users, Policies ── */}
+					<Card>
+						<CardHeader>
+							<CardTitle>Active Jobs</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<h2 className="text-3xl font-black">
+								{data?.stats?.total_jobs ?? "—"}
+							</h2>
+							<p className="text-muted-foreground text-xs mt-0.5">
+								across all agents
+							</p>
+						</CardContent>
+						<CardFooter>
+							<Button
+								variant="outline"
+								className="w-full"
+								onClick={() => navigate("/backup-jobs")}
+							>
+								<ArrowRightIcon />
+								Manage Jobs
+							</Button>
+						</CardFooter>
+					</Card>
 
-				<Card>
-					<CardHeader>
-						<CardTitle>Agents</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<h2 className="text-3xl font-black">
-							{onlineCount}
-							<span className="text-muted-foreground text-xl font-normal">
-								/{data?.stats?.total_agents ?? "—"}
-							</span>
-						</h2>
-						<p className="text-muted-foreground text-xs mt-0.5">
-							online right now
-						</p>
-					</CardContent>
-					<CardFooter>
-						<Button
-							variant="outline"
-							className="w-full"
-							onClick={() => navigate("/agents")}
-						>
-							<ArrowRightIcon />
-							Manage Agents
-						</Button>
-					</CardFooter>
-				</Card>
+					<Card>
+						<CardHeader>
+							<CardTitle>Users</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<h2 className="text-3xl font-black">
+								{data?.total_users ?? "—"}
+							</h2>
+							<p className="text-muted-foreground text-xs mt-0.5">
+								with access to this server
+							</p>
+						</CardContent>
+						<CardFooter>
+							<Button
+								variant="outline"
+								className="w-full"
+								onClick={() => navigate("/users")}
+							>
+								<ArrowRightIcon />
+								Manage Users
+							</Button>
+						</CardFooter>
+					</Card>
 
-				<Card>
-					<CardHeader>
-						<CardTitle>Active Jobs</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<h2 className="text-3xl font-black">
-							{data?.stats?.total_jobs ?? "—"}
-						</h2>
-						<p className="text-muted-foreground text-xs mt-0.5">
-							across all agents
-						</p>
-					</CardContent>
-					<CardFooter>
-						<Button
-							variant="outline"
-							className="w-full"
-							onClick={() => navigate("/backup-jobs")}
-						>
-							<ArrowRightIcon />
-							Manage Jobs
-						</Button>
-					</CardFooter>
-				</Card>
-
-				<Card>
-					<CardHeader>
-						<CardTitle>Users</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<h2 className="text-3xl font-black">{data?.total_users ?? "—"}</h2>
-						<p className="text-muted-foreground text-xs mt-0.5">
-							with access to this server
-						</p>
-					</CardContent>
-					<CardFooter>
-						<Button
-							variant="outline"
-							className="w-full"
-							onClick={() => navigate("/users")}
-						>
-							<ArrowRightIcon />
-							Manage Users
-						</Button>
-					</CardFooter>
-				</Card>
-
-				<Card>
-					<CardHeader>
-						<CardTitle>Policies</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<h2 className="text-3xl font-black">
-							{data?.total_policies ?? "—"}
-						</h2>
-						<p className="text-muted-foreground text-xs mt-0.5">
-							retention policies defined
-						</p>
-					</CardContent>
-					<CardFooter>
-						<Button
-							variant="outline"
-							className="w-full"
-							onClick={() => navigate("/backup-policies")}
-						>
-							<ArrowRightIcon />
-							Manage Policies
-						</Button>
-					</CardFooter>
-				</Card>
+					<Card>
+						<CardHeader>
+							<CardTitle>Policies</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<h2 className="text-3xl font-black">
+								{data?.total_policies ?? "—"}
+							</h2>
+							<p className="text-muted-foreground text-xs mt-0.5">
+								retention policies defined
+							</p>
+						</CardContent>
+						<CardFooter>
+							<Button
+								variant="outline"
+								className="w-full"
+								onClick={() => navigate("/backup-policies")}
+							>
+								<ArrowRightIcon />
+								Manage Policies
+							</Button>
+						</CardFooter>
+					</Card>
+				</div>
 			</div>
-		</div>
 		</>
 	);
 }

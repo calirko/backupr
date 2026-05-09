@@ -51,6 +51,20 @@ class BackuprAgent {
 	private jobQueue: BackupJobState[] = [];
 	private currentJob: BackupJobState | null = null;
 
+	async stop() {
+		this.stopHeartbeat();
+		if (this.ws) {
+			this.ws.close();
+		}
+		if (this.reconnectTimeout) {
+			clearTimeout(this.reconnectTimeout);
+		}
+		if (this.statusReportInterval) {
+			clearInterval(this.statusReportInterval);
+		}
+		process.exit(0);
+	}
+
 	async start() {
 		this.config = await ConfigManager.load();
 		this.shouldReconnect = true;
@@ -174,7 +188,10 @@ class BackuprAgent {
 		}, delayMs);
 	}
 
-	private handleCommand(message: { type: string; [key: string]: unknown }) {
+	private async handleCommand(message: {
+		type: string;
+		[key: string]: unknown;
+	}) {
 		switch (message.type) {
 			case "start_backup":
 				console.log("[Agent] Received start_backup command:", message);
@@ -195,8 +212,24 @@ class BackuprAgent {
 			case "pong":
 				console.log("[Agent] Received pong from server.");
 				break;
+			case "error":
+				{
+					switch (message.message) {
+						case "Invalid token":
+							console.error(
+								"[Agent] The token was invalidated. Clearing config and shutting down.",
+							);
+							await ConfigManager.clear();
+							this.stop();
+							break;
+						default:
+							console.warn(`[Agent] Unknown error message: ${message.message}`);
+					}
+				}
+				break;
 			default:
 				console.warn(`[Agent] Unknown message type: ${message.type}`);
+				console.log("[Agent] Message:", message);
 		}
 	}
 

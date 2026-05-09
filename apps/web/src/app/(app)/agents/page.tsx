@@ -5,6 +5,7 @@ import AgentDialog from "@/components/dialog/agent";
 import AgentCodeDialog from "@/components/dialog/agent-code";
 import AgentDetailDialog from "@/components/dialog/agent-detail";
 import ConfirmDialog from "@/components/dialog/confirm";
+import ErrorDialog from "@/components/dialog/error";
 import { Button } from "@/components/ui/button";
 import {
 	ConnectionStatus,
@@ -180,7 +181,7 @@ export default function AgentsPage() {
 			icon: <PencilIcon />,
 			onClick: (row) => {
 				openDialog(AgentDialog, {
-					defaultData: { name: row.name },
+					defaultData: { name: row.name, is_active: row.is_active },
 					agentId: row.id,
 					onConfirm: () => {
 						fetchData();
@@ -197,43 +198,53 @@ export default function AgentsPage() {
 			label: "Dangerous",
 		},
 		{
-			id: "disable",
-			label: "Disable",
+			id: "delete",
+			label: "Delete",
 			icon: <XSquareIcon />,
-			variant: "destructive",
+			variant: "destructive" as const,
 			onClick: (row) => {
 				openDialog(ConfirmDialog, {
+					title: "Delete Agent",
+					description:
+						"Are you sure you want to delete this agent? This action cannot be undone.",
 					onConfirm: () => {
-						disableAgent(row.id);
+						deleteAgent(row.id);
 					},
 				});
 			},
 		},
 	] as TableAction[];
 
-	async function disableAgent(agentId: string) {
+	async function deleteAgent(agentId: string) {
 		try {
-			const response = await fetch(`/api/agents/${agentId}/disable`, {
-				method: "POST",
+			const response = await fetch(`/api/agents/${agentId}`, {
+				method: "DELETE",
 				headers: {
 					Authorization: `Bearer ${localStorage.getItem("token")}`,
 				},
 			});
 			if (response.ok) {
-				toast.success("Agent disabled successfully", {
-					description: "The agent has been disabled successfully.",
+				toast.success("Agent deleted successfully", {
+					description: "The agent has been deleted.",
 				});
 				fetchData();
 			} else {
 				const error = await response.json();
-				toast.error("Error disabling agent", {
-					description:
-						error instanceof Error ? error.message : String(error.error),
-				});
+				if (response.status === 409) {
+					openDialog(ErrorDialog, {
+						title: "Cannot Delete Agent",
+						description: "This agent cannot be deleted while it has backup jobs assigned.",
+						message: error.error || "Unknown error",
+					});
+				} else {
+					toast.error("Error deleting agent", {
+						description: error.error || "Unknown error",
+					});
+				}
 			}
 		} catch (error) {
 			console.error(error);
-			toast.error("Failed to disable agent", {
+			toast.error("Failed to delete agent", {
 				description: error instanceof Error ? error.message : String(error),
 			});
 		}

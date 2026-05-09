@@ -80,6 +80,28 @@ export default async function backupPolicyRoutes(app: Hono) {
 	app.delete("/api/backup-policies/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		try {
+			const usageCount = await db.backupJobPolicy.findMany({
+				where: {
+					backup_policy_id: id,
+					backup_policy: { deleted_at: null },
+					backup_job: { deleted_at: null },
+				},
+				include: {
+					backup_job: {
+						select: {
+							name: true,
+						},
+					},
+				},
+			});
+			if (usageCount.length > 0) {
+				return c.json(
+					{
+						error: `This policy is assigned to ${usageCount.length} backup job${usageCount.length === 1 ? "" : "s"} (${usageCount.map((u) => u.backup_job.name).join(", ")}). Remove it from all backup jobs before deleting.`,
+					},
+					409,
+				);
+			}
 			await db.backupPolicy.update({
 				where: { id },
 				data: { deleted_at: new Date() },

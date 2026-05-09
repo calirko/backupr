@@ -53,6 +53,10 @@ export class ConfigManager {
 		return merged;
 	}
 
+	static async clear(): Promise<void> {
+		await this.write({});
+	}
+
 	/**
 	 * Writes a config object to disk, omitting any keys with falsy values
 	 * so the file stays clean (no empty strings / nulls).

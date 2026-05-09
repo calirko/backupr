@@ -24,7 +24,7 @@ export default function Navbar() {
 	const location = useLocation();
 
 	return (
-		<nav className="w-full h-14 border-b bg-background">
+		<nav className="w-full h-14 border-b bg-background sticky top-0 z-50 mb-2">
 			<div className="h-full flex justify-between items-center">
 				<div className="h-full flex">
 					<div className="h-full flex items-center p-2 border-r">

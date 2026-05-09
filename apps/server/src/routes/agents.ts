@@ -88,7 +88,9 @@ export default async function agentRoutes(app: Hono) {
 			const nodeStream = Readable.fromWeb(body as any);
 			await uploadStream(key, nodeStream, size, contentType);
 
-			const filename = `${job.name}.7z`;
+			const dateStr = new Date().toISOString().slice(0, 16).replace(/:/g, "-");
+			const safeName = job.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+			const filename = `${safeName}_${dateStr}.7z`;
 			const url = await presignedDownloadUrl(key, undefined, filename);
 
 			const updated = await db.backup.update({
@@ -408,32 +410,59 @@ export default async function agentRoutes(app: Hono) {
 	});
 
 	// Revoke Agent Session
-	app.delete("/api/agents/:id/sessions/:sessionId", rateLimit, auth, async (c) => {
-		const agentId = c.req.param("id");
-		const sessionId = c.req.param("sessionId");
+	app.delete(
+		"/api/agents/:id/sessions/:sessionId",
+		rateLimit,
+		auth,
+		async (c) => {
+			const agentId = c.req.param("id");
+			const sessionId = c.req.param("sessionId");
 
-		const session = await db.agentSession.findFirst({
-			where: { id: sessionId, agent_id: agentId },
-		});
-		if (!session) return c.json({ error: "Session not found" }, 404);
+			const session = await db.agentSession.findFirst({
+				where: { id: sessionId, agent_id: agentId },
+			});
+			if (!session) return c.json({ error: "Session not found" }, 404);
 
-		await db.agentSession.delete({ where: { id: sessionId } });
+			await db.agentSession.delete({ where: { id: sessionId } });
 
-		const state = agentRegistry.get(agentId);
-		if (state && state.sessionId === sessionId) {
-			state.websocket.close();
-		}
+			const state = agentRegistry.get(agentId);
+			if (state && state.sessionId === sessionId) {
+				state.websocket.close();
+			}
 
-		return c.json({ message: "Session revoked" });
-	});
+			return c.json({ message: "Session revoked" });
+		},
+	);
 
 	// Delete Agent
 	app.delete("/api/agents/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
-		await db.agent.update({
-			where: { id },
-			data: { deleted_at: new Date() },
-		});
-		return c.json({ message: "Agent deleted" });
+		try {
+			const backupJobs = await db.backupJob.findMany({
+				where: { agent_id: id, deleted_at: null },
+				select: { name: true },
+			});
+			if (backupJobs.length > 0) {
+				return c.json(
+					{
+						error: `This agent has ${backupJobs.length} backup job${backupJobs.length === 1 ? "" : "s"} assigned (${backupJobs.map((j) => j.name).join(", ")}). Remove all backup jobs before deleting.`,
+					},
+					409,
+				);
+			}
+			await db.agent.update({
+				where: { id },
+				data: { deleted_at: new Date() },
+			});
+			await db.agentSession.deleteMany({ where: { agent_id: id } });
+			await db.agentCode.deleteMany({ where: { agent_id: id } });
+			const state = agentRegistry.get(id);
+			if (state) {
+				state.websocket.close();
+			}
+			return c.json({ message: "Agent deleted" });
+		} catch (error) {
+			return c.json({ error: "Failed to delete agent" }, 400);
+		}
 	});
 }

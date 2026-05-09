@@ -43,6 +43,7 @@ export async function sendStartBackupCommand(jobId: string): Promise<void> {
 		data: {
 			backup_job_id: jobId,
 			status: BackupStatus.PENDING,
+			requires_password: job.use_password,
 			started_at: new Date(),
 		},
 	});
@@ -131,7 +132,9 @@ export async function handleBackupStatusUpdate(
 
 	// Generate a proper presigned URL server-side so the filename is set correctly
 	if (status === BackupStatus.COMPLETED && metadata?.blob_key) {
-		const filename = `${backup.backup_job.name}.7z`;
+		const dateStr = new Date().toISOString().slice(0, 16).replace(/:/g, "-");
+		const safeName = backup.backup_job.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+		const filename = `${safeName}_${dateStr}.7z`;
 		try {
 			updateData.url = await presignedDownloadUrl(metadata.blob_key, undefined, filename);
 		} catch (err) {
@@ -299,6 +302,7 @@ export async function initBackup(
 		data: {
 			backup_job_id: jobId,
 			status: BackupStatus.PENDING,
+			requires_password: job.use_password,
 			started_at: new Date(),
 		},
 	});

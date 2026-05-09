@@ -153,6 +153,18 @@ export default function AgentDetailDialog({
 		return new Date(dateString).toLocaleString();
 	};
 
+	const formatBytes = (bytes: number | null | undefined): string => {
+		if (!bytes) return "N/A";
+		const units = ["B", "KB", "MB", "GB", "TB"];
+		let value = bytes;
+		let unit = 0;
+		while (value >= 1024 && unit < units.length - 1) {
+			value /= 1024;
+			unit++;
+		}
+		return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+	};
+
 	const formatSystemInfo = (info: Record<string, any>) => {
 		return {
 			arch: info.arch || "N/A",
@@ -161,6 +173,8 @@ export default function AgentDetailDialog({
 			hostname: info.hostname || "N/A",
 			release: info.release || "N/A",
 			version: info.agent_version || "N/A",
+			ram: formatBytes(info.ram),
+			disk_available: formatBytes(info.disk_available),
 		};
 	};
 
@@ -240,6 +254,16 @@ export default function AgentDetailDialog({
 											</p>
 											<p className="font-medium">{sysInfo.arch}</p>
 										</div>
+										<div>
+											<p className="text-muted-foreground text-xs">RAM</p>
+											<p className="font-medium">{sysInfo.ram}</p>
+										</div>
+										<div>
+											<p className="text-muted-foreground text-xs">
+												Disk Available
+											</p>
+											<p className="font-medium">{sysInfo.disk_available}</p>
+										</div>
 										<div className="col-span-2">
 											<p className="text-muted-foreground text-xs">
 												OS Release
@@ -294,9 +318,7 @@ export default function AgentDetailDialog({
 								<div className="flex justify-between items-start">
 									<div>
 										<p className="text-muted-foreground text-xs">Code</p>
-										<p className="font-mono font-medium text-xs break-all">
-											{code.code}
-										</p>
+										<p className="font-medium text-xs break-all">{code.code}</p>
 									</div>
 									<div className="text-right">
 										<p className="text-muted-foreground text-xs">Created</p>

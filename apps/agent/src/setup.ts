@@ -1,3 +1,4 @@
+import { statfsSync } from "node:fs";
 import os from "os";
 import { version } from "../package.json" with { type: "json" };
 import { ConfigManager } from "./lib/config";
@@ -36,6 +37,15 @@ export async function runSetup(agentCode: string): Promise<void> {
 					cpus: os.cpus().length,
 					hostname: os.hostname(),
 					agent_version: version,
+					ram: os.totalmem(),
+					disk_available: (() => {
+						try {
+							const s = statfsSync(os.platform() === "win32" ? "C:\\" : "/");
+							return s.bavail * s.bsize;
+						} catch {
+							return null;
+						}
+					})(),
 				},
 			}),
 		});

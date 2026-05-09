@@ -28,6 +28,8 @@ interface Agent {
 	id: string;
 	name: string;
 	is_active: boolean;
+	total_size_bytes: number;
+	created_by: { name: string } | null;
 }
 
 function getAgentStatus(
@@ -44,6 +46,18 @@ function getAgentStatus(
 	if (status.jobQueue && status.jobQueue.length > 0) return "queued";
 	if (status.status === "connected") return "connected";
 	return "unknown";
+}
+
+function formatBytes(bytes: number): string {
+	if (!bytes) return "0 B";
+	const units = ["B", "KB", "MB", "GB", "TB"];
+	let value = bytes;
+	let unit = 0;
+	while (value >= 1024 && unit < units.length - 1) {
+		value /= 1024;
+		unit++;
+	}
+	return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 export default function BackupsPage() {
@@ -138,25 +152,43 @@ export default function BackupsPage() {
 				<p className="text-sm text-muted-foreground">No agents found.</p>
 			)}
 
-			<div className="grid grid-cols-3 gap-4">
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 				{visibleAgents.map((agent) => {
 					const status = getAgentStatus(agentStatuses, agent.id);
 					return (
 						<Card key={agent.id}>
 							<CardHeader>
-								<CardTitle>{agent.name}</CardTitle>
+								<CardTitle className="truncate">{agent.name}</CardTitle>
 								<CardAction>
 									<ConnectionStatus status={status} type="long" />
 								</CardAction>
 							</CardHeader>
 							<CardContent>
-								<p className="text-sm text-muted-foreground">
-									{agent.is_active ? "Active" : "Inactive"}
-								</p>
+								<div className="space-y-0">
+									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+										<span className="text-xs text-muted-foreground shrink-0">Status</span>
+										<span
+											className="text-xs text-right"
+											style={agent.is_active ? { color: "var(--greenish)" } : undefined}
+										>
+											{agent.is_active ? "Active" : <span className="text-destructive">Inactive</span>}
+										</span>
+									</div>
+									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+										<span className="text-xs text-muted-foreground shrink-0">Total Size</span>
+										<span className="text-xs text-right font-mono">{formatBytes(agent.total_size_bytes)}</span>
+									</div>
+									{agent.created_by && (
+										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+											<span className="text-xs text-muted-foreground shrink-0">Created By</span>
+											<span className="text-xs text-right truncate max-w-32">{agent.created_by.name}</span>
+										</div>
+									)}
+								</div>
 							</CardContent>
 							<CardFooter>
 								<Button
-									variant={"outline"}
+									variant="outline"
 									className="w-full"
 									onClick={() => navigate(`/backups/${agent.id}/jobs`)}
 								>

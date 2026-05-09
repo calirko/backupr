@@ -54,7 +54,10 @@ export default async function backupRoutes(app: Hono) {
 		if (!backup.blob_key)
 			return c.json({ error: "No file stored for this backup" }, 404);
 
-		const filename = `${backup.backup_job.name}.7z`;
+		const date = backup.completed_at ?? backup.started_at ?? new Date();
+		const dateStr = date.toISOString().slice(0, 16).replace(/:/g, "-");
+		const safeName = backup.backup_job.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+		const filename = `${safeName}_${dateStr}.7z`;
 		const url = await presignedDownloadUrl(
 			backup.blob_key,
 			undefined,

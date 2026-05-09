@@ -87,7 +87,7 @@ function BackupErrorDialog({
 						This backup failed with the following error.
 					</DialogDescription>
 				</DialogHeader>
-				<pre className="dynround border border-destructive/20 bg-destructive/5 p-3 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+				<pre className="dynround border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive whitespace-pre-wrap break-all">
 					{error}
 				</pre>
 				<DialogFooter className="gap-2">
@@ -221,7 +221,7 @@ function BackupVersionsTable({ backupJobId }: { backupJobId: string }) {
 									<div className="flex flex-col gap-0.5">
 										<StatusBadge status={b.status} />
 										{liveStatus && (
-											<span className="text-xs text-muted-foreground font-mono">
+											<span className="text-xs text-muted-foreground">
 												{liveStatus}
 											</span>
 										)}
