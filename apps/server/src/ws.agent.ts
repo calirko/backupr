@@ -128,6 +128,18 @@ export default upgradeWebSocket((c) => {
 				return;
 			}
 
+			if (session.agent.deleted_at) {
+				console.warn(
+					`[ws agent] Connection rejected: agent ${session.agent_id} is deleted`,
+				);
+				send(ws as unknown as WebSocket, {
+					type: "error",
+					message: "Agent has been deleted",
+				});
+				ws.close();
+				return;
+			}
+
 			agentId = session.agent_id;
 			sessionId = session.id;
 

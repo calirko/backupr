@@ -103,9 +103,18 @@ export default function UserDropdown() {
 					<DropdownMenuGroup>
 						<DropdownMenuItem
 							variant="destructive"
-							onClick={() => {
-								localStorage.removeItem("token");
-								window.location.reload();
+							onClick={async () => {
+								try {
+									await fetch("/api/users/me/logout", {
+										method: "POST",
+										headers: {
+											Authorization: `Bearer ${localStorage.getItem("token")}`,
+										},
+									});
+								} finally {
+									localStorage.removeItem("token");
+									window.location.reload();
+								}
 							}}
 						>
 							<SignOutIcon />

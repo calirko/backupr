@@ -1,3 +1,7 @@
+import { FloppyDiskIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { NoticeCard } from "../notice-card";
 import { Button } from "../ui/button";
 import {
 	Dialog,
@@ -8,7 +12,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "../ui/dialog";
-import { useIsMobile } from "@/hooks/use-mobile";
 import {
 	Drawer,
 	DrawerClose,
@@ -18,12 +21,9 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "../ui/drawer";
-import { FloppyDiskIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
-import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { toast } from "sonner";
 import { InputPassword } from "../ui/input-password";
-import { NoticeCard } from "../notice-card";
+import { Label } from "../ui/label";
 
 export default function UserDialog({
 	open,
@@ -236,7 +236,7 @@ export default function UserDialog({
 						<DrawerTitle>{title}</DrawerTitle>
 						<DrawerDescription>{description}</DrawerDescription>
 					</DrawerHeader>
-					{content}
+					<span className="px-4">{content}</span>
 					<DrawerFooter>
 						<DrawerClose asChild>
 							<Button variant="outline">

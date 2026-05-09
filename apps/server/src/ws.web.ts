@@ -24,7 +24,7 @@ function send(ws: WebSocket, message: Record<string, unknown>) {
 }
 
 async function buildAgentStatusPayload() {
-	const agents = await db.agent.findMany({ where: { is_active: true } });
+	const agents = await db.agent.findMany({ where: { is_active: true, deleted_at: null } });
 	return agents.map((agent) => {
 		const state = agentRegistry.get(agent.id);
 		if (state) {
@@ -101,11 +101,19 @@ export default upgradeWebSocket((c) => {
 
 			const session = await db.userSession.findUnique({
 				where: { token },
+				include: { user: { select: { deleted_at: true } } },
 			});
 
 			if (!session || new Date() > session.expires_at) {
 				console.warn("[ws web] Connection rejected: invalid or expired token");
 				send(ws as unknown as WebSocket, { type: "error", message: "Invalid or expired token" });
+				ws.close();
+				return;
+			}
+
+			if (session.user.deleted_at) {
+				console.warn(`[ws web] Connection rejected: user ${session.user_id} is deleted`);
+				send(ws as unknown as WebSocket, { type: "error", message: "Account has been deleted" });
 				ws.close();
 				return;
 			}

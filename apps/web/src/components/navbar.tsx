@@ -36,15 +36,17 @@ export default function Navbar() {
 								{NAV_ITEMS.map((item) => (
 									<div key={item.path} className="h-full flex items-center">
 										<div
-											className={`h-full flex items-center border-r gap-1 ${item.path === location.pathname ? "" : "text-muted-foreground"}`}
+											className={`h-full flex items-center border-r gap-1 ${location.pathname.startsWith(item.path) ? "" : "text-muted-foreground"}`}
 										>
 											<Button
 												variant="ghost"
-												className="h-full px-4"
+												className="h-full px-4 rounded-none! m-0!"
 												onClick={() => navigate(item.path)}
 											>
 												{item.icon}
-												{item.label}
+												<span className="hidden sm:hidden md:block">
+													{item.label}
+												</span>
 											</Button>
 										</div>
 									</div>

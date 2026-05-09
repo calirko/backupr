@@ -8,13 +8,14 @@ datasource db {
 }
 
 model User {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   name       String?
-  username   String   @unique
-  email      String   @unique
+  username   String    @unique
+  email      String    @unique
   password   String
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   agents         Agent[]
   backupJobs     BackupJob[]
@@ -39,13 +40,14 @@ model UserSession {
 }
 
 model Agent {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   name          String
   created_by_id String
-  is_active     Boolean  @default(true)
-  created_by    User     @relation(fields: [created_by_id], references: [id])
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  is_active     Boolean   @default(true)
+  created_by    User      @relation(fields: [created_by_id], references: [id])
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  deleted_at    DateTime?
 
   agentCodes    AgentCode[]
   backupJobs    BackupJob[]
@@ -103,6 +105,7 @@ model BackupJob {
   updated_at        DateTime          @updatedAt
   backups           Backup[]
   backupJobPolicies BackupJobPolicy[]
+  deleted_at        DateTime?
 
   @@map("backup_jobs")
 }
@@ -140,6 +143,7 @@ model BackupPolicy {
   created_at             DateTime          @default(now())
   updated_at             DateTime          @updatedAt
   backupJobPolicies      BackupJobPolicy[]
+  deleted_at             DateTime?
 
   @@map("backup_policies")
 }

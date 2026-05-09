@@ -383,7 +383,7 @@ export default function DataHeader({
 						<CardDescription>Search for other options</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<div className="grid grid-cols-3 gap-2">
+						<div className="grid grid-cols-1 md:grid-cols-3 sm:grid-cols-2 gap-2">
 							{filterFields.slice(1, filterFields.length).map((field) => (
 								<div key={field.name} className="grid gap-2">
 									<Label>{field.label}</Label>

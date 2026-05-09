@@ -1,10 +1,10 @@
 import type { Hono } from "hono";
+import { initBackup } from "../backup";
 import { auth } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import { rateLimit } from "../lib/rate-limit";
 import { Token } from "../lib/token";
 import { agentRegistry, sendToAgent } from "../ws.agent";
-import { initBackup } from "../backup";
 
 const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
@@ -23,9 +23,11 @@ export default async function backupJobRoutes(app: Hono) {
 		const s = skip ? parseInt(skip) : undefined;
 		const t = take ? parseInt(take) : undefined;
 
+		const baseWhere = { deleted_at: null, ...parsedFilters };
+
 		const [data, total, absoluteTotal] = await Promise.all([
 			db.backupJob.findMany({
-				where: parsedFilters,
+				where: baseWhere,
 				orderBy: Object.keys(parsedOrderBy).length
 					? parsedOrderBy
 					: { created_at: "desc" },
@@ -44,8 +46,8 @@ export default async function backupJobRoutes(app: Hono) {
 					},
 				},
 			}),
-			db.backupJob.count({ where: parsedFilters }),
-			db.backupJob.count(),
+			db.backupJob.count({ where: baseWhere }),
+			db.backupJob.count({ where: { deleted_at: null } }),
 		]);
 		return c.json({ data, total, absoluteTotal, skip: s, take: t });
 	});
@@ -115,7 +117,10 @@ export default async function backupJobRoutes(app: Hono) {
 	app.delete("/api/backup-jobs/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		try {
-			await db.backupJob.delete({ where: { id } });
+			await db.backupJob.update({
+				where: { id },
+				data: { deleted_at: new Date() },
+			});
 			return c.json({ message: "Job deleted" });
 		} catch (error) {
 			return c.json({ error: "Failed to delete backup job" }, 400);
@@ -140,7 +145,7 @@ export default async function backupJobRoutes(app: Hono) {
 
 			const critical_info: string[] = [];
 			if (!agentOnline)
-				critical_info.push("Agent is offline — backup cannot run");
+				critical_info.push("Agent is offline, backup cannot run");
 			if (!job.files || (job.files as string[]).length === 0)
 				critical_info.push("No files or directories configured");
 			if (!job.is_active) critical_info.push("Job is inactive");

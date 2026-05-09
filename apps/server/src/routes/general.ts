@@ -1,15 +1,19 @@
 import type { Hono } from "hono";
 import { getConnInfo } from "hono/bun";
 import { auth } from "../lib/auth";
+import { Password } from "../lib/password";
 import { prisma } from "../lib/prisma";
 import { authRateLimit, rateLimit } from "../lib/rate-limit";
 import { Token, type TokenPayload } from "../lib/token";
-import { Password } from "../lib/password";
 
 const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
 
-function parseSessionInfo(c: Parameters<typeof getConnInfo>[0] & { req: { header: (h: string) => string | undefined } }) {
+function parseSessionInfo(
+	c: Parameters<typeof getConnInfo>[0] & {
+		req: { header: (h: string) => string | undefined };
+	},
+) {
 	const ua = c.req.header("user-agent") ?? "";
 	const ip =
 		c.req.header("x-forwarded-for")?.split(",")[0].trim() ??
@@ -19,20 +23,27 @@ function parseSessionInfo(c: Parameters<typeof getConnInfo>[0] & { req: { header
 		getConnInfo(c).remote.address ??
 		"unknown";
 
-	const browser =
-		/Edg\//.test(ua) ? "Edge"
-		: /Chrome\//.test(ua) ? "Chrome"
-		: /Firefox\//.test(ua) ? "Firefox"
-		: /Safari\//.test(ua) ? "Safari"
-		: "Unknown";
+	const browser = /Edg\//.test(ua)
+		? "Edge"
+		: /Chrome\//.test(ua)
+			? "Chrome"
+			: /Firefox\//.test(ua)
+				? "Firefox"
+				: /Safari\//.test(ua)
+					? "Safari"
+					: "Unknown";
 
-	const os =
-		/Windows/.test(ua) ? "Windows"
-		: /Macintosh|Mac OS X/.test(ua) ? "macOS"
-		: /Android/.test(ua) ? "Android"
-		: /iPhone|iPad/.test(ua) ? "iOS"
-		: /Linux/.test(ua) ? "Linux"
-		: "Unknown";
+	const os = /Windows/.test(ua)
+		? "Windows"
+		: /Macintosh|Mac OS X/.test(ua)
+			? "macOS"
+			: /Android/.test(ua)
+				? "Android"
+				: /iPhone|iPad/.test(ua)
+					? "iOS"
+					: /Linux/.test(ua)
+						? "Linux"
+						: "Unknown";
 
 	return { ip, browser, os, user_agent: ua };
 }
@@ -62,10 +73,12 @@ export default async function generalRoutes(app: Hono) {
 		}
 
 		// Try to find user by email first, then by name (username)
-		let user = await db.user.findUnique({ where: { email: emailOrUsername } });
+		let user = await db.user.findFirst({
+			where: { email: emailOrUsername, deleted_at: null },
+		});
 		if (!user) {
 			user = await db.user.findFirst({
-				where: { username: emailOrUsername },
+				where: { username: emailOrUsername, deleted_at: null },
 			});
 		}
 		if (!user || !(await Password.compare(password, user.password))) {
@@ -157,9 +170,9 @@ export default async function generalRoutes(app: Hono) {
 			totalUsers,
 			totalPolicies,
 		] = await Promise.all([
-			db.agent.count(),
-			db.agent.count({ where: { is_active: true } }),
-			db.backupJob.count({ where: { is_active: true } }),
+			db.agent.count({ where: { deleted_at: null } }),
+			db.agent.count({ where: { is_active: true, deleted_at: null } }),
+			db.backupJob.count({ where: { is_active: true, deleted_at: null } }),
 			db.backup.count(),
 
 			db.backup.aggregate({
@@ -222,8 +235,8 @@ export default async function generalRoutes(app: Hono) {
          LIMIT 8
        `,
 
-			db.user.count(),
-			db.backupPolicy.count(),
+			db.user.count({ where: { deleted_at: null } }),
+			db.backupPolicy.count({ where: { deleted_at: null } }),
 		]);
 
 		return c.json({

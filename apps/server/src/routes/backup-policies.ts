@@ -22,17 +22,19 @@ export default async function backupPolicyRoutes(app: Hono) {
 		const s = skip ? parseInt(skip) : undefined;
 		const t = take ? parseInt(take) : undefined;
 
+		const baseWhere = { deleted_at: null, ...parsedFilters };
+
 		const [data, total, absoluteTotal] = await Promise.all([
 			db.backupPolicy.findMany({
-				where: parsedFilters,
+				where: baseWhere,
 				orderBy: Object.keys(parsedOrderBy).length
 					? parsedOrderBy
 					: { created_at: "desc" },
 				skip: s,
 				take: t,
 			}),
-			db.backupPolicy.count({ where: parsedFilters }),
-			db.backupPolicy.count(),
+			db.backupPolicy.count({ where: baseWhere }),
+			db.backupPolicy.count({ where: { deleted_at: null } }),
 		]);
 		return c.json({ data, total, absoluteTotal, skip: s, take: t });
 	});
@@ -78,7 +80,10 @@ export default async function backupPolicyRoutes(app: Hono) {
 	app.delete("/api/backup-policies/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		try {
-			await db.backupPolicy.delete({ where: { id } });
+			await db.backupPolicy.update({
+				where: { id },
+				data: { deleted_at: new Date() },
+			});
 			return c.json({ message: "Policy deleted" });
 		} catch (error) {
 			return c.json({ error: "Failed to delete backup policy" }, 400);

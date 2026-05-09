@@ -129,7 +129,7 @@ async function triggerDueBackups(): Promise<void> {
 	const now = new Date();
 
 	const activeJobs = await db.backupJob.findMany({
-		where: { is_active: true },
+		where: { is_active: true, deleted_at: null },
 		include: {
 			// Pull the most recent backup so we can compare against it
 			backups: {
@@ -350,10 +350,12 @@ async function timeoutStaleBackups(): Promise<void> {
 async function enforceRetentionPolicies(): Promise<void> {
 	const jobs = await db.backupJob.findMany({
 		where: {
-			backupJobPolicies: { some: {} },
+			deleted_at: null,
+			backupJobPolicies: { some: { backup_policy: { deleted_at: null } } },
 		},
 		include: {
 			backupJobPolicies: {
+				where: { backup_policy: { deleted_at: null } },
 				include: { backup_policy: true },
 			},
 		},

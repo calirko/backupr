@@ -1,8 +1,9 @@
 // agent.ts
-import WebSocket from "ws";
+
 import * as fs from "fs";
-import { type AgentConfig, ConfigManager } from "./lib/config";
+import WebSocket from "ws";
 import { runBackupJob } from "./backup";
+import { type AgentConfig, ConfigManager } from "./lib/config";
 import { runSetup } from "./setup";
 
 const [, , subcommand, subcommandArg] = process.argv;
@@ -52,7 +53,11 @@ class BackuprAgent {
 		this.config = await ConfigManager.load();
 		this.shouldReconnect = true;
 
-		if (!this.config.agentToken || !this.config.serverUrl || !this.config.wsUrl) {
+		if (
+			!this.config.agentToken ||
+			!this.config.serverUrl ||
+			!this.config.wsUrl
+		) {
 			console.error(
 				"\x1b[31m[Error] Agent is not configured. Run: agent setup <agentCode>\x1b[0m",
 			);
@@ -198,23 +203,27 @@ class BackuprAgent {
 		const paths = (message.files as string[]) ?? [];
 		const compressionLevel = (message.compression_level as number) ?? 5;
 
-		console.log(`[Agent] Received dry_run request (${requestId}) for ${paths.length} path(s):`, paths);
+		console.log(
+			`[Agent] Received dry_run request (${requestId}) for ${paths.length} path(s):`,
+			paths,
+		);
 
 		// Per-level compression ratio estimates (compressed_size / original_size)
 		// These are conservative estimates based on typical file mixes
 		const compressionRatios: Record<number, number> = {
-			1: 0.70,  // Very low: ~70% of original
-			2: 0.65,  // Low: ~65%
-			3: 0.60,  // Medium-low: ~60%
-			4: 0.55,  // Medium: ~55%
-			5: 0.50,  // Medium (default): ~50%
-			6: 0.45,  // Medium-high: ~45%
-			7: 0.40,  // High: ~40%
-			8: 0.35,  // Very high: ~35%
-			9: 0.30,  // Ultra: ~30%
+			1: 0.7, // Very low: ~70% of original
+			2: 0.65, // Low: ~65%
+			3: 0.6, // Medium-low: ~60%
+			4: 0.55, // Medium: ~55%
+			5: 0.5, // Medium (default): ~50%
+			6: 0.45, // Medium-high: ~45%
+			7: 0.4, // High: ~40%
+			8: 0.35, // Very high: ~35%
+			9: 0.3, // Ultra: ~30%
 		};
 
-		const compressionRatio = compressionRatios[compressionLevel] ?? compressionRatios[5];
+		const compressionRatio =
+			compressionRatios[compressionLevel] ?? compressionRatios[5];
 
 		interface PathResult {
 			path: string;

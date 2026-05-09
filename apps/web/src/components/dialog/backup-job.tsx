@@ -1,4 +1,10 @@
+import { FloppyDiskIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { NoticeCard } from "../notice-card";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import {
 	Dialog,
 	DialogClose,
@@ -8,7 +14,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "../ui/dialog";
-import { useIsMobile } from "@/hooks/use-mobile";
 import {
 	Drawer,
 	DrawerClose,
@@ -18,12 +23,9 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "../ui/drawer";
-import { FloppyDiskIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
-import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { InputPassword } from "../ui/input-password";
-import { toast } from "sonner";
-import { useEffect, useState } from "react";
+import { Label } from "../ui/label";
 import {
 	Select,
 	SelectContent,
@@ -31,9 +33,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "../ui/select";
-import { Checkbox } from "../ui/checkbox";
 import { Textarea } from "../ui/textarea";
-import { NoticeCard } from "../notice-card";
 
 interface Agent {
 	id: string;
@@ -427,7 +427,7 @@ export default function BackupJobDialog({
 								: "Create a new backup job with schedule and files."}
 						</DrawerDescription>
 					</DrawerHeader>
-					<div className="px-4">{content}</div>
+					<div className="px-4 overflow-y-auto flex-1">{content}</div>
 					<DrawerFooter>
 						<DrawerClose asChild>
 							<Button variant="outline">

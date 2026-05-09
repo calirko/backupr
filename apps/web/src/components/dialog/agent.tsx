@@ -139,7 +139,7 @@ export default function AgentDialog({
 							{agentId ? "Edit the agent's details." : "Add a new agent."}
 						</DrawerDescription>
 					</DrawerHeader>
-					{content}
+					<span className="px-4">{content}</span>
 					<DrawerFooter>
 						<DrawerClose asChild>
 							<Button variant="outline">

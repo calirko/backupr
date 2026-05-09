@@ -138,9 +138,9 @@ export default function AgentsPage() {
 	const actions = [
 		{
 			id: "gen-code",
-			label: "Generate Code",
+			label: "Pairing Code",
 			icon: <CodeSimpleIcon />,
-			// disabled: (row) => getAgentStatus(row.id).label !== "No Status",
+			disabled: (row) => !row.is_active,
 			onClick: (row) => {
 				openDialog(AgentCodeDialog, {
 					agentId: row.id,
@@ -189,7 +189,7 @@ export default function AgentsPage() {
 			},
 		},
 		{
-			id: "separator",
+			id: "2-separator",
 			divider: true,
 		},
 		{
@@ -283,7 +283,7 @@ export default function AgentsPage() {
 	}, [filters, orderBy]);
 
 	return (
-		<div className="w-full grow px-14 pt-4 flex flex-col gap-6">
+		<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6">
 			<div>
 				<h1 className="text-4xl font-black">Agents</h1>
 				<p className="text-muted-foreground text-sm">

@@ -21,8 +21,8 @@ interface BackupJobPayload {
  */
 export async function sendStartBackupCommand(jobId: string): Promise<void> {
 	// 1. Fetch the job details
-	const job = await db.backupJob.findUnique({
-		where: { id: jobId },
+	const job = await db.backupJob.findFirst({
+		where: { id: jobId, deleted_at: null },
 		include: { agent: true },
 	});
 
@@ -168,7 +168,7 @@ export async function handleBackupStatusUpdate(
 export async function runBackupPolicy(jobId: string): Promise<void> {
 	// 1. Fetch all policies associated with this job
 	const jobPolicies = await db.backupJobPolicy.findMany({
-		where: { backup_job_id: jobId },
+		where: { backup_job_id: jobId, backup_policy: { deleted_at: null } },
 		include: { backup_policy: true },
 	});
 
@@ -269,8 +269,8 @@ export async function initBackup(
 	},
 ): Promise<{ backupId: string; jobId: string }> {
 	// Validate the job exists
-	const job = await db.backupJob.findUnique({
-		where: { id: jobId },
+	const job = await db.backupJob.findFirst({
+		where: { id: jobId, deleted_at: null },
 		include: { agent: true },
 	});
 

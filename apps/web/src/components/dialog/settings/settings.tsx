@@ -1,5 +1,3 @@
-import { jwtDecode } from "jwt-decode";
-import { useEffect, useState } from "react";
 import {
 	AppleLogoIcon,
 	ArrowClockwiseIcon,
@@ -14,8 +12,9 @@ import {
 	WindowsLogoIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
+import { jwtDecode } from "jwt-decode";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogTitle } from "../../ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -28,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getGravatarImageUrl } from "@/lib/gravatar";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogTitle } from "../../ui/dialog";
 
 const tabs = [
 	{ id: "account", label: "Account", icon: UserIcon },
@@ -206,9 +206,18 @@ function AccountPanel() {
 							variant="destructive"
 							size="sm"
 							className="shrink-0"
-							onClick={() => {
-								localStorage.removeItem("token");
-								window.location.reload();
+							onClick={async () => {
+								try {
+									await fetch("/api/users/me/logout", {
+										method: "POST",
+										headers: {
+											Authorization: `Bearer ${localStorage.getItem("token")}`,
+										},
+									});
+								} finally {
+									localStorage.removeItem("token");
+									window.location.reload();
+								}
 							}}
 						>
 							<SignOutIcon />
@@ -291,67 +300,69 @@ function SecurityPanel() {
 		<div className="flex flex-col gap-3">
 			<div>
 				<p className="mb-2">Sessions</p>
-				{sessions.map((session) => (
-					<Card key={session.id} size="sm">
-						<CardContent className="flex items-center justify-between gap-4">
-							<div className="flex gap-4 items-center">
-								<div className="dynround bg-accent/50 p-2">
-									{session.info.os == "Linux" ? (
-										<LinuxLogoIcon size={25} />
-									) : session.info.os == "Windows" ? (
-										<WindowsLogoIcon size={25} />
-									) : session.info.os == "macOS" ? (
-										<AppleLogoIcon size={25} />
-									) : session.info.os == "iOS" ||
-										session.info.os == "Android" ? (
-										<DeviceMobileIcon size={25} />
-									) : (
-										<HardDrivesIcon size={25} />
-									)}
-								</div>
-								<div className="flex flex-col gap-1 min-w-0">
-									<div className="flex items-center gap-2">
-										<span className="text-sm font-medium">
-											{session.info.browser ?? "Unknown browser"} on{" "}
-											{session.info.os ?? "Unknown OS"}
-										</span>
-										{session.is_current && (
-											<span className="dynround text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-md font-medium shrink-0">
-												Current
-											</span>
+				<div className="min-h-10 flex items-center justify-center gap-2 flex-col">
+					{sessions.map((session) => (
+						<Card key={session.id} size="sm" className="w-full">
+							<CardContent className="flex items-center justify-between gap-4 w-full">
+								<div className="flex gap-4 items-center">
+									<div className="dynround bg-accent/50 p-2">
+										{session.info.os == "Linux" ? (
+											<LinuxLogoIcon size={25} />
+										) : session.info.os == "Windows" ? (
+											<WindowsLogoIcon size={25} />
+										) : session.info.os == "macOS" ? (
+											<AppleLogoIcon size={25} />
+										) : session.info.os == "iOS" ||
+											session.info.os == "Android" ? (
+											<DeviceMobileIcon size={25} />
+										) : (
+											<HardDrivesIcon size={25} />
 										)}
 									</div>
-									<span className="text-xs text-muted-foreground">
-										{session.info.ip ?? "Unknown IP"} · Signed in{" "}
-										{new Date(session.created_at).toLocaleDateString(
-											undefined,
-											{
-												month: "short",
-												day: "numeric",
-												year: "numeric",
-											},
-										)}
-									</span>
+									<div className="flex flex-col gap-1 min-w-0">
+										<div className="flex items-center gap-2">
+											<span className="text-sm font-medium">
+												{session.info.browser ?? "Unknown browser"} on{" "}
+												{session.info.os ?? "Unknown OS"}
+											</span>
+											{session.is_current && (
+												<span className="dynround text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-md font-medium shrink-0">
+													Current
+												</span>
+											)}
+										</div>
+										<span className="text-xs text-muted-foreground">
+											{session.info.ip ?? "Unknown IP"} · Signed in{" "}
+											{new Date(session.created_at).toLocaleDateString(
+												undefined,
+												{
+													month: "short",
+													day: "numeric",
+													year: "numeric",
+												},
+											)}
+										</span>
+									</div>
 								</div>
-							</div>
-							<Button
-								variant="destructive"
-								size="sm"
-								className="shrink-0"
-								disabled={session.is_current || revoking === session.id}
-								onClick={() => revokeSession(session.id)}
-							>
-								<XSquareIcon />
-								{revoking === session.id ? "Revoking…" : "Revoke"}
-							</Button>
-						</CardContent>
-					</Card>
-				))}
-				{sessions.length === 0 && (
-					<div className="text-sm text-muted-foreground">
-						No active sessions.
-					</div>
-				)}
+								<Button
+									variant="destructive"
+									size="sm"
+									className="shrink-0"
+									disabled={session.is_current || revoking === session.id}
+									onClick={() => revokeSession(session.id)}
+								>
+									<XSquareIcon />
+									{revoking === session.id ? "Revoking…" : "Revoke"}
+								</Button>
+							</CardContent>
+						</Card>
+					))}
+					{sessions.length === 0 && (
+						<div className="text-sm text-muted-foreground">
+							No active sessions.
+						</div>
+					)}
+				</div>
 			</div>
 		</div>
 	);

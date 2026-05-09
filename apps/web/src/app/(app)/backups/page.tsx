@@ -38,8 +38,7 @@ function getAgentStatus(
 	if (!status) return "none";
 	if (status.status === "disconnected" || status.status === "inactive")
 		return "disconnected";
-	const isStale =
-		Date.now() - new Date(status.lastSeen ?? 0).getTime() > 60000;
+	const isStale = Date.now() - new Date(status.lastSeen ?? 0).getTime() > 60000;
 	if (isStale) return "stale";
 	if (status.currentJob?.status === "running") return "running";
 	if (status.jobQueue && status.jobQueue.length > 0) return "queued";
@@ -99,7 +98,7 @@ export default function BackupsPage() {
 	}
 
 	return (
-		<div className="w-full grow px-14 pt-4 flex flex-col gap-6">
+		<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6">
 			<div>
 				<h1 className="text-4xl font-black">Backups</h1>
 				<p className="text-muted-foreground text-sm">

@@ -205,7 +205,7 @@ export default function UsersPage() {
 	}, [filters, orderBy]);
 
 	return (
-		<div className="w-full grow px-14 pt-4 flex flex-col gap-6">
+		<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6">
 			<div>
 				<h1 className="text-4xl font-black">Users</h1>
 				<p className="text-muted-foreground text-sm">

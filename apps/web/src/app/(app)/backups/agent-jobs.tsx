@@ -25,6 +25,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { useSocket } from "@/hooks/use-socket";
 import { BACKUP_STATUS_LABEL, BACKUP_STATUS_STYLE } from "@/lib/backup-status";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface BackupJob {
 	id: string;
@@ -57,7 +62,6 @@ function formatRelative(dateStr: string | null | undefined): string {
 	if (hours < 24) return `${hours}h ago`;
 	return `${Math.floor(hours / 24)}d ago`;
 }
-
 
 export default function AgentJobsPage() {
 	const { agentId } = useParams<{ agentId: string }>();
@@ -182,7 +186,7 @@ export default function AgentJobsPage() {
 	}, [agentStatuses, agentId]);
 
 	return (
-		<div className="w-full grow px-14 pt-4 flex flex-col gap-6">
+		<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6">
 			<div>
 				<button
 					type="button"
@@ -249,14 +253,16 @@ export default function AgentJobsPage() {
 								<CardAction>
 									<span
 										className="text-xs font-medium"
-										style={job.is_active ? { color: "var(--greenish)" } : { color: "var(--destructive)" }}
+										style={
+											job.is_active
+												? { color: "var(--greenish)" }
+												: { color: "var(--destructive)" }
+										}
 									>
 										{job.is_active ? "Active" : "Inactive"}
 									</span>
 								</CardAction>
-								<CardDescription className="font-mono">
-									{job.cron}
-								</CardDescription>
+								<CardDescription>{job.cron}</CardDescription>
 							</CardHeader>
 
 							<CardContent className="flex flex-col gap-2">
@@ -278,8 +284,16 @@ export default function AgentJobsPage() {
 								{last && (
 									<div className="flex justify-between text-xs">
 										<span className="text-muted-foreground">Last status</span>
-										<span style={BACKUP_STATUS_STYLE[last.status as keyof typeof BACKUP_STATUS_STYLE] ?? {}}>
-											{BACKUP_STATUS_LABEL[last.status as keyof typeof BACKUP_STATUS_LABEL] ?? last.status}
+										<span
+											style={
+												BACKUP_STATUS_STYLE[
+													last.status as keyof typeof BACKUP_STATUS_STYLE
+												] ?? {}
+											}
+										>
+											{BACKUP_STATUS_LABEL[
+												last.status as keyof typeof BACKUP_STATUS_LABEL
+											] ?? last.status}
 										</span>
 									</div>
 								)}
@@ -294,21 +308,33 @@ export default function AgentJobsPage() {
 							</CardContent>
 
 							<CardFooter className="gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => triggerBackup(job.id)}
-									disabled={agentBusy || !job.is_active}
-									title={
-										!job.is_active
+								<Tooltip>
+									<TooltipTrigger>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => triggerBackup(job.id)}
+											disabled={agentBusy || !job.is_active}
+											aria-description="trigger backup now"
+											title={
+												!job.is_active
+													? "This job is inactive"
+													: agentBusy
+														? "Agent is busy or offline"
+														: "Trigger backup now"
+											}
+										>
+											<LightningIcon />
+										</Button>
+									</TooltipTrigger>
+									<TooltipContent>
+										{!job.is_active
 											? "This job is inactive"
 											: agentBusy
 												? "Agent is busy or offline"
-												: "Trigger backup now"
-									}
-								>
-									<LightningIcon />
-								</Button>
+												: "Trigger backup now"}
+									</TooltipContent>
+								</Tooltip>
 								<Button
 									variant="outline"
 									size="sm"

@@ -1,9 +1,5 @@
 # Backupr TODO
 
-## UX Fixes
-
-- [ ] **Add tooltip to disabled "Trigger Backup" button** — button is disabled when agent is busy but reason isn't clear; current `title` attribute is easy to miss, make it more visible (inline text or popover)
-
 ## Polish
 
 - [ ] **Compression warning placement** — the "high compression may impact system performance" note sits below the selector; move it inline or to a callout so it's seen before selecting

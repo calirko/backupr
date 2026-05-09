@@ -1,8 +1,8 @@
+import { Outlet } from "react-router-dom";
 import Navbar from "@/components/navbar";
 import { DataProvider } from "@/hooks/use-data";
 import { DialogProvider } from "@/hooks/use-dialog";
 import { SocketProvider } from "@/hooks/use-socket";
-import { Outlet } from "react-router-dom";
 
 export default function AppLayout() {
 	return (

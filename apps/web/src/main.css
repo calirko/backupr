@@ -160,8 +160,8 @@
 }
 
 .cs-label {
-	font-size: 0.7rem;
-	letter-spacing: 0.02em;
+	/*font-size: 0.7rem;
+	letter-spacing: 0.02em;*/
 	color: var(--cs-color);
 }
 

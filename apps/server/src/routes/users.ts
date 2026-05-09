@@ -22,6 +22,8 @@ export default async function userRoutes(app: Hono) {
 		const s = skip ? parseInt(skip) : undefined;
 		const t = take ? parseInt(take) : undefined;
 
+		const baseWhere = { deleted_at: null, ...parsedFilters };
+
 		const [data, total, absoluteTotal] = await Promise.all([
 			db.user.findMany({
 				select: {
@@ -32,17 +34,15 @@ export default async function userRoutes(app: Hono) {
 					updated_at: true,
 					username: true,
 				},
-				where: parsedFilters,
+				where: baseWhere,
 				orderBy: Object.keys(parsedOrderBy).length
 					? parsedOrderBy
 					: { created_at: "desc" },
 				skip: s,
 				take: t,
 			}),
-			db.user.count({
-				where: parsedFilters,
-			}),
-			db.user.count(),
+			db.user.count({ where: baseWhere }),
+			db.user.count({ where: { deleted_at: null } }),
 		]);
 		return c.json({ data, total, absoluteTotal });
 	});
@@ -88,6 +88,13 @@ export default async function userRoutes(app: Hono) {
 			select: { id: true, email: true },
 		});
 		return c.json(user);
+	});
+
+	// Logout (delete current session)
+	app.post("/api/users/me/logout", rateLimit, auth, async (c) => {
+		const token = c.get("token");
+		await db.userSession.deleteMany({ where: { token } });
+		return c.json({ message: "Logged out" });
 	});
 
 	// List own sessions
@@ -149,7 +156,17 @@ export default async function userRoutes(app: Hono) {
 			return c.json({ error: "You cannot delete your own account" }, 400);
 		}
 
-		await db.user.delete({ where: { id: c.req.param("id") } });
+		await db.user.update({
+			where: { id: c.req.param("id") },
+			data: { deleted_at: new Date() },
+		});
+
+		await db.userSession.deleteMany({
+			where: {
+				user_id: userId,
+			},
+		});
+
 		return c.json({ message: "User deleted" });
 	});
 }

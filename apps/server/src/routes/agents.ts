@@ -1,10 +1,10 @@
 import type { Hono } from "hono";
+import { generateAgentCode, generateAgentToken } from "../lib/agent";
 import { auth } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import { rateLimit } from "../lib/rate-limit";
-import { Token } from "../lib/token";
 import { presignedDownloadUrl, uploadStream } from "../lib/storage";
-import { generateAgentCode, generateAgentToken } from "../lib/agent";
+import { Token } from "../lib/token";
 
 const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
@@ -29,7 +29,7 @@ export default async function agentRoutes(app: Hono) {
 		const backupId = c.req.header("X-Backup-Id");
 
 		const job = await db.backupJob.findFirst({
-			where: { id: backupJobId, agent_id: session.agent_id },
+			where: { id: backupJobId, agent_id: session.agent_id, deleted_at: null },
 		});
 		if (!job)
 			return c.json({ error: "Backup job not found for this agent" }, 404);
@@ -124,7 +124,7 @@ export default async function agentRoutes(app: Hono) {
 
 	app.get("/api/agents/:id/code", rateLimit, async (c) => {
 		const id = c.req.param("id");
-		const agent = await db.agent.findUnique({ where: { id } });
+		const agent = await db.agent.findFirst({ where: { id, deleted_at: null } });
 		if (!agent) return c.json({ error: "Agent not found" }, 404);
 
 		const tokenPayload = await Token.verify(
@@ -216,7 +216,7 @@ export default async function agentRoutes(app: Hono) {
 			});
 
 			const agent = await tx.agent.findFirst({
-				where: { id: agentCodeRecord.agent_id },
+				where: { id: agentCodeRecord.agent_id, deleted_at: null },
 			});
 
 			if (!agent) {
@@ -269,9 +269,11 @@ export default async function agentRoutes(app: Hono) {
 		const s = skip ? parseInt(skip) : undefined;
 		const t = take ? parseInt(take) : undefined;
 
+		const baseWhere = { deleted_at: null, ...parsedFilters };
+
 		const [rawData, total, absoluteTotal] = await Promise.all([
 			db.agent.findMany({
-				where: parsedFilters,
+				where: baseWhere,
 				orderBy: Object.keys(parsedOrderBy).length
 					? parsedOrderBy
 					: { created_at: "desc" },
@@ -280,6 +282,7 @@ export default async function agentRoutes(app: Hono) {
 				include: {
 					created_by: { select: { name: true } },
 					backupJobs: {
+						where: { deleted_at: null },
 						select: {
 							backups: {
 								where: { status: "COMPLETED" },
@@ -289,8 +292,8 @@ export default async function agentRoutes(app: Hono) {
 					},
 				},
 			}),
-			db.agent.count({ where: parsedFilters }),
-			db.agent.count({}),
+			db.agent.count({ where: baseWhere }),
+			db.agent.count({ where: { deleted_at: null } }),
 		]);
 
 		const data = rawData.map(({ backupJobs, ...agent }) => ({
@@ -349,7 +352,7 @@ export default async function agentRoutes(app: Hono) {
 	// Disable/Enable Agent (Toggle)
 	app.patch("/api/agents/:id/toggle", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
-		const agent = await db.agent.findUnique({ where: { id } });
+		const agent = await db.agent.findFirst({ where: { id, deleted_at: null } });
 		if (!agent) return c.json({ error: "Agent not found" }, 404);
 
 		const updated = await db.agent.update({
@@ -362,7 +365,7 @@ export default async function agentRoutes(app: Hono) {
 	// Disable Agent
 	app.post("/api/agents/:id/disable", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
-		const agent = await db.agent.findUnique({ where: { id } });
+		const agent = await db.agent.findFirst({ where: { id, deleted_at: null } });
 		if (!agent) return c.json({ error: "Agent not found" }, 404);
 
 		const updated = await db.agent.update({
@@ -375,8 +378,8 @@ export default async function agentRoutes(app: Hono) {
 	// Get Agent Details with Sessions
 	app.get("/api/agents/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
-		const agent = await db.agent.findUnique({
-			where: { id },
+		const agent = await db.agent.findFirst({
+			where: { id, deleted_at: null },
 			include: {
 				agentSessions: {
 					orderBy: { last_seen_at: "desc" },
@@ -406,7 +409,10 @@ export default async function agentRoutes(app: Hono) {
 	// Delete Agent
 	app.delete("/api/agents/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
-		await db.agent.delete({ where: { id } });
+		await db.agent.update({
+			where: { id },
+			data: { deleted_at: new Date() },
+		});
 		return c.json({ message: "Agent deleted" });
 	});
 }

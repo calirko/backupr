@@ -109,7 +109,7 @@ export default function AgentCodeDialog({
 						<DrawerTitle>Agent Code</DrawerTitle>
 						<DrawerDescription>Manage the agent's code.</DrawerDescription>
 					</DrawerHeader>
-					{content}
+					<span className="px-4">{content}</span>
 					<DrawerFooter>
 						<DrawerClose asChild>
 							<Button variant="outline">

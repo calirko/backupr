@@ -290,7 +290,7 @@ export default function TestJobDialog({
 						<DrawerTitle>{title}</DrawerTitle>
 						<DrawerDescription>{description}</DrawerDescription>
 					</DrawerHeader>
-					<div className="px-4 pb-2">
+					<div className="px-4 pb-2 overflow-y-auto flex-1">
 						<TestJobContent jobId={jobId} />
 					</div>
 					<DrawerFooter>{footer(DrawerClose)}</DrawerFooter>

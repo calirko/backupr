@@ -251,7 +251,7 @@ export default function DashboardPage() {
 	const totalStorageBytes = Number(data?.stats?.total_size_bytes ?? 0);
 
 	return (
-		<div className="w-full grow px-14 pt-4 flex flex-col gap-6 justify-center">
+		<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6 justify-center">
 			<div className="absolute top-18">
 				<h1 className="text-4xl font-black">Dashboard</h1>
 				<p className="text-muted-foreground text-sm">
@@ -332,7 +332,7 @@ export default function DashboardPage() {
 				<Card className="col-span-2 row-span-2">
 					<CardHeader>
 						<CardTitle>Backup Activity</CardTitle>
-						<CardDescription>Daily backup count — last 7 days</CardDescription>
+						<CardDescription>Daily backup count · last 7 days</CardDescription>
 					</CardHeader>
 					<CardContent className="h-full">
 						<BackupDayChart data={chartData} />
