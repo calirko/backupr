@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { getConnInfo } from "hono/bun";
+import pkg from "../../package.json";
 import { auth } from "../lib/auth";
 import { Password } from "../lib/password";
 import { prisma } from "../lib/prisma";
@@ -16,7 +17,7 @@ function parseSessionInfo(
 ) {
 	const ua = c.req.header("user-agent") ?? "";
 	const ip =
-		c.req.header("x-forwarded-for")?.split(",")[0].trim() ??
+		c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
 		c.req.header("x-real-ip") ??
 		c.req.header("cf-connecting-ip") ??
 		c.req.header("x-client-ip") ??
@@ -50,7 +51,7 @@ function parseSessionInfo(
 
 export default async function generalRoutes(app: Hono) {
 	app.get("/api/ping", (c) => {
-		return c.json({ message: "pong" });
+		return c.json({ message: "pong", version: pkg.version });
 	});
 
 	// user

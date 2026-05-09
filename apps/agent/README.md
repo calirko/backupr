@@ -16,4 +16,4 @@ This project was created using `bun init` in bun v1.3.11. [Bun](https://bun.com)
 
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
-iex (irm "https://github.com/calirko/backupr/releases/latest/download/install.ps1")
+iex (irm "https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent/scripts/install.ps1")

@@ -74,6 +74,7 @@ export default function AgentDetailDialog({
 	const { agentStatuses } = useSocket();
 	const [data, setData] = useState<AgentDetailData | null>(null);
 	const [loading, setLoading] = useState(false);
+	const [revoking, setRevoking] = useState<string | null>(null);
 
 	function resolveConnectionStatus(): AgentConnectionStatus {
 		const status = agentStatuses.find((s) => s.agentId === agentId);
@@ -96,6 +97,29 @@ export default function AgentDetailDialog({
 			fetchAgentDetails();
 		}
 	}, [open, agentId]);
+
+	async function revokeSession(sessionId: string) {
+		setRevoking(sessionId);
+		try {
+			const res = await fetch(`/api/agents/${agentId}/sessions/${sessionId}`, {
+				method: "DELETE",
+				headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+			});
+			if (res.ok) {
+				toast.success("Session revoked");
+				fetchAgentDetails();
+			} else {
+				const err = await res.json();
+				toast.error("Failed to revoke session", { description: err.error });
+			}
+		} catch (error) {
+			toast.error("Failed to revoke session", {
+				description: error instanceof Error ? error.message : String(error),
+			});
+		} finally {
+			setRevoking(null);
+		}
+	}
 
 	async function fetchAgentDetails() {
 		setLoading(true);
@@ -195,7 +219,7 @@ export default function AgentDetailDialog({
 							return (
 								<div
 									key={session.id}
-									className="border rounded-lg p-3 space-y-2 text-sm"
+									className="border dynround rounded-lg p-3 space-y-2 text-sm"
 								>
 									<div className="grid grid-cols-2 gap-2">
 										<div>
@@ -229,13 +253,20 @@ export default function AgentDetailDialog({
 											<p className="font-medium">{sysInfo.version}</p>
 										</div>
 									</div>
-									<div className="border-t pt-2 flex justify-between text-xs text-muted-foreground">
+									<div className="border-t pt-2 flex justify-between items-center text-xs text-muted-foreground">
 										<div>
 											<p>Connected: {formatDate(session.created_at)}</p>
+											<p>Last Seen: {formatDate(session.last_seen_at)}</p>
 										</div>
-										<div className="flex items-center gap-1">
-											Last Seen: {formatDate(session.last_seen_at)}
-										</div>
+										<Button
+											variant="destructive"
+											size="sm"
+											disabled={revoking === session.id}
+											onClick={() => revokeSession(session.id)}
+										>
+											<XSquareIcon />
+											{revoking === session.id ? "Revoking…" : "Revoke"}
+										</Button>
 									</div>
 								</div>
 							);
@@ -258,7 +289,7 @@ export default function AgentDetailDialog({
 						{data.agentCodes.map((code) => (
 							<div
 								key={code.id}
-								className="border rounded-lg p-3 text-sm space-y-2"
+								className="border dynround rounded-lg p-3 text-sm space-y-2"
 							>
 								<div className="flex justify-between items-start">
 									<div>
@@ -299,7 +330,7 @@ export default function AgentDetailDialog({
 						{data.backupJobs.map((job) => (
 							<div
 								key={job.id}
-								className="border rounded-lg p-3 text-sm flex justify-between items-center"
+								className="border dynround rounded-lg p-3 text-sm flex justify-between items-center"
 							>
 								<div className="space-y-1">
 									<p className="font-medium">{job.name || "Unnamed Job"}</p>

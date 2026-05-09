@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { rateLimit } from "../lib/rate-limit";
 import { presignedDownloadUrl, uploadStream } from "../lib/storage";
 import { Token } from "../lib/token";
+import { agentRegistry } from "../ws.agent";
 
 const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
@@ -404,6 +405,26 @@ export default async function agentRoutes(app: Hono) {
 		}
 
 		return c.json(agent);
+	});
+
+	// Revoke Agent Session
+	app.delete("/api/agents/:id/sessions/:sessionId", rateLimit, auth, async (c) => {
+		const agentId = c.req.param("id");
+		const sessionId = c.req.param("sessionId");
+
+		const session = await db.agentSession.findFirst({
+			where: { id: sessionId, agent_id: agentId },
+		});
+		if (!session) return c.json({ error: "Session not found" }, 404);
+
+		await db.agentSession.delete({ where: { id: sessionId } });
+
+		const state = agentRegistry.get(agentId);
+		if (state && state.sessionId === sessionId) {
+			state.websocket.close();
+		}
+
+		return c.json({ message: "Session revoked" });
 	});
 
 	// Delete Agent
