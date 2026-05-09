@@ -199,6 +199,14 @@ export default function BackupJobDialog({
 		const password = usePassword
 			? (formData.get("password") as string) || undefined
 			: undefined;
+
+		if (usePassword && !password) {
+			toast.warning("Password required", {
+				description: "Please enter a password for password protection.",
+			});
+			return;
+		}
+
 		const compressionLevel = parseInt(
 			formData.get("compression_level") as string,
 			10,

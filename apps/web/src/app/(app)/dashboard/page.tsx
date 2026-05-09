@@ -88,6 +88,7 @@ function StatusDot({ status }: { status: string }) {
 			className={`inline-block w-2 h-2 shrink-0`}
 			style={{
 				backgroundColor: colors[status],
+				borderRadius: "2px",
 			}}
 		/>
 	);
@@ -97,7 +98,7 @@ function BackupDayChart({ data }: { data: { day: string; count: number }[] }) {
 	const maxCount = Math.max(...data.map((d) => d.count), 1);
 
 	return (
-		<div className="w-full flex flex-col gap-1">
+		<div className="w-full flex flex-col gap-1 h-full justify-end">
 			<div className="flex gap-1.5">
 				{data.map((d) => (
 					<div
@@ -108,11 +109,11 @@ function BackupDayChart({ data }: { data: { day: string; count: number }[] }) {
 					</div>
 				))}
 			</div>
-			<div className="flex items-end gap-1.5 h-32">
+			<div className="flex items-end gap-1.5 h-42">
 				{data.map((d) => (
 					<div
 						key={d.day}
-						className="flex-1 bg-primary transition-all"
+						className="flex-1 bg-primary transition-all dynround"
 						style={{
 							height: d.count > 0 ? `${(d.count / maxCount) * 100}%` : "2px",
 							opacity: d.count > 0 ? 1 : 0.2,
@@ -175,7 +176,7 @@ function StorageByJobChart({
 						<div className="w-full h-1.5 bg-muted overflow-hidden">
 							<div
 								className="h-full bg-primary transition-all duration-500"
-								style={{ width: `${Math.max(pct, 0.5)}%` }}
+								style={{ width: `${Math.max(pct, 0.5)}%`, borderRadius: "2px" }}
 							/>
 						</div>
 					</div>
@@ -333,7 +334,7 @@ export default function DashboardPage() {
 						<CardTitle>Backup Activity</CardTitle>
 						<CardDescription>Daily backup count — last 7 days</CardDescription>
 					</CardHeader>
-					<CardContent>
+					<CardContent className="h-full">
 						<BackupDayChart data={chartData} />
 					</CardContent>
 				</Card>

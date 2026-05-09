@@ -3,7 +3,7 @@ import { auth } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import { rateLimit } from "../lib/rate-limit";
 import { Token } from "../lib/token";
-import { agentRegistry } from "../ws.agent";
+import { agentRegistry, sendToAgent } from "../ws.agent";
 import { initBackup } from "../backup";
 
 const db = prisma;
@@ -147,15 +147,40 @@ export default async function backupJobRoutes(app: Hono) {
 			if (job.use_password && !job.password)
 				critical_info.push("Password protection enabled but no password set");
 
-			return c.json({
-				date_triggered: new Date().toISOString(),
-				time_elapsed_ms: Date.now() - start,
+			let dryRunResult: Record<string, unknown> = {
 				storage_required: null,
 				files_found: (job.files as string[]).length > 0,
 				file_count: (job.files as string[]).length,
 				files: job.files as string[],
+			};
+
+			if (agentOnline) {
+				try {
+					const result = await sendToAgent(job.agent_id, {
+						type: "dry_run",
+						files: job.files as string[],
+						compression_level: job.compression_level,
+					});
+					dryRunResult = {
+						storage_required: result.storage_required ?? null,
+						files_found: result.files_found ?? false,
+						file_count: result.file_count ?? 0,
+						files: result.files ?? [],
+						path_results: result.path_results ?? [],
+					};
+				} catch (err) {
+					critical_info.push(
+						`Dry run failed: ${err instanceof Error ? err.message : "unknown error"}`,
+					);
+				}
+			}
+
+			return c.json({
+				date_triggered: new Date().toISOString(),
+				time_elapsed_ms: Date.now() - start,
 				agent_online: agentOnline,
 				critical_info,
+				...dryRunResult,
 			});
 		} catch (error) {
 			return c.json({ error: "Failed to run test" }, 500);

@@ -34,6 +34,35 @@ export interface AgentState {
 
 export const agentRegistry = new Map<string, AgentState>();
 
+const pendingRequests = new Map<string, (response: Record<string, unknown>) => void>();
+
+export function sendToAgent(
+	agentId: string,
+	message: Record<string, unknown>,
+	timeoutMs = 30000,
+): Promise<Record<string, unknown>> {
+	return new Promise((resolve, reject) => {
+		const state = agentRegistry.get(agentId);
+		if (!state || state.status !== "online") {
+			reject(new Error("Agent is offline"));
+			return;
+		}
+
+		const requestId = crypto.randomUUID();
+		const timer = setTimeout(() => {
+			pendingRequests.delete(requestId);
+			reject(new Error("Request timed out"));
+		}, timeoutMs);
+
+		pendingRequests.set(requestId, (response) => {
+			clearTimeout(timer);
+			resolve(response);
+		});
+
+		send(state.websocket, { ...message, requestId });
+	});
+}
+
 type StatusChangeCallback = () => void;
 let onStatusChange: StatusChangeCallback | null = null;
 export function setOnAgentStatusChange(cb: StatusChangeCallback) {
@@ -225,6 +254,16 @@ export default upgradeWebSocket((c) => {
 					});
 
 					onStatusChange?.();
+					break;
+				}
+
+				case "dry_run_result": {
+					const requestId = message.requestId as string;
+					const resolver = pendingRequests.get(requestId);
+					if (resolver) {
+						pendingRequests.delete(requestId);
+						resolver(message);
+					}
 					break;
 				}
 

@@ -1,5 +1,6 @@
 // agent.ts
 import WebSocket from "ws";
+import * as fs from "fs";
 import { type AgentConfig, ConfigManager } from "./lib/config";
 import { runBackupJob } from "./backup";
 import { runSetup } from "./setup";
@@ -181,12 +182,126 @@ class BackuprAgent {
 					this.queueBackupJob(jobState);
 				}
 				break;
+			case "dry_run":
+				this.handleDryRun(message);
+				break;
 			case "pong":
 				console.log("[Agent] Received pong from server.");
 				break;
 			default:
 				console.warn(`[Agent] Unknown message type: ${message.type}`);
 		}
+	}
+
+	private handleDryRun(message: { type: string; [key: string]: unknown }) {
+		const requestId = message.requestId as string;
+		const paths = (message.files as string[]) ?? [];
+		const compressionLevel = (message.compression_level as number) ?? 5;
+
+		console.log(`[Agent] Received dry_run request (${requestId}) for ${paths.length} path(s):`, paths);
+
+		// Per-level compression ratio estimates (compressed_size / original_size)
+		// These are conservative estimates based on typical file mixes
+		const compressionRatios: Record<number, number> = {
+			1: 0.70,  // Very low: ~70% of original
+			2: 0.65,  // Low: ~65%
+			3: 0.60,  // Medium-low: ~60%
+			4: 0.55,  // Medium: ~55%
+			5: 0.50,  // Medium (default): ~50%
+			6: 0.45,  // Medium-high: ~45%
+			7: 0.40,  // High: ~40%
+			8: 0.35,  // Very high: ~35%
+			9: 0.30,  // Ultra: ~30%
+		};
+
+		const compressionRatio = compressionRatios[compressionLevel] ?? compressionRatios[5];
+
+		interface PathResult {
+			path: string;
+			exists: boolean;
+			readable: boolean;
+			type: "file" | "directory" | "unknown";
+			size_bytes: number;
+			error?: string;
+		}
+
+		const getDirSize = (dir: string): number => {
+			let total = 0;
+			try {
+				for (const entry of fs.readdirSync(dir)) {
+					const full = `${dir}/${entry}`;
+					try {
+						const s = fs.statSync(full);
+						total += s.isDirectory() ? getDirSize(full) : s.size;
+					} catch {
+						// skip unreadable entries
+					}
+				}
+			} catch {
+				// skip unreadable dir
+			}
+			return total;
+		};
+
+		const pathResults: PathResult[] = [];
+		let totalBytes = 0;
+
+		for (const p of paths) {
+			const result: PathResult = {
+				path: p,
+				exists: false,
+				readable: false,
+				type: "unknown",
+				size_bytes: 0,
+			};
+
+			try {
+				const stat = fs.statSync(p);
+				result.exists = true;
+				result.type = stat.isDirectory() ? "directory" : "file";
+
+				fs.accessSync(p, fs.constants.R_OK);
+				result.readable = true;
+
+				result.size_bytes = stat.isDirectory() ? getDirSize(p) : stat.size;
+				totalBytes += result.size_bytes;
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				if (!result.exists) {
+					result.error = "Path does not exist";
+				} else {
+					result.error = `Not readable: ${msg}`;
+				}
+			}
+
+			pathResults.push(result);
+			console.log(
+				`[Agent] dry_run path "${p}": exists=${result.exists} readable=${result.readable} type=${result.type} size=${result.size_bytes}B${result.error ? ` error="${result.error}"` : ""}`,
+			);
+		}
+
+		const reachablePaths = pathResults.filter((r) => r.exists && r.readable);
+
+		// Calculate storage required: original + copy + compressed
+		// During backup: original files + temp copy + archive all exist on disk simultaneously
+		const compressedEstimate = Math.ceil(totalBytes * compressionRatio);
+		const storageRequired = totalBytes + totalBytes + compressedEstimate; // original + copy + compressed
+
+		const response = {
+			type: "dry_run_result",
+			requestId,
+			files_found: reachablePaths.length > 0,
+			file_count: reachablePaths.length,
+			files: reachablePaths.map((r) => r.path),
+			storage_required: storageRequired,
+			path_results: pathResults,
+		};
+
+		console.log(
+			`[Agent] Sending dry_run_result (${requestId}): ${reachablePaths.length}/${paths.length} paths reachable, original=${totalBytes}B, copy=${totalBytes}B, compressed_est=${compressedEstimate}B, storage_required=${storageRequired}B`,
+		);
+
+		this.ws?.send(JSON.stringify(response));
 	}
 
 	private queueBackupJob(job: BackupJobState) {

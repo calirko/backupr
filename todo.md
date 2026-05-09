@@ -2,9 +2,6 @@
 
 ## UX Fixes
 
-- [ ] **Show QR code for agent pairing** — "Generate Code" implies a QR but only shows a raw Base64 string; render an actual QR code so users don't have to copy a long string manually
-- [ ] **Validate password field when protection is enabled** — backup job form allows submitting with `use_password = true` and an empty password; add a required check
-- [ ] **Show total count when filters are active** — filtered table shows "4 results" with no indication of "out of N total"; append e.g. "(4 of 47)" when a filter is applied
 - [ ] **Add tooltip to disabled "Trigger Backup" button** — button is disabled when agent is busy but reason isn't clear; current `title` attribute is easy to miss, make it more visible (inline text or popover)
 
 ## Polish
