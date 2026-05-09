@@ -1,5 +1,6 @@
 import { BackupStatus } from "../prisma/generated/prisma/enums";
 import { prisma } from "./lib/prisma";
+import { presignedDownloadUrl } from "./lib/storage";
 import { agentRegistry } from "./ws.agent";
 
 const db = prisma;
@@ -7,6 +8,7 @@ const db = prisma;
 interface BackupJobPayload {
 	id: string; // backup ID
 	jobId: string; // backup job ID (needed for upload)
+	jobName: string; // used for naming the stored file
 	files: string[];
 	compression_level: number;
 	use_password: boolean;
@@ -51,6 +53,7 @@ export async function sendStartBackupCommand(jobId: string): Promise<void> {
 	const payload: BackupJobPayload = {
 		id: backup.id,
 		jobId: jobId,
+		jobName: job.name,
 		files: job.files,
 		compression_level: job.compression_level,
 		use_password: job.use_password,
@@ -120,13 +123,20 @@ export async function handleBackupStatusUpdate(
 	if (metadata?.blob_key !== undefined) {
 		updateData.blob_key = metadata.blob_key;
 	}
-	if (metadata?.url !== undefined) {
-		updateData.url = metadata.url;
-	}
 
 	// Set completed_at if backup is finished
 	if (status === BackupStatus.COMPLETED || status === BackupStatus.FAILED) {
 		updateData.completed_at = new Date();
+	}
+
+	// Generate a proper presigned URL server-side so the filename is set correctly
+	if (status === BackupStatus.COMPLETED && metadata?.blob_key) {
+		const filename = `${backup.backup_job.name}.7z`;
+		try {
+			updateData.url = await presignedDownloadUrl(metadata.blob_key, undefined, filename);
+		} catch (err) {
+			console.error(`[Backup] Failed to generate presigned URL for ${backupId}:`, err);
+		}
 	}
 
 	await db.backup.update({
@@ -301,6 +311,7 @@ export async function initBackup(
 	const payload: BackupJobPayload = {
 		id: backup.id,
 		jobId: jobId,
+		jobName: job.name,
 		files: job.files,
 		compression_level: job.compression_level,
 		use_password: job.use_password,
