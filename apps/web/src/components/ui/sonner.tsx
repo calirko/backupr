@@ -1,7 +1,6 @@
 import {
 	CheckSquareIcon,
 	InfoIcon,
-	SpinnerIcon,
 	WarningIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
