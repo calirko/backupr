@@ -11,20 +11,13 @@ export default function RootLayout() {
 	return (
 		<>
 			<GridBackground />
-			<div className="h-dvh dark text-foreground relative z-10 ">
-				<TooltipProvider>
-					<Outlet />
-					<Toaster
-						position="bottom-center"
-						expand
-						icons={{
-							warning: <WarningIcon className="text-orange-200" />,
-							error: <XSquareIcon className="text-destructive" />,
-							success: <CheckSquareIcon style={{ color: "var(--greenish)" }} />,
-							info: <InfoIcon />,
-						}}
-					/>
-				</TooltipProvider>
+			<div className="dark">
+				<div className="h-dvh text-foreground relative z-10 ">
+					<TooltipProvider>
+						<Outlet />
+					</TooltipProvider>
+				</div>
+				<Toaster />
 			</div>
 		</>
 	);

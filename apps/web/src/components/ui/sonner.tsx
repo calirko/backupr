@@ -16,19 +16,19 @@ const Toaster = ({ ...props }: ToasterProps) => {
 			theme={theme as ToasterProps["theme"]}
 			className="toaster group"
 			icons={{
-				success: <CheckSquareIcon className="size-4" />,
-				info: <InfoIcon className="size-4" />,
-				warning: <WarningIcon className="size-4" />,
-				error: <XSquareIcon className="size-4" />,
-				loading: <SpinnerIcon className="size-4 animate-spin" />,
+				warning: <WarningIcon className="text-orange-200" />,
+				error: <XSquareIcon className="text-destructive" />,
+				success: <CheckSquareIcon style={{ color: "var(--greenish)" }} />,
+				info: <InfoIcon />,
 			}}
+			position="bottom-center"
+			expand
 			style={
 				{
 					"--normal-bg": "var(--popover)",
 					"--normal-text": "var(--popover-foreground)",
 					"--normal-border": "var(--border)",
-					"--border-radius": "var(--radius)",
-					"--z-index": 9999,
+					"--border-radius": "var(--dyn-radius)",
 				} as React.CSSProperties
 			}
 			toastOptions={{
