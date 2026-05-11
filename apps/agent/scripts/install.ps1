@@ -28,6 +28,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Force TLS 1.2+ to support modern GitHub/7-zip HTTPS endpoints on older Windows
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+
 # --- Constants ----------------------------------------------------------------
 
 $AgentUrl    = "https://github.com/calirko/backupr/releases/latest/download/backupr-agent.exe"
@@ -71,7 +74,6 @@ function Ensure-WinSwPresent {
     Write-Host "  Downloading WinSW..." -ForegroundColor Yellow
     $null = New-Item -ItemType Directory -Force -Path $WinSwDir
 
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $WinSwUrl -OutFile $WinSwExe -UseBasicParsing
     Write-Host "  WinSW saved to $WinSwExe" -ForegroundColor Green
 }
@@ -100,7 +102,6 @@ function Write-WinSwConfig {
 function Ensure-AgentPresent {
     $null = New-Item -ItemType Directory -Force -Path $InstallDir
     Write-Host "  Downloading backupr-agent.exe..." -ForegroundColor Yellow
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $AgentUrl -OutFile $AgentExe -UseBasicParsing
     Write-Host "  Agent binary saved to $AgentExe" -ForegroundColor Green
 }
@@ -112,7 +113,6 @@ function Ensure-SevenZipPresent {
     $null = New-Item -ItemType Directory -Force -Path $SevenZipDir
 
     $installer = Join-Path $env:TEMP "7z-setup.exe"
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $SevenZipUrl -OutFile $installer -UseBasicParsing
 
     $proc = Start-Process -FilePath $installer -ArgumentList "/S /D=`"$SevenZipDir`"" -Wait -PassThru
