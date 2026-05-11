@@ -27,9 +27,13 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$global:LASTEXITCODE = 0
 
-# Force TLS 1.2+ (3072) and TLS 1.3 (12288) via integer literals — enum names don't exist on .NET < 4.8
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType](3072 -bor 12288)
+# Force TLS 1.2+ and TLS 1.3 when available
+$protocols = [Net.SecurityProtocolType]::Tls12
+$tls13 = [Net.SecurityProtocolType].GetField('Tls13')
+if ($tls13) { $protocols = $protocols -bor $tls13.GetValue($null) }
+[Net.ServicePointManager]::SecurityProtocol = $protocols
 
 # --- Constants ----------------------------------------------------------------
 
