@@ -13,20 +13,8 @@ interface BackupJobPayload {
 	password?: string;
 }
 
-// ─── Tunables ───────────────────────────────────────────────────────────────
-
 // Throttle progress callbacks to avoid spamming the WS channel.
 const PROGRESS_THROTTLE_MS = 250;
-
-// Per-LZMA2-thread memory cost ≈ dictionary size × ~11 (compress) / × ~1 (decompress).
-// We pick dictionary based on level and clamp threads so total RAM stays sane.
-// e.g. dict=64m at level 7 → ~700 MB per thread → 8 threads ≈ 5.6 GB. We cap accordingly.
-const MAX_COMPRESSION_RAM_BYTES = (() => {
-	const total = os.totalmem();
-	// Use up to 60% of system RAM, but leave at least 2 GB for the OS / other work.
-	const cap = Math.max(total * 0.6, total - 2 * 1024 ** 3);
-	return Math.max(cap, 512 * 1024 ** 2); // never less than 512 MB
-})();
 
 // ─── 7z resolution (cross-platform) ─────────────────────────────────────────
 
@@ -69,79 +57,6 @@ function resolve7zBinary(): string {
 	);
 }
 
-// ─── Compression tuning ─────────────────────────────────────────────────────
-
-interface CompressionTuning {
-	threads: number;
-	dictionarySize: string; // e.g. "64m"
-	solidBlockSize: string; // e.g. "4g"
-	wordSize: number;
-}
-
-function tuneCompression(level: number): CompressionTuning {
-	// Dictionary size by level (LZMA2 defaults are conservative; we go bigger).
-	// These match 7-Zip's own "ultra" tier where appropriate.
-	const dictByLevel: Record<number, string> = {
-		1: "64k",
-		2: "1m",
-		3: "4m",
-		4: "16m",
-		5: "32m", // 7z default
-		6: "32m",
-		7: "64m",
-		8: "128m",
-		9: "256m", // ultra
-	};
-
-	const wordByLevel: Record<number, number> = {
-		1: 32,
-		2: 32,
-		3: 32,
-		4: 32,
-		5: 64,
-		6: 64,
-		7: 128,
-		8: 256,
-		9: 273,
-	};
-
-	const dictionarySize = dictByLevel[level] ?? "32m";
-	const wordSize = wordByLevel[level] ?? 64;
-
-	// Estimate RAM per thread (compression cost ≈ 11× dictionary).
-	const dictBytes = parseSize(dictionarySize);
-	const ramPerThread = dictBytes * 11;
-
-	const cpuThreads = Math.max(1, os.cpus().length);
-	const ramThreads = Math.max(
-		1,
-		Math.floor(MAX_COMPRESSION_RAM_BYTES / ramPerThread),
-	);
-	const threads = Math.min(cpuThreads, ramThreads);
-
-	// Solid block: bigger = better ratio, but slower random access.
-	// 4 GB is a reasonable default for backup archives.
-	const solidBlockSize = "4g";
-
-	return { threads, dictionarySize, solidBlockSize, wordSize };
-}
-
-function parseSize(s: string): number {
-	const m = s.match(/^(\d+)\s*([kmgKMG]?)$/);
-	if (!m) return 0;
-	const n = parseInt(m[1], 10);
-	const unit = m[2].toLowerCase();
-	switch (unit) {
-		case "k":
-			return n * 1024;
-		case "m":
-			return n * 1024 ** 2;
-		case "g":
-			return n * 1024 ** 3;
-		default:
-			return n;
-	}
-}
 
 function formatBytes(bytes: number): string {
 	if (bytes === 0) return "0 B";
@@ -151,73 +66,42 @@ function formatBytes(bytes: number): string {
 	return (bytes / Math.pow(k, i)).toFixed(2) + " " + sizes[i];
 }
 
-// ─── Input size helper ───────────────────────────────────────────────────────
-
-function statSize(p: string): number {
-	const s = fs.statSync(p);
-	if (!s.isDirectory()) return s.size;
-	let total = 0;
-	for (const entry of fs.readdirSync(p, { withFileTypes: true })) {
-		try {
-			total += statSize(path.join(p, entry.name));
-		} catch {}
-	}
-	return total;
-}
-
-function computeInputSize(files: string[]): number {
-	let total = 0;
-	for (const f of files) {
-		try {
-			total += statSize(f);
-		} catch {}
-	}
-	return total;
-}
-
 // ─── Compression ────────────────────────────────────────────────────────────
 
 function compressWithProgress(
-	archivePath: string,
-	inputSizeBytes: number,
 	args: string[],
 	onPct: (pct: number) => void,
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const binary = resolve7zBinary();
 		const proc = spawn(binary, args, {
-			stdio: ["ignore", "ignore", "pipe"],
+			// stdout captures -bsp1 progress lines; stderr captures -bse2 errors
+			stdio: ["ignore", "pipe", "pipe"],
 		});
 
+		let stdoutTail = "";
 		let stderrBuf = "";
 		let lastPct = -1;
 
-		// Poll the growing archive file instead of parsing 7z stdout, which
-		// suppresses progress output when not connected to a tty.
-		const pollInterval = setInterval(() => {
-			try {
-				const archiveSize = fs.statSync(archivePath).size;
-				if (inputSizeBytes > 0) {
-					const pct = Math.min(
-						99,
-						Math.round((archiveSize / inputSizeBytes) * 100),
-					);
-					if (pct > lastPct) {
-						lastPct = pct;
-						onPct(pct);
-					}
+		proc.stdout?.on("data", (chunk: Buffer) => {
+			// Keep a small rolling tail to handle percentages split across chunks
+			const text = stdoutTail + chunk.toString("utf8");
+			const matches = text.match(/(\d+)%/g);
+			if (matches) {
+				const pct = parseInt(matches[matches.length - 1]);
+				if (!isNaN(pct) && pct > lastPct) {
+					lastPct = pct;
+					onPct(Math.min(99, pct));
 				}
-			} catch {
-				// archive not created yet
 			}
-		}, 500);
+			stdoutTail = text.slice(-20);
+		});
 
 		proc.stderr?.on("data", (chunk: Buffer) => {
 			stderrBuf += chunk.toString("utf8");
 		});
 
 		proc.on("error", (err: NodeJS.ErrnoException) => {
-			clearInterval(pollInterval);
 			if (err.code === "ENOENT") {
 				reject(
 					new Error(
@@ -230,7 +114,6 @@ function compressWithProgress(
 		});
 
 		proc.on("close", (code) => {
-			clearInterval(pollInterval);
 			if (code === 0) {
 				onPct(100);
 				resolve();
@@ -250,25 +133,17 @@ function buildSevenZipArgs(
 	level: number,
 	job: BackupJobPayload,
 ): string[] {
-	const tuning = tuneCompression(level);
-
-	console.log(
-		`[Backup] Compression tuning: level=${level}, threads=${tuning.threads}, ` +
-			`dict=${tuning.dictionarySize}, word=${tuning.wordSize}, ` +
-			`solid=${tuning.solidBlockSize}`,
-	);
+	console.log(`[Backup] Compression: level=${level}, threads=auto`);
 
 	const args = [
 		"a",
 		"-t7z",
 		"-y",
-		"-bso0", // suppress normal stdout (we poll file size for progress)
+		"-bso0", // suppress normal output messages
+		"-bsp1", // progress percentages → stdout
 		"-bse2", // errors → stderr
 		`-mx=${level}`,
-		`-mmt=${tuning.threads}`,
-		`-md=${tuning.dictionarySize}`,
-		`-mfb=${tuning.wordSize}`,
-		`-ms=${tuning.solidBlockSize}`,
+		"-mmt=on", // let 7z pick thread count based on available CPUs
 		archivePath,
 		...files,
 	];
@@ -281,13 +156,133 @@ function buildSevenZipArgs(
 	return args;
 }
 
+// ─── VSS (Windows Volume Shadow Copy) ────────────────────────────────────────
+// Creates a point-in-time volume snapshot so files that are open/being written
+// (e.g. Firebird .fdb, SQL Server .mdf) are copied in a consistent state.
+
+async function runPowerShell(script: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const proc = spawn(
+			"powershell.exe",
+			["-NoProfile", "-NonInteractive", "-Command", script],
+			{ stdio: ["ignore", "pipe", "pipe"] },
+		);
+		let stdout = "";
+		let stderr = "";
+		proc.stdout?.on("data", (c: Buffer) => { stdout += c; });
+		proc.stderr?.on("data", (c: Buffer) => { stderr += c; });
+		proc.on("error", reject);
+		proc.on("close", (code) => {
+			if (code === 0) resolve(stdout.trim());
+			else reject(new Error(stderr.trim() || `exit ${code}`));
+		});
+	});
+}
+
+async function createVSSShadow(volume: string): Promise<string | null> {
+	try {
+		const escaped = volume.replace(/'/g, "''");
+		const out = await runPowerShell(
+			`$r = ([WMICLASS]"root\\cimv2:win32_shadowcopy").Create('${escaped}', 'ClientAccessible'); ` +
+			`if ($r.ReturnValue -ne 0) { exit 1 }; ` +
+			`(Get-WmiObject Win32_ShadowCopy -Filter "ID='$($r.ShadowID)'").DeviceObject`,
+		);
+		return out.startsWith("\\") ? out : null;
+	} catch (err) {
+		console.warn(`[Backup] VSS failed for ${volume}: ${err instanceof Error ? err.message : err}`);
+		return null;
+	}
+}
+
+async function deleteVSSShadow(deviceObject: string): Promise<void> {
+	try {
+		const escaped = deviceObject.replace(/'/g, "''");
+		await runPowerShell(
+			`$s = Get-WmiObject Win32_ShadowCopy | Where-Object { $_.DeviceObject -eq '${escaped}' }; ` +
+			`if ($s) { $s.Delete() | Out-Null }`,
+		);
+	} catch {
+		// best-effort
+	}
+}
+
+function shadowResolvePath(filePath: string, volumeToDevice: Map<string, string>): string {
+	const vol = path.parse(filePath).root;
+	const device = volumeToDevice.get(vol);
+	if (!device) return filePath;
+	// e.g. C:\foo\bar.fdb → \\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\foo\bar.fdb
+	return device + "\\" + filePath.slice(vol.length);
+}
+
+// ─── Staging ─────────────────────────────────────────────────────────────────
+
+async function stageFiles(files: string[], stageDir: string): Promise<string[]> {
+	fs.mkdirSync(stageDir, { recursive: true });
+	const staged: string[] = [];
+
+	const volumeToDevice = new Map<string, string>();
+	const shadowDevices: string[] = [];
+
+	if (process.platform === "win32") {
+		const volumes = new Set(files.map((f) => path.parse(f).root).filter(Boolean));
+		for (const vol of volumes) {
+			console.log(`[Backup] Creating VSS shadow copy for ${vol}...`);
+			const device = await createVSSShadow(vol);
+			if (device) {
+				volumeToDevice.set(vol, device);
+				shadowDevices.push(device);
+				console.log(`[Backup] VSS shadow ready: ${device}`);
+			} else {
+				console.warn(
+					`[Backup] VSS unavailable for ${vol} — copying live files (consistency not guaranteed)`,
+				);
+			}
+		}
+	}
+
+	try {
+		for (let i = 0; i < files.length; i++) {
+			const src = files[i];
+			const resolved =
+				process.platform === "win32"
+					? shadowResolvePath(src, volumeToDevice)
+					: src;
+			const dest = path.join(stageDir, `${i}_${path.basename(src)}`);
+			const viaVSS = resolved !== src;
+
+			try {
+				const stat = fs.statSync(resolved);
+				if (stat.isDirectory()) {
+					fs.cpSync(resolved, dest, { recursive: true, force: true, errorOnExist: false });
+				} else {
+					fs.copyFileSync(resolved, dest);
+				}
+				staged.push(dest);
+				console.log(
+					`[Backup] Staged: ${src} → ${dest}${viaVSS ? " (VSS snapshot)" : ""}`,
+				);
+			} catch (err) {
+				console.warn(
+					`[Backup] Could not stage ${src}: ${err instanceof Error ? err.message : err}`,
+				);
+			}
+		}
+	} finally {
+		for (const device of shadowDevices) {
+			console.log(`[Backup] Releasing VSS shadow: ${device}`);
+			await deleteVSSShadow(device);
+		}
+	}
+
+	return staged;
+}
+
 // ─── Upload ─────────────────────────────────────────────────────────────────
 
 async function uploadBackupArchive(
 	archivePath: string,
 	backupId: string,
 	jobId: string,
-	requiresPassword: boolean,
 	onPct?: (pct: number) => void,
 ): Promise<void> {
 	const config = await ConfigManager.load();
@@ -341,14 +336,14 @@ async function uploadBackupArchive(
 		},
 	});
 
-	const response = await fetch(`${config.serverUrl}/api/agent/upload`, {
+	const response = await fetch(`${config.serverUrl}/agent/upload`, {
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${config.agentToken}`,
 			"X-Backup-Id": backupId,
 			"X-Backup-Job-Id": jobId,
 			"Content-Length": fileSize.toString(),
-			"X-Requires-Password": requiresPassword ? "true" : "false",
+			"X-Requires-Password": "false",
 			"Content-Type": "application/octet-stream",
 		},
 		body,
@@ -370,29 +365,30 @@ export async function runBackupJob(
 	job: BackupJobPayload,
 	onProgress?: (message: string) => void,
 ): Promise<void> {
-	const archivePath = path.join(
-		os.tmpdir(),
-		`backupr_${job.id}_${Date.now()}.7z`,
-	);
+	const tmpBase = path.join(os.tmpdir(), `backupr_${job.id}_${Date.now()}`);
+	const stageDir = `${tmpBase}_stage`;
+	const archivePath = `${tmpBase}.7z`;
 
 	try {
-		const level = Math.max(1, Math.min(9, job.compression_level));
-		const sevenZipArgs = buildSevenZipArgs(archivePath, job.files, level, job);
+		console.log(`[Backup] Staging ${job.files.length} path(s) to ${stageDir}...`);
+		onProgress?.("staging files...");
+		const stagedPaths = await stageFiles(job.files, stageDir);
 
-		const inputSizeBytes = computeInputSize(job.files);
+		if (stagedPaths.length === 0) {
+			throw new Error("No files could be staged for backup.");
+		}
+
+		const level = Math.max(1, Math.min(9, job.compression_level));
+		const sevenZipArgs = buildSevenZipArgs(archivePath, stagedPaths, level, job);
+
 		const startCompress = Date.now();
-		console.log(
-			`[Backup] Starting compression (level ${level}, input ${formatBytes(inputSizeBytes)})...`,
-		);
+		console.log(`[Backup] Starting compression (level ${level})...`);
 		onProgress?.("compressing 0%");
-		await compressWithProgress(
-			archivePath,
-			inputSizeBytes,
-			sevenZipArgs,
-			(pct) => {
-				onProgress?.(`compressing ${pct}%`);
-			},
-		);
+		await compressWithProgress(sevenZipArgs, (pct) => {
+			onProgress?.(`compressing ${pct}%`);
+		});
+
+		safeDeleteDir(stageDir);
 
 		const archiveSize = fs.statSync(archivePath).size;
 		const compressSec = (Date.now() - startCompress) / 1000;
@@ -403,7 +399,7 @@ export async function runBackupJob(
 
 		const startUpload = Date.now();
 		onProgress?.("uploading 0%");
-		await uploadBackupArchive(archivePath, job.id, job.jobId, job.use_password, (pct) => {
+		await uploadBackupArchive(archivePath, job.id, job.jobId, (pct) => {
 			onProgress?.(`uploading ${pct}%`);
 		});
 		const uploadSec = (Date.now() - startUpload) / 1000;
@@ -412,6 +408,7 @@ export async function runBackupJob(
 				`(${formatBytes(archiveSize / uploadSec)}/s)`,
 		);
 	} finally {
+		safeDeleteDir(stageDir);
 		safeDeleteFile(archivePath);
 	}
 }
@@ -419,6 +416,14 @@ export async function runBackupJob(
 function safeDeleteFile(filePath: string): void {
 	try {
 		fs.rmSync(filePath, { force: true });
+	} catch {
+		// best-effort cleanup
+	}
+}
+
+function safeDeleteDir(dirPath: string): void {
+	try {
+		fs.rmSync(dirPath, { recursive: true, force: true });
 	} catch {
 		// best-effort cleanup
 	}

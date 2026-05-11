@@ -1,4 +1,3 @@
-import { statfsSync } from "node:fs";
 import os from "os";
 import { version } from "../package.json" with { type: "json" };
 import { ConfigManager } from "./lib/config";
@@ -24,7 +23,7 @@ export async function runSetup(agentCode: string): Promise<void> {
 	const { serverUrl, agentCode: code } = decoded;
 
 	try {
-		const response = await fetch(`${serverUrl}/api/agents/pair`, {
+		const response = await fetch(`${serverUrl}/agents/pair`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -37,15 +36,6 @@ export async function runSetup(agentCode: string): Promise<void> {
 					cpus: os.cpus().length,
 					hostname: os.hostname(),
 					agent_version: version,
-					ram: os.totalmem(),
-					disk_available: (() => {
-						try {
-							const s = statfsSync(os.platform() === "win32" ? "C:\\" : "/");
-							return s.bavail * s.bsize;
-						} catch {
-							return null;
-						}
-					})(),
 				},
 			}),
 		});
@@ -65,7 +55,7 @@ export async function runSetup(agentCode: string): Promise<void> {
 		// Falls back gracefully for bare origins (e.g. http://localhost:5174).
 		const wsUrl = serverUrl
 			.replace(/^http/, "ws")
-			.replace(/\/api\/?$/, "/ws");
+			.replace(/\/api\/?$/, "");
 
 		await ConfigManager.update({ serverUrl, wsUrl, agentToken: data.token });
 
