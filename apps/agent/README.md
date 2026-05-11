@@ -1,19 +1,41 @@
+![backupr](../../banner.png)
+
 # agent
 
-To install dependencies:
+CLI daemon that runs on client machines. Connects to the backupr server over WebSocket, executes backup jobs on demand, and uploads archives to S3.
+
+## Setup
+
+Run once to pair with the server using a code generated from the dashboard:
+
+```bash
+# Linux
+./backupr-agent setup <pairing-code>
+
+# Windows
+backupr-agent.exe setup <pairing-code>
+```
+
+After setup the agent starts automatically and reconnects on restart.
+
+## Dev
 
 ```bash
 bun install
+bun run dev           # run with hot reload
+bun run setup         # interactive setup mode
 ```
 
-To run:
+## Build binaries
 
 ```bash
-bun run index.ts
+bun run build:linux    # linux-x64
+bun run build:windows  # windows-x64
 ```
 
-This project was created using `bun init` in bun v1.3.11. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Install (Windows, one-liner)
 
+```powershell
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-
 iex (irm "https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent/scripts/install.ps1")
+```

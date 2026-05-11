@@ -200,3 +200,5 @@ next-env.d.ts
 apps/app/backups/*
 
 apps/client/out/*
+
+.claude
