@@ -186,7 +186,13 @@ export function RowDataActions({
 					<DotsThreeIcon />
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent side="left" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+			<DropdownMenuContent
+				side="left"
+				onContextMenu={(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+				}}
+			>
 				{actions.map((action) => {
 					if ("divider" in action) {
 						return <DropdownMenuSeparator key={action.id} />;
@@ -242,7 +248,12 @@ export function RowDataActionsBulk({
 					{selectedRows.length} Selecionado{selectedRows.length > 1 ? "s" : ""}
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+			<DropdownMenuContent
+				onContextMenu={(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+				}}
+			>
 				{actions
 					.filter((action) => "onBulkClick" in action)
 					.map((action) => {

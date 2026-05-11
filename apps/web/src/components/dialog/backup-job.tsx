@@ -319,6 +319,7 @@ export default function BackupJobDialog({
 					defaultValue={defaultData?.files ? defaultData.files.join("\n") : ""}
 					disabled={readonly}
 					rows={4}
+					className="break-all"
 				/>
 				<p className="text-xs text-muted-foreground">
 					Enter one path per line. Use absolute paths.

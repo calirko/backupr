@@ -154,6 +154,26 @@
     }
 }
 
+/* Scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.35 0.001 264) transparent;
+}
+*::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+    background-color: oklch(0.35 0.001 264);
+    border-radius: 99px;
+}
+*::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
 /*DYNAMIC ROUNDNESS FOR THE ENTIRE APP*/
 
 :root {

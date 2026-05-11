@@ -1,19 +1,3 @@
-import { useEffect, useRef, useState } from "react";
-import { Spinner } from "@/components/ui/spinner";
-import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
-import {
-	Card,
-	CardHeader,
-	CardTitle,
-	CardDescription,
-	CardContent,
-	CardFooter,
-	CardAction,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { useDialog } from "@/hooks/use-dialog";
-import BackupVersionsDialog from "@/components/dialog/backup-versions";
 import {
 	ArrowLeftIcon,
 	CheckSquareIcon,
@@ -23,18 +7,34 @@ import {
 	MagnifyingGlassIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
+import BackupVersionsDialog from "@/components/dialog/backup-versions";
+import { Button } from "@/components/ui/button";
+import {
+	Card,
+	CardAction,
+	CardContent,
+	CardDescription,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
+import {
+	type AgentConnectionStatus,
+	ConnectionStatus,
+} from "@/components/ui/connection-status";
 import { Input } from "@/components/ui/input";
-import { useSocket } from "@/hooks/use-socket";
-import { BACKUP_STATUS_LABEL, BACKUP_STATUS_STYLE } from "@/lib/backup-status";
+import { Spinner } from "@/components/ui/spinner";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-	ConnectionStatus,
-	type AgentConnectionStatus,
-} from "@/components/ui/connection-status";
+import { useDialog } from "@/hooks/use-dialog";
+import { useSocket } from "@/hooks/use-socket";
+import { BACKUP_STATUS_LABEL, BACKUP_STATUS_STYLE } from "@/lib/backup-status";
 
 interface BackupJob {
 	id: string;
@@ -260,7 +260,7 @@ export default function AgentJobsPage() {
 				</p>
 			)}
 
-			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+			<div className="grid pb-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 				{visibleJobs.map((job) => {
 					const last = job.backups?.[0] ?? null;
 					const agentStatus = agentStatuses.find((s) => s.agentId === agentId);

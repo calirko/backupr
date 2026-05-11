@@ -90,7 +90,7 @@ export default function AgentCodeDialog({
 					readOnly
 					placeholder="Agent code"
 					value={data.agentCode}
-					className="h-25 resize-none"
+					className="h-25 resize-none break-all"
 				/>
 			</div>
 			{data.expiresAt && (

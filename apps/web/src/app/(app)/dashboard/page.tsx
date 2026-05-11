@@ -266,7 +266,7 @@ export default function DashboardPage() {
 						Overview of your agents and backup status.
 					</p>
 				</div>
-				<div className="grid grid-cols-4 gap-4 w-full">
+				<div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
 					{/* ── Row 1: 2 stat cards + storage-by-job chart ── */}
 
 					<Card>

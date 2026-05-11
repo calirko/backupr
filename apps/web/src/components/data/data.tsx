@@ -96,10 +96,17 @@ export default function Data({
 	}
 
 	function tableRows({ row, striped }: { row: Row; striped?: boolean }) {
+		const isSelected = !!selectedRows.find((e: Row) => e.id === row.id);
+		const stickyBg = isSelected
+			? "bg-card"
+			: striped
+				? "bg-table-row"
+				: "bg-card";
+
 		return (
 			<TableRow
 				key={row.id}
-				className={`${striped && "bg-table-row"} ${selectedRows.find((e: Row) => e.id === row.id) ? "bg-sidebar" : ""} text-xs`}
+				className={`${striped && "bg-table-row"} ${isSelected ? "bg-sidebar" : ""} text-xs`}
 			>
 				{showIndex && (
 					<TableCell
@@ -159,8 +166,14 @@ export default function Data({
 					</TableCell>
 				))}
 				{actions && actions.length > 0 && (
-					<TableCell align="right" className="p-0! w-8" key={"actions"}>
-						<RowDataActions actions={actions} row={row} />
+					<TableCell
+						align="right"
+						className={`p-0! w-8 sticky right-0 z-10 ${stickyBg}`}
+						key={"actions"}
+					>
+						<div className="bg-card aspect-square border-l">
+							<RowDataActions actions={actions} row={row} />
+						</div>
 					</TableCell>
 				)}
 			</TableRow>
@@ -280,7 +293,10 @@ export default function Data({
 											</TableHead>
 										))}
 										{actions && actions.length > 0 && (
-											<TableHead align="right" className="p-2! w-8" />
+											<TableHead
+												align="right"
+												className="p-2! w-8 sticky right-0 bg-card border-l z-20"
+											/>
 										)}
 									</TableRow>
 								</TableHeader>
@@ -309,7 +325,7 @@ export default function Data({
 											</TableCell>
 										))}
 										{actions && actions.length > 0 && (
-											<TableCell className="p-2! w-8" />
+											<TableCell className="p-2! w-8 sticky right-0 bg-inherit border-l z-10" />
 										)}
 									</TableFooter>
 								)}
