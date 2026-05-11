@@ -208,8 +208,12 @@ function Action-Start {
     }
 
     sc.exe config $ServiceName start= auto | Out-Null
-    Push-Location $WinSwDir
-    try { & $WinSwExe start } finally { Pop-Location }
+    if (Test-Path $WinSwDir) {
+        Push-Location $WinSwDir
+        try { & $WinSwExe start } finally { Pop-Location }
+    } else {
+        sc.exe start $ServiceName | Out-Null
+    }
     Start-Sleep -Seconds 1
     $svc = Get-Service -Name $ServiceName
     $color = if ($svc.Status -eq "Running") { "Green" } else { "Yellow" }
@@ -224,8 +228,12 @@ function Action-Stop {
         return
     }
 
-    Push-Location $WinSwDir
-    try { & $WinSwExe stop } finally { Pop-Location }
+    if (Test-Path $WinSwDir) {
+        Push-Location $WinSwDir
+        try { & $WinSwExe stop } finally { Pop-Location }
+    } else {
+        sc.exe stop $ServiceName | Out-Null
+    }
     Write-Host "  Service stopped." -ForegroundColor Yellow
 }
 
@@ -243,8 +251,13 @@ function Action-Remove {
         return
     }
 
-    Push-Location $WinSwDir
-    try { & $WinSwExe uninstall } finally { Pop-Location }
+    if (Test-Path $WinSwDir) {
+        Push-Location $WinSwDir
+        try { & $WinSwExe uninstall } finally { Pop-Location }
+    } else {
+        Write-Host "  WinSW directory not found; using sc.exe to remove service..." -ForegroundColor Yellow
+        sc.exe delete $ServiceName | Out-Null
+    }
     Write-Host "  Service removed." -ForegroundColor Yellow
     Write-Host "  Files in $InstallDir were left in place. Delete manually if needed." -ForegroundColor DarkGray
 }
