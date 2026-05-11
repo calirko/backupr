@@ -45,7 +45,7 @@ const content = {
 		installDesc:
 			"The agent is installed via a PowerShell script. Open PowerShell as Administrator and run the one-liner below to download and launch the installer interactively:",
 		installCmd:
-			'iex (irm "https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent/scripts/install.ps1")',
+			'[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex (irm "https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent/scripts/install.ps1")',
 		installAdminNote:
 			"PowerShell must be run as Administrator. The script will attempt to relaunch itself with elevated privileges if it detects it is not already elevated.",
 		installSteps: [
@@ -109,7 +109,7 @@ const content = {
 		installDesc:
 			"O agente é instalado via script PowerShell. Abra o PowerShell como Administrador e execute o comando abaixo para baixar e iniciar o instalador de forma interativa:",
 		installCmd:
-			'iex (irm "https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent/scripts/install.ps1")',
+			'[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex (irm "https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent/scripts/install.ps1")',
 		installAdminNote:
 			"O PowerShell deve ser executado como Administrador. O script tentará se reiniciar com privilégios elevados caso detecte que não está rodando com permissões de administrador.",
 		installSteps: [

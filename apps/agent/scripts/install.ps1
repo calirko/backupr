@@ -28,8 +28,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# Force TLS 1.2+ to support modern GitHub/7-zip HTTPS endpoints on older Windows
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+# Force TLS 1.2+ (3072) and TLS 1.3 (12288) via integer literals — enum names don't exist on .NET < 4.8
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType](3072 -bor 12288)
 
 # --- Constants ----------------------------------------------------------------
 

@@ -37,16 +37,7 @@ bun run build:windows  # windows-x64
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-iex (irm "https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent/scripts/install.ps1")
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex (irm "https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent/scripts/install.ps1")
 ```
 
-### Troubleshooting: TLS/SSL Error on older Windows Servers
-
-If you get `"A solicitação foi anulada: Não foi possível criar um canal seguro para SSL/TLS"` (or similar SSL/TLS error), use the helper script instead:
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-iex (New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent/scripts/install-helper.ps1')
-```
-
-This helper configures TLS 1.2+ support before downloading the main installer, which works on older Windows Server editions.
+The TLS 1.2 line ensures compatibility with older Windows Server editions that default to TLS 1.0.
