@@ -9,7 +9,7 @@
     The service runs as LocalSystem (no interactive login required) and starts automatically.
 
 .PARAMETER Action
-    Action to perform: install | setup | start | stop | restart | remove | status
+    Action to perform: install | setup | start | stop | restart | remove | status | logs | update
     If omitted, an interactive menu is shown.
 
 .EXAMPLE
@@ -21,7 +21,7 @@
 #>
 
 param(
-    [ValidateSet("install", "setup", "start", "stop", "restart", "remove", "status", "")]
+    [ValidateSet("install", "setup", "start", "stop", "restart", "remove", "status", "logs", "update", "")]
     [string]$Action = ""
 )
 
@@ -293,6 +293,103 @@ function Action-Status {
     }
 }
 
+function Action-Logs {
+    Write-Header "Backupr Agent logs"
+
+    $logFiles = Get-ChildItem -Path $InstallDir -Filter "*.log" -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending
+
+    if (-not $logFiles) {
+        Write-Host "  No log files found in $InstallDir" -ForegroundColor DarkGray
+        return
+    }
+
+    Write-Host "  Found $($logFiles.Count) log file(s) in $InstallDir" -ForegroundColor Cyan
+    Write-Host ""
+
+    foreach ($file in $logFiles) {
+        $size = if ($file.Length -ge 1MB) {
+            "{0:N1} MB" -f ($file.Length / 1MB)
+        } elseif ($file.Length -ge 1KB) {
+            "{0:N1} KB" -f ($file.Length / 1KB)
+        } else {
+            "$($file.Length) B"
+        }
+        Write-Host ("  {0,-40} {1,8}   {2}" -f $file.Name, $size, $file.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"))
+    }
+
+    Write-Host ""
+    $choice = Read-Host "  Enter a log filename to tail (or press Enter to skip)"
+    $choice = $choice.Trim()
+    if (-not $choice) { return }
+
+    $target = Join-Path $InstallDir $choice
+    if (-not (Test-Path $target)) {
+        Write-Warning "File not found: $target"
+        return
+    }
+
+    Write-Host ""
+    Write-Host "  --- Last 50 lines of $choice ---" -ForegroundColor DarkCyan
+    Get-Content $target -Tail 50 | ForEach-Object { Write-Host "  $_" }
+    Write-Host "  --- end ---" -ForegroundColor DarkCyan
+}
+
+function Action-Update {
+    Write-Header "Updating Backupr Agent"
+
+    $null = New-Item -ItemType Directory -Force -Path $InstallDir
+
+    $wasRunning = $false
+    if (Get-ServiceExists) {
+        $svc = Get-Service -Name $ServiceName
+        if ($svc.Status -eq "Running") {
+            $wasRunning = $true
+            Write-Host "  Stopping service before update..." -ForegroundColor Yellow
+            Action-Stop
+            Start-Sleep -Seconds 2
+        }
+    }
+
+    # Back up the current binary so we can roll back on failure
+    $backup = $null
+    if (Test-Path $AgentExe) {
+        $backup = "$AgentExe.bak"
+        Copy-Item $AgentExe $backup -Force
+        Write-Host "  Backed up existing binary to $backup" -ForegroundColor DarkGray
+    }
+
+    try {
+        Write-Host "  Downloading latest backupr-agent.exe..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $AgentUrl -OutFile $AgentExe -UseBasicParsing
+        Write-Host "  Agent updated at $AgentExe" -ForegroundColor Green
+
+        # Remove backup on success
+        if ($backup -and (Test-Path $backup)) {
+            Remove-Item $backup -Force
+        }
+    } catch {
+        Write-Warning "Download failed: $_"
+        if ($backup -and (Test-Path $backup)) {
+            Copy-Item $backup $AgentExe -Force
+            Remove-Item $backup -Force
+            Write-Host "  Rolled back to previous binary." -ForegroundColor Yellow
+        }
+        if ($wasRunning) { Action-Start }
+        return
+    }
+
+    if ($wasRunning) {
+        Write-Host "  Restarting service..." -ForegroundColor Yellow
+        Action-Start
+    } else {
+        Write-Host "  Service was not running; skipping restart." -ForegroundColor DarkGray
+    }
+
+    Write-Host ""
+    Write-Host "  Update complete. Config files were not modified." -ForegroundColor Green
+}
+
 # --- Interactive menu ---------------------------------------------------------
 
 function Show-Menu {
@@ -308,6 +405,8 @@ function Show-Menu {
         Write-Host "  |  5) Restart service          |"
         Write-Host "  |  6) Remove service           |"
         Write-Host "  |  7) Status                   |"
+        Write-Host "  |  8) View logs                |"
+        Write-Host "  |  9) Update agent             |"
         Write-Host "  |  Q) Quit                     |"
         Write-Host "  +------------------------------+" -ForegroundColor Cyan
         Write-Host ""
@@ -321,6 +420,8 @@ function Show-Menu {
             "5" { Action-Restart }
             "6" { Action-Remove  }
             "7" { Action-Status  }
+            "8" { Action-Logs    }
+            "9" { Action-Update  }
             "Q" { Write-Host "  Bye." -ForegroundColor DarkGray; return }
             default { Write-Warning "Unknown option: $choice" }
         }
@@ -339,5 +440,7 @@ switch ($Action.ToLower()) {
     "restart" { Action-Restart }
     "remove"  { Action-Remove  }
     "status"  { Action-Status  }
+    "logs"    { Action-Logs    }
+    "update"  { Action-Update  }
     ""        { Show-Menu      }
 }
