@@ -26,10 +26,12 @@ WORKDIR /app/apps/server
 RUN bun build --target bun --outdir dist --format esm src/main.ts && \
     bun install --production
 
-# Production stage - minimal runtime
-FROM oven/bun:1.3.11-distroless
+# Production stage
+FROM oven/bun:1.3.11
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 # Copy only production node_modules
 COPY --from=bundler /app/node_modules ./node_modules
@@ -42,9 +44,6 @@ COPY --from=bundler /app/apps/server/prisma ./apps/server/prisma
 COPY apps/server/entrypoint.sh ./apps/server/entrypoint.sh
 
 EXPOSE 5174
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD bun -e "fetch('http://localhost:5174/ping').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 ENV NODE_ENV=production
 ENV BUN_GC=aggressive

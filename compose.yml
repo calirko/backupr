@@ -26,13 +26,7 @@ services:
         reservations:
           memory: 128M
     healthcheck:
-      test:
-        [
-          "CMD",
-          "bun",
-          "-e",
-          "fetch('http://localhost:5174/api/ping').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))",
-        ]
+      test: ["CMD", "curl", "-sf", "http://localhost:5174/api/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -75,12 +69,18 @@ services:
         aliases:
           - backupr_proxy
       dokploy-network: {}
-    # depends_on:
-    #   web:
-    #     condition: service_healthy
-    #   server:
-    #     condition: service_healthy
+    depends_on:
+      web:
+        condition: service_healthy
+      server:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 networks:
   backupr_network:
