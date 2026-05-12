@@ -1,5 +1,5 @@
 import os from "os";
-import { version } from "../package.json" with { type: "json" };
+import { version } from "../package.json";
 import { ConfigManager } from "./lib/config";
 
 export async function runSetup(agentCode: string): Promise<void> {

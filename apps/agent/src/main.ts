@@ -10,15 +10,6 @@ import { runSetup } from "./setup";
 
 const [, , subcommand, subcommandArg] = process.argv;
 
-if (subcommand === "setup") {
-	if (!subcommandArg) {
-		console.error("\x1b[31m[Setup] Usage: agent setup <agentCode>\x1b[0m");
-		process.exit(1);
-	}
-	await runSetup(subcommandArg);
-	process.exit(0);
-}
-
 const RECONNECT_TIMEOUT_MS = 5000; // Start with 5 seconds
 const MAX_RECONNECT_TIMEOUT_MS = 30000; // Cap at 30 seconds
 const HEARTBEAT_INTERVAL_MS = 30000; // Send heartbeat every 30 seconds
@@ -467,4 +458,15 @@ class BackuprAgent {
 	}
 }
 
-new BackuprAgent().start();
+if (subcommand === "setup") {
+	if (!subcommandArg) {
+		console.error("\x1b[31m[Setup] Usage: agent setup <agentCode>\x1b[0m");
+		process.exit(1);
+	}
+	runSetup(subcommandArg).then(
+		() => process.exit(0),
+		(err: unknown) => { console.error(err); process.exit(1); },
+	);
+} else {
+	new BackuprAgent().start();
+}

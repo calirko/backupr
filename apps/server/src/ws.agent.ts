@@ -9,12 +9,15 @@ const PING_TIMEOUT_MS = 10000;
 
 interface BackupJob {
 	id: string;
+	jobId?: string;
 	agent_id: string;
 	files: string[];
 	compression_level: number;
 	use_password: boolean;
 	password?: string;
 	is_active: boolean;
+	status?: string;
+	statusMessage?: string;
 }
 
 export interface AgentState {

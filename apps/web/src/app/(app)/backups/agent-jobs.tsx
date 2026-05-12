@@ -253,177 +253,186 @@ export default function AgentJobsPage() {
 				</div>
 			</div>
 
-			{loading && <Spinner className="self-center" />}
-			{!loading && visibleJobs.length === 0 && (
+			{loading && (
+				<div className="h-40 flex items-center justify-center">
+					<Spinner />
+				</div>
+			)}
+			{!loading && visibleJobs.length === 0 ? (
 				<p className="text-sm text-muted-foreground">
 					No backup jobs configured for this agent.
 				</p>
-			)}
+			) : (
+				<div className="grid pb-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+					{visibleJobs.map((job) => {
+						const last = job.backups?.[0] ?? null;
+						const agentStatus = agentStatuses.find(
+							(s) => s.agentId === agentId,
+						);
+						const agentBusy =
+							agentStatus?.status !== "connected" || !!agentStatus?.currentJob;
+						const liveStatusMessage =
+							agentStatus?.currentJob?.jobId === job.id
+								? agentStatus.currentJob.statusMessage
+								: undefined;
+						return (
+							<Card key={job.id}>
+								<CardHeader>
+									<CardTitle className="truncate">{job.name}</CardTitle>
+									<CardAction>
+										{job.is_active ? (
+											<CheckSquareIcon
+												size={16}
+												style={{ color: "var(--greenish)" }}
+											/>
+										) : (
+											<XSquareIcon size={16} className="text-destructive" />
+										)}
+									</CardAction>
+									<CardDescription className="font-mono text-xs">
+										{job.cron}
+									</CardDescription>
+								</CardHeader>
 
-			<div className="grid pb-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-				{visibleJobs.map((job) => {
-					const last = job.backups?.[0] ?? null;
-					const agentStatus = agentStatuses.find((s) => s.agentId === agentId);
-					const agentBusy =
-						agentStatus?.status !== "connected" || !!agentStatus?.currentJob;
-					const liveStatusMessage =
-						agentStatus?.currentJob?.jobId === job.id
-							? agentStatus.currentJob.statusMessage
-							: undefined;
-					return (
-						<Card key={job.id}>
-							<CardHeader>
-								<CardTitle className="truncate">{job.name}</CardTitle>
-								<CardAction>
-									{job.is_active ? (
-										<CheckSquareIcon
-											size={16}
-											style={{ color: "var(--greenish)" }}
-										/>
-									) : (
-										<XSquareIcon size={16} className="text-destructive" />
-									)}
-								</CardAction>
-								<CardDescription className="font-mono text-xs">
-									{job.cron}
-								</CardDescription>
-							</CardHeader>
-
-							<CardContent>
-								<div className="space-y-0">
-									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-										<span className="text-xs text-muted-foreground shrink-0">
-											Status
-										</span>
-										<span
-											className="text-xs text-right"
-											style={
-												job.is_active ? { color: "var(--greenish)" } : undefined
-											}
-										>
-											{job.is_active ? (
-												"Active"
-											) : (
-												<span className="text-destructive">Inactive</span>
-											)}
-										</span>
-									</div>
-									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-										<span className="text-xs text-muted-foreground shrink-0">
-											Files
-										</span>
-										<span className="text-xs text-right">
-											{job.files.length} item{job.files.length !== 1 ? "s" : ""}
-										</span>
-									</div>
-									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-										<span className="text-xs text-muted-foreground shrink-0">
-											Total Backups
-										</span>
-										<span className="text-xs text-right">
-											{job._count?.backups ?? 0}
-										</span>
-									</div>
-									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-										<span className="text-xs text-muted-foreground shrink-0">
-											Last Run
-										</span>
-										<span className="text-xs text-right">
-											{formatRelative(last?.started_at)}
-										</span>
-									</div>
-									{last && (
+								<CardContent>
+									<div className="space-y-0">
 										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
 											<span className="text-xs text-muted-foreground shrink-0">
-												Last Status
+												Status
 											</span>
 											<span
 												className="text-xs text-right"
 												style={
-													BACKUP_STATUS_STYLE[
-														last.status as keyof typeof BACKUP_STATUS_STYLE
-													] ?? {}
+													job.is_active
+														? { color: "var(--greenish)" }
+														: undefined
 												}
 											>
-												{BACKUP_STATUS_LABEL[
-													last.status as keyof typeof BACKUP_STATUS_LABEL
-												] ?? last.status}
+												{job.is_active ? (
+													"Active"
+												) : (
+													<span className="text-destructive">Inactive</span>
+												)}
 											</span>
 										</div>
-									)}
-									{job.use_password && (
 										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
 											<span className="text-xs text-muted-foreground shrink-0">
-												Encrypted
+												Files
 											</span>
-											<span
-												className="text-xs text-right"
-												style={{ color: "var(--greenish)" }}
-											>
-												Yes
+											<span className="text-xs text-right">
+												{job.files.length} item
+												{job.files.length !== 1 ? "s" : ""}
 											</span>
 										</div>
-									)}
-									{liveStatusMessage && (
 										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
 											<span className="text-xs text-muted-foreground shrink-0">
-												Progress
+												Total Backups
 											</span>
-											<span className="text-xs text-right text-blue-200">
-												{liveStatusMessage}
+											<span className="text-xs text-right">
+												{job._count?.backups ?? 0}
 											</span>
 										</div>
-									)}
-								</div>
-							</CardContent>
+										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+											<span className="text-xs text-muted-foreground shrink-0">
+												Last Run
+											</span>
+											<span className="text-xs text-right">
+												{formatRelative(last?.started_at)}
+											</span>
+										</div>
+										{last && (
+											<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+												<span className="text-xs text-muted-foreground shrink-0">
+													Last Status
+												</span>
+												<span
+													className="text-xs text-right"
+													style={
+														BACKUP_STATUS_STYLE[
+															last.status as keyof typeof BACKUP_STATUS_STYLE
+														] ?? {}
+													}
+												>
+													{BACKUP_STATUS_LABEL[
+														last.status as keyof typeof BACKUP_STATUS_LABEL
+													] ?? last.status}
+												</span>
+											</div>
+										)}
+										{job.use_password && (
+											<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+												<span className="text-xs text-muted-foreground shrink-0">
+													Encrypted
+												</span>
+												<span
+													className="text-xs text-right"
+													style={{ color: "var(--greenish)" }}
+												>
+													Yes
+												</span>
+											</div>
+										)}
+										{liveStatusMessage && (
+											<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+												<span className="text-xs text-muted-foreground shrink-0">
+													Progress
+												</span>
+												<span className="text-xs text-right text-muted-foreground">
+													{liveStatusMessage}
+												</span>
+											</div>
+										)}
+									</div>
+								</CardContent>
 
-							<CardFooter className="gap-2">
-								<Tooltip>
-									<TooltipTrigger>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() => triggerBackup(job.id)}
-											disabled={agentBusy || !job.is_active}
-										>
-											<LightningIcon />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>
-										{!job.is_active
-											? "This job is inactive"
-											: agentBusy
-												? "Agent is busy or offline"
-												: "Trigger backup now"}
-									</TooltipContent>
-								</Tooltip>
-								<Button
-									variant="outline"
-									size="sm"
-									className="flex-1"
-									onClick={() => downloadLatest(job.id)}
-								>
-									<DownloadSimpleIcon />
-									Latest
-								</Button>
-								<Button
-									size="sm"
-									className="flex-1"
-									onClick={() =>
-										openDialog(BackupVersionsDialog, {
-											backupJobId: job.id,
-											jobLabel: job.cron,
-										})
-									}
-								>
-									<ClockClockwiseIcon />
-									Versions
-								</Button>
-							</CardFooter>
-						</Card>
-					);
-				})}
-			</div>
+								<CardFooter className="gap-2">
+									<Tooltip>
+										<TooltipTrigger>
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => triggerBackup(job.id)}
+												disabled={agentBusy || !job.is_active}
+											>
+												<LightningIcon />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>
+											{!job.is_active
+												? "This job is inactive"
+												: agentBusy
+													? "Agent is busy or offline"
+													: "Trigger backup now"}
+										</TooltipContent>
+									</Tooltip>
+									<Button
+										variant="outline"
+										size="sm"
+										className="flex-1"
+										onClick={() => downloadLatest(job.id)}
+									>
+										<DownloadSimpleIcon />
+										Latest
+									</Button>
+									<Button
+										size="sm"
+										className="flex-1"
+										onClick={() =>
+											openDialog(BackupVersionsDialog, {
+												backupJobId: job.id,
+												jobLabel: job.cron,
+											})
+										}
+									>
+										<ClockClockwiseIcon />
+										Versions
+									</Button>
+								</CardFooter>
+							</Card>
+						);
+					})}
+				</div>
+			)}
 		</div>
 	);
 }

@@ -1,22 +1,26 @@
+import {
+	ClipboardIcon,
+	DownloadSimpleIcon,
+	WarningIcon,
+} from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useSocket } from "@/hooks/use-socket";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogClose,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-	DialogDescription,
 } from "@/components/ui/dialog";
 import {
 	Drawer,
 	DrawerContent,
+	DrawerDescription,
 	DrawerHeader,
 	DrawerTitle,
-	DrawerDescription,
 } from "@/components/ui/drawer";
 import {
 	Table,
@@ -26,18 +30,14 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useSocket } from "@/hooks/use-socket";
 import {
-	ClipboardIcon,
-	DownloadSimpleIcon,
-	WarningIcon,
-} from "@phosphor-icons/react";
-import Badge from "../ui/badge";
-import {
-	type BackupStatus,
 	BACKUP_STATUS_BADGE_VARIANT,
 	BACKUP_STATUS_LABEL,
+	type BackupStatus,
 } from "@/lib/backup-status";
+import Badge from "../ui/badge";
 
 interface BackupVersion {
 	id: string;

@@ -122,6 +122,8 @@ export function SocketProvider({
 					return;
 				}
 
+				console.log(message);
+
 				switch (message.type) {
 					case "ping":
 						ws.send(JSON.stringify({ type: "pong" }));
