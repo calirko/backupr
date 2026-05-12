@@ -1,3 +1,12 @@
+## Installing
+
+### Windows
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex (irm "https://raw.githubusercontent.com/calirko/backupr/refs/heads/main/apps/agent-rust/scripts/setup.ps1")
+```
+
 ## Building
 
 ### Windows
