@@ -490,10 +490,11 @@ fn safe_delete_dir(path: &Path) {
 
 // ─── Public Entry Point ───────────────────────────────────────────────────────
 
+/// Returns the compressed archive size in bytes on success.
 pub async fn run_backup_job(
     job: &crate::BackupJobState,
     progress_tx: tokio::sync::mpsc::Sender<String>,
-) -> Result<()> {
+) -> Result<u64> {
     let tmp_base = std::env::temp_dir().join(format!(
         "backupr_{}_{}",
         job.id,
@@ -574,7 +575,7 @@ pub async fn run_backup_job(
             format_bytes((archive_size as f64 / upload_sec) as u64)
         );
 
-        Ok(())
+        Ok(archive_size)
     }
     .await;
 

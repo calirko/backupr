@@ -144,6 +144,25 @@ async function triggerDueBackups(): Promise<void> {
 
 		if (!isDue) continue;
 
+		// Secondary DB-level guard: reject if a backup was already started within
+		// the current calendar minute (protects against NTP clock skew or multiple
+		// server instances firing simultaneously).
+		const windowStart = new Date(now);
+		windowStart.setSeconds(0, 0);
+		const windowEnd = new Date(windowStart.getTime() + 60_000);
+		const recentCount = await db.backup.count({
+			where: {
+				backup_job_id: job.id,
+				started_at: { gte: windowStart, lt: windowEnd },
+			},
+		});
+		if (recentCount > 0) {
+			console.log(
+				`[Scheduler] Skipping job ${job.id}: backup already started in the current minute.`,
+			);
+			continue;
+		}
+
 		console.log(
 			`[Scheduler] Triggering backup for job ${job.id} (cron: ${job.cron})`,
 		);
@@ -201,7 +220,7 @@ function isCronDue(
 ): boolean {
 	const fields = expression.trim().split(/\s+/);
 	if (fields.length !== 5) {
-		console.warn(`[Scheduler] Invalid cron expression: "${expression}"`);
+		console.error(`[Scheduler] Invalid cron expression (expected 5 fields, got ${fields.length}): "${expression}" — job will never fire`);
 		return false;
 	}
 
@@ -218,6 +237,14 @@ function isCronDue(
 	const dom = now.getDate();
 	const month = now.getMonth() + 1; // cron months are 1-based
 	const dow = now.getDay(); // 0 = Sunday
+
+	// Validate each field is parseable before evaluating — log once if malformed
+	for (const [label, field] of [["minute", minuteField], ["hour", hourField], ["dom", domField], ["month", monthField], ["dow", dowField]] as const) {
+		if (field !== "*" && !field.match(/^[\d,\-\/\*]+$/)) {
+			console.error(`[Scheduler] Invalid cron field "${label}=${field}" in "${expression}" — job will never fire`);
+			return false;
+		}
+	}
 
 	const matches =
 		cronFieldMatches(minuteField, minute, 0, 59) &&
@@ -313,27 +340,52 @@ function cronFieldMatches(
 
 /**
  * Marks IN_PROGRESS backups as FAILED if they have been running for over 1 hour.
+ * Also removes any storage blobs that were uploaded for timed-out backups.
  */
 async function timeoutStaleBackups(): Promise<void> {
 	const cutoff = new Date(Date.now() - 60 * 60_000);
 
-	const { count } = await db.backup.updateMany({
-		where: {
-			status: "IN_PROGRESS",
-			started_at: { lt: cutoff },
-		},
+	// Fetch stale backups before marking them so we can clean their blobs
+	const staleBackups = await db.backup.findMany({
+		where: { status: "IN_PROGRESS", started_at: { lt: cutoff } },
+		select: { id: true, blob_key: true },
+	});
+
+	if (staleBackups.length === 0) return;
+
+	await db.backup.updateMany({
+		where: { id: { in: staleBackups.map((b) => b.id) } },
 		data: {
 			status: "FAILED",
 			error: "Backup timed out after 1 hour with no completion.",
+			completed_at: new Date(),
 		},
 	});
 
-	if (count > 0) {
-		console.log(
-			`[Scheduler] Marked ${count} stale backup(s) as FAILED (timeout).`,
-		);
+	console.log(
+		`[Scheduler] Marked ${staleBackups.length} stale backup(s) as FAILED (timeout).`,
+	);
+
+	// Best-effort: remove any blobs that were partially uploaded
+	for (const backup of staleBackups) {
+		if (backup.blob_key) {
+			try {
+				await removeObject(backup.blob_key);
+				await db.backup.update({
+					where: { id: backup.id },
+					data: { blob_key: null },
+				});
+			} catch (err) {
+				console.error(
+					`[Scheduler] Failed to remove blob ${backup.blob_key} for timed-out backup ${backup.id}:`,
+					err,
+				);
+			}
+		}
 	}
 }
+
+let retentionRunning = false;
 
 /**
  * Enforces retention policies across all backup jobs.
@@ -341,13 +393,27 @@ async function timeoutStaleBackups(): Promise<void> {
  * constraints is applied — whichever rule demands the most aggressive pruning wins.
  *
  * Rules:
- *   keep_last_n_backups  – delete COMPLETED backups beyond the N most recent
- *   max_backup_age_in_days – delete COMPLETED backups older than N days
+ *   keep_last_n_backups    – delete COMPLETED backups beyond the N most recent
+ *   max_backup_age_in_days – delete COMPLETED and FAILED backups older than N days
  *
- * Storage objects (blob_key) are removed before the DB row so a crash never
- * leaves orphaned rows pointing at deleted blobs.
+ * DB row is deleted first, then the storage object. This means a crash between
+ * the two steps leaves an orphaned blob (recoverable) rather than a DB row
+ * pointing to a deleted blob (causes broken downloads).
  */
 async function enforceRetentionPolicies(): Promise<void> {
+	if (retentionRunning) {
+		console.warn("[Scheduler] enforceRetentionPolicies already running, skipping.");
+		return;
+	}
+	retentionRunning = true;
+	try {
+		await _enforceRetentionPolicies();
+	} finally {
+		retentionRunning = false;
+	}
+}
+
+async function _enforceRetentionPolicies(): Promise<void> {
 	const jobs = await db.backupJob.findMany({
 		where: {
 			deleted_at: null,
@@ -400,10 +466,11 @@ async function enforceRetentionPolicies(): Promise<void> {
 			const cutoff = new Date();
 			cutoff.setDate(cutoff.getDate() - maxAgeDays);
 
+			// Apply age limit to both COMPLETED and FAILED backups
 			const backups = await db.backup.findMany({
 				where: {
 					backup_job_id: job.id,
-					status: "COMPLETED",
+					status: { in: ["COMPLETED", "FAILED"] },
 					started_at: { lt: cutoff },
 				},
 				select: { id: true, blob_key: true },
@@ -424,21 +491,31 @@ async function enforceRetentionPolicies(): Promise<void> {
 
 		let deleted = 0;
 		for (const backup of backupsToDelete) {
+			// Delete the DB row first. If the subsequent storage removal fails, the
+			// blob becomes an orphan in storage (detectable via reconciliation) rather
+			// than leaving a DB row that points at a missing blob (broken downloads).
+			try {
+				await db.backup.delete({ where: { id: backup.id } });
+			} catch (err) {
+				console.error(
+					`[Scheduler] Failed to delete DB row for backup ${backup.id}:`,
+					err,
+				);
+				continue;
+			}
+
+			deleted++;
+
 			if (backup.blob_key) {
 				try {
 					await removeObject(backup.blob_key);
 				} catch (err) {
 					console.error(
-						`[Scheduler] Failed to remove storage object ${backup.blob_key}:`,
+						`[Scheduler] Failed to remove storage object ${backup.blob_key} (DB row already deleted — blob is orphaned):`,
 						err,
 					);
-					// Don't delete the DB row if storage removal fails — avoids orphaned references
-					continue;
 				}
 			}
-
-			await db.backup.delete({ where: { id: backup.id } });
-			deleted++;
 		}
 
 		if (deleted > 0) {

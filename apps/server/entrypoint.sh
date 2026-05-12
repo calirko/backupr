@@ -7,5 +7,4 @@ echo "Running database migrations..."
 bunx prisma migrate deploy
 
 echo "Starting server..."
-cd /app/apps/server
-bun run start
+bun run dist/main.js

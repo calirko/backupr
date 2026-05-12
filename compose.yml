@@ -9,6 +9,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5174
+      - BUN_GC=aggressive
     networks:
       backupr_network:
         aliases:
@@ -18,6 +19,12 @@ services:
           - backupr-server
       dokploy-network: {}
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
     healthcheck:
       test:
         [

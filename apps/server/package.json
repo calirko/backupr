@@ -14,7 +14,6 @@
     "typescript": "^6.0.2"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.14",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "bcrypt": "^6.0.0",
@@ -33,3 +32,4 @@
     "seed": "bun run prisma/seed.ts"
   }
 }
+

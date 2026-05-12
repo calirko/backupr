@@ -616,7 +616,7 @@ impl BackuprAgent {
         println!("[Agent] Starting backup job {}...", job.id);
 
         // Send status update
-        Self::send_backup_status(&job.id, "running", None, cmd_tx).await;
+        Self::send_backup_status(&job.id, "running", None, None, cmd_tx).await;
         
         // Send full status report to update UI immediately
         let full_status = Self::build_status_report(current_job, job_queue).await;
@@ -654,7 +654,7 @@ impl BackuprAgent {
             {
                 let mut current = current_job_clone.lock().await;
                 match result {
-                    Ok(_) => {
+                    Ok(size_bytes) => {
                         println!(
                             "[Agent] Backup job {} completed successfully.",
                             job_clone.id
@@ -663,7 +663,7 @@ impl BackuprAgent {
                             j.status = JobStatus::Completed;
                             j.completed_at = Some(chrono::Utc::now().to_rfc3339());
                         }
-                        Self::send_backup_status(&job_clone.id, "completed", None, &cmd_tx_clone).await;
+                        Self::send_backup_status(&job_clone.id, "completed", None, Some(size_bytes), &cmd_tx_clone).await;
                     }
                     Err(e) => {
                         eprintln!("[Agent] Backup job {} failed: {}", job_clone.id, e);
@@ -676,6 +676,7 @@ impl BackuprAgent {
                             &job_clone.id,
                             "failed",
                             Some(e.to_string()),
+                            None,
                             &cmd_tx_clone,
                         )
                         .await;
@@ -702,18 +703,24 @@ impl BackuprAgent {
         backup_id: &str,
         status: &str,
         error: Option<String>,
+        size_bytes: Option<u64>,
         cmd_tx: &tokio::sync::mpsc::Sender<Message>,
     ) {
-        let mut msg = serde_json::json!({
+        let mut metadata = serde_json::json!({});
+
+        if let Some(err) = error {
+            metadata["error"] = serde_json::Value::String(err);
+        }
+        if let Some(size) = size_bytes {
+            metadata["size_bytes"] = serde_json::Value::Number(size.into());
+        }
+
+        let msg = serde_json::json!({
             "type": "backup_status",
             "backupId": backup_id,
             "status": status,
-            "metadata": {}
+            "metadata": metadata
         });
-
-        if let Some(err) = error {
-            msg["metadata"]["error"] = serde_json::Value::String(err);
-        }
 
         let _ = cmd_tx.send(Message::Text(msg.to_string())).await;
         println!("[Agent] Sent backup status: {} = {}", backup_id, status);
