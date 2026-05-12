@@ -3,6 +3,8 @@ set -e
 
 printenv
 
+ls -lh
+
 cd /app/apps/server
 
 echo "Running database migrations..."

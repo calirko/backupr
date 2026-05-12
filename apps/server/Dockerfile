@@ -40,6 +40,7 @@ COPY --from=bundler /app/apps/server/node_modules ./apps/server/node_modules
 # Copy bundled output and prisma files
 COPY --from=bundler /app/apps/server/dist ./apps/server/dist
 COPY --from=bundler /app/apps/server/prisma ./apps/server/prisma
+COPY apps/server/prisma.config.ts ./apps/server/prisma.config.ts
 
 COPY apps/server/entrypoint.sh ./apps/server/entrypoint.sh
 
