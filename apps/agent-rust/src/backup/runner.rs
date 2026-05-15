@@ -312,7 +312,7 @@ fn shadow_resolve_path(
 
 // ─── Staging ──────────────────────────────────────────────────────────────────
 
-async fn stage_files(files: &[String], stage_dir: &Path) -> Result<Vec<PathBuf>> {
+async fn stage_files(files: &[String], stage_dir: &Path, progress_tx: &tokio::sync::mpsc::Sender<String>) -> Result<Vec<PathBuf>> {
     tokio::fs::create_dir_all(stage_dir).await?;
     let mut staged = Vec::new();
 
@@ -334,6 +334,7 @@ async fn stage_files(files: &[String], stage_dir: &Path) -> Result<Vec<PathBuf>>
             .collect();
 
         for vol in &volumes {
+            let _ = progress_tx.try_send(format!("Creating VSS snapshot for {}...", vol));
             println!("[Backup] Creating VSS shadow copy for {}...", vol);
             if let Some(device) = create_vss_shadow(vol).await {
                 println!("[Backup] VSS shadow ready: {}", device);
@@ -638,7 +639,7 @@ pub async fn run_backup_job(
             stage_dir.display()
         );
 
-        let staged = stage_files(&job.files, &stage_dir).await?;
+        let staged = stage_files(&job.files, &stage_dir, &progress_tx).await?;
 
         if staged.is_empty() {
             anyhow::bail!("No files could be staged for backup.");

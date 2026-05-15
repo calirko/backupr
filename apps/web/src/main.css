@@ -84,7 +84,7 @@
 
     --greenish: oklch(0.7559 0.0814 145);
     --purpleish: oklch(0.64 0.07 272);
-    --blueish: oklch(0.64 0.08 228);
+    --blueish: oklch(0.3445 0.2077 267.05);
 }
 
 /* flash fast, exhale slow */
@@ -132,8 +132,8 @@
 
 /* Status variants — soft desaturated OKLCH */
 .cs-connected    { --cs-color: var(--greenish); --cs-speed: 2.5s; }
-.cs-running      { --cs-color: oklch(0.64 0.08 228); --cs-speed: 1.1s; }
-.cs-queued       { --cs-color: oklch(0.64 0.07 272); --cs-speed: 2s; }
+.cs-running      { --cs-color: var(--blueish); --cs-speed: 1.1s; }
+.cs-queued       { --cs-color: var(--purpleish); --cs-speed: 2s; }
 .cs-stale        { --cs-color: oklch(0.68 0.09 76);  --cs-speed: 4s; }
 .cs-disconnected { --cs-color: oklch(0.42 0 0); }
 .cs-unknown      { --cs-color: oklch(0.42 0 0); }
