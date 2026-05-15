@@ -21,9 +21,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 1G
         reservations:
-          memory: 128M
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:5174/api/ping"]
       interval: 30s

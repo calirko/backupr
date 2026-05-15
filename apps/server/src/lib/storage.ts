@@ -51,6 +51,13 @@ export async function presignedDownloadUrl(
 	return storage.presignedGetObject(BUCKET, key, expiresInSeconds, reqParams);
 }
 
+export async function presignedPutUrl(
+	key: string,
+	expiresInSeconds = 3600,
+): Promise<string> {
+	return storage.presignedPutObject(BUCKET, key, expiresInSeconds);
+}
+
 export async function removeObject(key: string): Promise<void> {
 	await storage.removeObject(BUCKET, key);
 }

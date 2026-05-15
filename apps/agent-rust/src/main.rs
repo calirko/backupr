@@ -1,5 +1,6 @@
+#![allow(special_module_name)]
+
 mod backup;
-#[allow(special_module_name)]
 mod lib;
 mod setup;
 
@@ -51,6 +52,7 @@ struct BackupJobState {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct BackupJobPayload {
     id: String,
     #[serde(rename = "jobId")]
@@ -617,7 +619,7 @@ impl BackuprAgent {
 
         // Send status update
         Self::send_backup_status(&job.id, "running", None, None, cmd_tx).await;
-        
+
         // Send full status report to update UI immediately
         let full_status = Self::build_status_report(current_job, job_queue).await;
         let _ = cmd_tx.send(Message::Text(full_status)).await;
@@ -663,7 +665,14 @@ impl BackuprAgent {
                             j.status = JobStatus::Completed;
                             j.completed_at = Some(chrono::Utc::now().to_rfc3339());
                         }
-                        Self::send_backup_status(&job_clone.id, "completed", None, Some(size_bytes), &cmd_tx_clone).await;
+                        Self::send_backup_status(
+                            &job_clone.id,
+                            "completed",
+                            None,
+                            Some(size_bytes),
+                            &cmd_tx_clone,
+                        )
+                        .await;
                     }
                     Err(e) => {
                         eprintln!("[Agent] Backup job {} failed: {}", job_clone.id, e);
@@ -683,18 +692,17 @@ impl BackuprAgent {
                     }
                 }
             }
-            
+
             // Send full status report immediately to update UI
             let full_status = Self::build_status_report(&current_job_clone, &job_queue_clone).await;
             let _ = cmd_tx_clone.send(Message::Text(full_status)).await;
-            
+
             // Clear current job and immediately push the cleared status
             {
                 let mut current = current_job_clone.lock().await;
                 *current = None;
             }
-            let full_status =
-                Self::build_status_report(&current_job_clone, &job_queue_clone).await;
+            let full_status = Self::build_status_report(&current_job_clone, &job_queue_clone).await;
             let _ = cmd_tx_clone.send(Message::Text(full_status)).await;
         });
     }

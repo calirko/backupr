@@ -3,7 +3,7 @@ import { generateAgentCode, generateAgentToken } from "../lib/agent";
 import { auth } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import { rateLimit } from "../lib/rate-limit";
-import { presignedDownloadUrl, uploadStream } from "../lib/storage";
+import { presignedDownloadUrl, presignedPutUrl } from "../lib/storage";
 import { Token } from "../lib/token";
 import { agentRegistry } from "../ws.agent";
 
@@ -11,8 +11,8 @@ const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
 
 export default async function agentRoutes(app: Hono) {
-	app.post("/api/agent/upload", async (c) => {
-		// Auth: agent session token
+	// Step 1: agent calls this to get a presigned PUT URL + backup record ID
+	app.post("/api/agent/upload/prepare", async (c) => {
 		const token =
 			c.req.header("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
 		if (!token) return c.json({ error: "Missing Authorization header" }, 401);
@@ -23,40 +23,34 @@ export default async function agentRoutes(app: Hono) {
 		});
 		if (!session) return c.json({ error: "Invalid agent token" }, 401);
 
-		const backupJobId = c.req.header("X-Backup-Job-Id");
-		if (!backupJobId)
-			return c.json({ error: "Missing X-Backup-Job-Id header" }, 400);
+		let json: { backup_job_id?: string; backup_id?: string; requires_password?: boolean };
+		try {
+			json = await c.req.json();
+		} catch {
+			return c.json({ error: "Invalid JSON" }, 400);
+		}
 
-		const backupId = c.req.header("X-Backup-Id");
+		const { backup_job_id: backupJobId, backup_id: backupId, requires_password: requiresPassword = false } = json;
+		if (!backupJobId) return c.json({ error: "backup_job_id required" }, 400);
 
 		const job = await db.backupJob.findFirst({
 			where: { id: backupJobId, agent_id: session.agent_id, deleted_at: null },
 		});
-		if (!job)
-			return c.json({ error: "Backup job not found for this agent" }, 404);
+		if (!job) return c.json({ error: "Backup job not found for this agent" }, 404);
 
-		const rawContentLength = c.req.header("Content-Length");
-		const size = rawContentLength ? parseInt(rawContentLength) : undefined;
-		const requiresPassword = c.req.header("X-Requires-Password") === "true";
-		const contentType =
-			c.req.header("Content-Type") ?? "application/octet-stream";
-
-		// Reuse the existing backup record created by the WS command flow, or create one
 		let backupRecord: { id: string };
 		if (backupId) {
 			const existing = await db.backup.findFirst({
 				where: { id: backupId, backup_job_id: backupJobId },
 			});
-			backupRecord =
-				existing ??
-				(await db.backup.create({
-					data: {
-						backup_job_id: backupJobId,
-						status: "IN_PROGRESS",
-						requires_password: requiresPassword,
-						started_at: new Date(),
-					},
-				}));
+			backupRecord = existing ?? (await db.backup.create({
+				data: {
+					backup_job_id: backupJobId,
+					status: "IN_PROGRESS",
+					requires_password: requiresPassword,
+					started_at: new Date(),
+				},
+			}));
 		} else {
 			backupRecord = await db.backup.create({
 				data: {
@@ -69,60 +63,66 @@ export default async function agentRoutes(app: Hono) {
 		}
 
 		const key = `${session.agent_id}/${backupJobId}/${backupRecord.id}`;
+		const upload_url = await presignedPutUrl(key, 3600);
 
+		console.log(`[agent/upload] Prepared backup ${backupRecord.id} for direct upload`);
+
+		return c.json({ backup_id: backupRecord.id, blob_key: key, upload_url });
+	});
+
+	// Step 2: agent calls this after the direct PUT to MinIO completes
+	app.post("/api/agent/upload/complete", async (c) => {
+		const token =
+			c.req.header("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+		if (!token) return c.json({ error: "Missing Authorization header" }, 401);
+
+		const session = await db.agentSession.findUnique({
+			where: { token },
+			include: { agent: true },
+		});
+		if (!session) return c.json({ error: "Invalid agent token" }, 401);
+
+		let json: { backup_id?: string; backup_job_id?: string; blob_key?: string; size_bytes?: number };
 		try {
-			const body = c.req.raw.body;
-			if (!body) {
-				await db.backup.update({
-					where: { id: backupRecord.id },
-					data: {
-						status: "FAILED",
-						error: "Empty request body",
-						completed_at: new Date(),
-					},
-				});
-				return c.json({ error: "Empty request body" }, 400);
-			}
+			json = await c.req.json();
+		} catch {
+			return c.json({ error: "Invalid JSON" }, 400);
+		}
 
-			const { Readable } = await import("node:stream");
-			const nodeStream = Readable.fromWeb(body as any);
-			await uploadStream(key, nodeStream, size, contentType);
+		const { backup_id: backupId, backup_job_id: backupJobId, blob_key: key, size_bytes: sizeBytes } = json;
+		if (!backupId || !backupJobId || !key) {
+			return c.json({ error: "backup_id, backup_job_id, and blob_key are required" }, 400);
+		}
 
-			const dateStr = new Date().toISOString().slice(0, 16).replace(/:/g, "-");
-			const safeName = job.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-			const filename = `${safeName}_${dateStr}.7z`;
-			const url = await presignedDownloadUrl(key, undefined, filename);
+		const job = await db.backupJob.findFirst({
+			where: { id: backupJobId, agent_id: session.agent_id, deleted_at: null },
+		});
+		if (!job) return c.json({ error: "Backup job not found for this agent" }, 404);
 
-			const updated = await db.backup.update({
-				where: { id: backupRecord.id },
-				data: {
-					status: "COMPLETED",
-					blob_key: key,
-					url,
-					size_bytes: size != null ? BigInt(size) : undefined,
-					completed_at: new Date(),
-				},
-			});
+		const dateStr = new Date().toISOString().slice(0, 16).replace(/:/g, "-");
+		const safeName = job.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+		const filename = `${safeName}_${dateStr}.7z`;
+		const url = await presignedDownloadUrl(key, undefined, filename);
 
-			console.log(
-				`[agent/upload] Backup ${backupRecord.id} uploaded successfully (${size ?? "??"} bytes)`,
-			);
-
-			return c.json({
-				backup_id: backupRecord.id,
+		const updated = await db.backup.update({
+			where: { id: backupId },
+			data: {
+				status: "COMPLETED",
 				blob_key: key,
 				url,
-				size_bytes: updated.size_bytes?.toString() ?? null,
-			});
-		} catch (error) {
-			const message = error instanceof Error ? error.message : "Upload failed";
-			console.error("[agent/upload] Error:", message);
-			await db.backup.update({
-				where: { id: backupRecord.id },
-				data: { status: "FAILED", error: message, completed_at: new Date() },
-			});
-			return c.json({ error: "Upload failed", detail: message }, 500);
-		}
+				size_bytes: sizeBytes != null ? BigInt(sizeBytes) : undefined,
+				completed_at: new Date(),
+			},
+		});
+
+		console.log(`[agent/upload] Backup ${backupId} completed (${sizeBytes ?? "??"} bytes)`);
+
+		return c.json({
+			backup_id: backupId,
+			blob_key: key,
+			url,
+			size_bytes: updated.size_bytes?.toString() ?? null,
+		});
 	});
 
 	app.get("/api/agents/:id/code", rateLimit, async (c) => {

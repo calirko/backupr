@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
+use futures_util::StreamExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::AsyncReadExt;
@@ -248,16 +249,28 @@ async fn run_powershell(script: &str) -> Result<String> {
 
 #[cfg(target_os = "windows")]
 async fn create_vss_shadow(volume: &str) -> Option<String> {
-    let escaped = volume.replace('\'', "''");
+    // FIX 1: Ensure volume ends with a backslash (WMI requirement)
+    let mut normalized_volume = volume.replace('\'', "''");
+    if !normalized_volume.ends_with('\\') {
+        normalized_volume.push('\\');
+    }
+
     let script = format!(
-        "$r = ([WMICLASS]\"root\\cimv2:win32_shadowcopy\").Create('{escaped}', 'ClientAccessible'); \
-         if ($r.ReturnValue -ne 0) {{ exit 1 }}; \
-         (Get-WmiObject Win32_ShadowCopy -Filter \"ID='$($r.ShadowID)'\").DeviceObject"
+        "$wmi = [WMICLASS]\"root\\cimv2:win32_shadowcopy\"; \
+         $params = $wmi.GetMethodParameters('Create'); \
+         $params['Volume'] = '{normalized_volume}'; \
+         $params['Context'] = 'ClientAccessible'; \
+         $result = $wmi.InvokeMethod('Create', $params, $null); \
+         if ($result.ReturnValue -ne 0) {{ exit 1 }}; \
+         (Get-WmiObject Win32_ShadowCopy | Where-Object {{ $_.ID -eq $result.ShadowID }}).DeviceObject"
     );
 
     match run_powershell(&script).await {
         Ok(out) if out.starts_with('\\') => Some(out),
-        Ok(_) => None,
+        Ok(out) => {
+            eprintln!("[Backup] VSS output unexpected: {}", out);
+            None
+        }
         Err(e) => {
             eprintln!("[Backup] VSS failed for {}: {}", volume, e);
             None
@@ -268,9 +281,10 @@ async fn create_vss_shadow(volume: &str) -> Option<String> {
 #[cfg(target_os = "windows")]
 async fn delete_vss_shadow(device_object: &str) {
     let escaped = device_object.replace('\'', "''");
+    // FIX 2: Added -ErrorAction SilentlyContinue and simplified the filter
     let script = format!(
         "$s = Get-WmiObject Win32_ShadowCopy | Where-Object {{ $_.DeviceObject -eq '{escaped}' }}; \
-         if ($s) {{ $s.Delete() | Out-Null }}"
+         if ($s) {{ $s.Delete() }}"
     );
     run_powershell(&script).await.ok();
 }
@@ -280,13 +294,17 @@ fn shadow_resolve_path(
     file_path: &str,
     volume_to_device: &std::collections::HashMap<String, String>,
 ) -> String {
-    let path = Path::new(file_path);
-    // Get the root (e.g. "C:\")
+    let path = std::path::Path::new(file_path);
     if let Some(root) = path.components().next() {
         let vol = root.as_os_str().to_string_lossy().to_string();
+        // Note: 'vol' is usually "C:"
+
         if let Some(device) = volume_to_device.get(&vol) {
+            // FIX 3: Ensure we don't end up with double backslashes (\\?\...\Device\HarddiskVolumeShadowCopy1\\Users)
+            // The DeviceObject usually does NOT end in a slash, but the 'relative' path starts with one.
             let relative = &file_path[vol.len()..];
-            return format!("{}\\{}", device, relative);
+            let trimmed_relative = relative.trim_start_matches('\\');
+            return format!("{}\\{}", device, trimmed_relative);
         }
     }
     file_path.to_string()
@@ -356,7 +374,10 @@ async fn stage_files(files: &[String], stage_dir: &Path) -> Result<Vec<PathBuf>>
                 let result = if meta.is_dir() {
                     copy_dir_all(src_path, &dest).await
                 } else {
-                    tokio::fs::copy(src_path, &dest).await.map(|_| ()).map_err(anyhow::Error::new)
+                    tokio::fs::copy(src_path, &dest)
+                        .await
+                        .map(|_| ())
+                        .map_err(anyhow::Error::new)
                 };
 
                 match result {
@@ -414,7 +435,7 @@ async fn upload_backup_archive(
     archive_path: &Path,
     backup_id: &str,
     job_id: &str,
-    on_pct: impl Fn(u8) + Send + Sync + 'static,
+    progress_tx: tokio::sync::mpsc::Sender<String>,
 ) -> Result<()> {
     let config = ConfigManager::load().await?;
 
@@ -427,54 +448,151 @@ async fn upload_backup_archive(
 
     let file_size = tokio::fs::metadata(archive_path).await?.len();
     println!(
-        "[Backup] Uploading archive {} ({}) to server...",
+        "[Backup] Uploading archive {} ({}) directly to storage...",
         backup_id,
         format_bytes(file_size)
     );
 
-    // Read the whole file and upload
-    // For large files a streaming approach is better,
-    // but reqwest with a file body handles progress tracking simply here
-    let archive_path = archive_path.to_path_buf();
-    let on_pct = std::sync::Arc::new(on_pct);
-    let _on_pct_clone = on_pct.clone();
-
-    // Use a channel to stream the file in chunks and report progress
-    let _file = tokio::fs::File::open(&archive_path).await?;
-    let _file = tokio::io::BufReader::new(_file);
-
-    // Build a streaming body with progress tracking
-    let _uploaded = 0u64;
-    let _last_pct: i16 = -1;
-    let _last_emit = std::time::Instant::now();
-
-    // Read file in chunks, build bytes
-    // For simplicity and WS2008 compat, we read fully then upload
-    // (avoids async streaming complexity with reqwest on older TLS stacks)
-    let file_bytes = tokio::fs::read(&archive_path).await?;
-
     let client = reqwest::Client::new();
-    let response = client
-        .post(format!("{}/api/agent/upload", server_url))
+
+    // Step 1: get presigned PUT URL from the server
+    let prepare_resp = client
+        .post(format!("{}/api/agent/upload/prepare", server_url))
         .header("Authorization", format!("Bearer {}", agent_token))
-        .header("X-Backup-Id", backup_id)
-        .header("X-Backup-Job-Id", job_id)
-        .header("Content-Length", file_size.to_string())
-        .header("X-Requires-Password", "false")
-        .header("Content-Type", "application/octet-stream")
-        .body(file_bytes)
+        .json(&serde_json::json!({
+            "backup_job_id": job_id,
+            "backup_id": backup_id,
+            "requires_password": false,
+        }))
         .send()
         .await
-        .context("Failed to upload archive")?;
+        .map_err(|e| anyhow::anyhow!("Upload prepare request failed: {}", e))?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        anyhow::bail!("Upload failed ({}): {}", status, text);
+    if !prepare_resp.status().is_success() {
+        let text = prepare_resp.text().await.unwrap_or_default();
+        return Err(anyhow::anyhow!("Upload prepare failed: {}", text));
     }
 
-    on_pct(100);
-    println!("[Backup] Upload completed successfully ({})", status);
+    let prepare: serde_json::Value = prepare_resp.json().await
+        .map_err(|e| anyhow::anyhow!("Failed to parse prepare response: {}", e))?;
+
+    let upload_url = prepare["upload_url"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("No upload_url in prepare response"))?
+        .to_string();
+    let blob_key = prepare["blob_key"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("No blob_key in prepare response"))?
+        .to_string();
+    let confirmed_backup_id = prepare["backup_id"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("No backup_id in prepare response"))?
+        .to_string();
+
+    // Step 2: PUT file directly to MinIO (streaming, no server memory used)
+    // Retry logic: immediate, 5s delay, 15s delay
+    let retry_delays = [0u64, 5, 15];
+    let mut upload_err: Option<anyhow::Error> = None;
+
+    for (attempt, &delay_secs) in retry_delays.iter().enumerate() {
+        if delay_secs > 0 {
+            println!(
+                "[Backup] Retry attempt {}/3: waiting {} seconds...",
+                attempt + 1,
+                delay_secs
+            );
+            tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
+        }
+
+        let file = tokio::fs::File::open(archive_path).await?;
+        let raw_stream = tokio_util::io::ReaderStream::new(file);
+        let tx = progress_tx.clone();
+        let total = file_size;
+        let uploaded = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let last_pct = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(-1));
+        let uploaded_clone = uploaded.clone();
+        let last_pct_clone = last_pct.clone();
+        let start = std::time::Instant::now();
+        let progress_stream = raw_stream.inspect(move |chunk| {
+            if let Ok(bytes) = chunk {
+                let done = uploaded_clone.fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed) + bytes.len() as u64;
+                let pct = if total > 0 { ((done * 100) / total).min(99) as i32 } else { 0 };
+                if pct > last_pct_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                    last_pct_clone.store(pct, std::sync::atomic::Ordering::Relaxed);
+                    let elapsed = start.elapsed().as_secs_f64().max(0.001);
+                    let speed = format_bytes((done as f64 / elapsed) as u64);
+                    let _ = tx.try_send(format!("Uploading {}% ({}/s)", pct, speed));
+                }
+            }
+        });
+        let body = reqwest::Body::wrap_stream(progress_stream);
+
+        match client
+            .put(&upload_url)
+            .header("Content-Length", file_size.to_string())
+            .header("Content-Type", "application/octet-stream")
+            .body(body)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let status = response.status();
+                if status.is_success() {
+                    let _ = progress_tx.try_send("Uploading 100%".to_string());
+                    println!("[Backup] Direct upload successful on attempt {}/3", attempt + 1);
+                    upload_err = None;
+                    break;
+                } else {
+                    let text = response.text().await.unwrap_or_default();
+                    let err = anyhow::anyhow!("Upload failed ({}): {}", status, text);
+                    if attempt < retry_delays.len() - 1 {
+                        eprintln!(
+                            "[Backup] Upload attempt {}/3 failed: {}, retrying...",
+                            attempt + 1,
+                            err
+                        );
+                    }
+                    upload_err = Some(err);
+                }
+            }
+            Err(e) => {
+                let err = anyhow::anyhow!("Upload request failed: {}", e);
+                if attempt < retry_delays.len() - 1 {
+                    eprintln!(
+                        "[Backup] Upload attempt {}/3 failed: {}, retrying...",
+                        attempt + 1,
+                        err
+                    );
+                }
+                upload_err = Some(err);
+            }
+        }
+    }
+
+    if let Some(err) = upload_err {
+        return Err(err);
+    }
+
+    // Step 3: tell the server the upload is done so it records it as COMPLETED
+    let complete_resp = client
+        .post(format!("{}/api/agent/upload/complete", server_url))
+        .header("Authorization", format!("Bearer {}", agent_token))
+        .json(&serde_json::json!({
+            "backup_id": confirmed_backup_id,
+            "backup_job_id": job_id,
+            "blob_key": blob_key,
+            "size_bytes": file_size,
+        }))
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Upload complete request failed: {}", e))?;
+
+    if !complete_resp.status().is_success() {
+        let text = complete_resp.text().await.unwrap_or_default();
+        return Err(anyhow::anyhow!("Upload complete failed: {}", text));
+    }
+
+    println!("[Backup] Backup {} recorded as completed", confirmed_backup_id);
     Ok(())
 }
 
@@ -561,11 +679,9 @@ pub async fn run_backup_job(
             format_bytes((archive_size as f64 / compress_sec) as u64)
         );
 
-        let _ = progress_tx.try_send("Uploading...".to_string());
+        let _ = progress_tx.try_send("Uploading 0%".to_string());
         let start_upload = std::time::Instant::now();
-        upload_backup_archive(&archive_path, &job.id, &job.job_id, |pct| {
-            println!("[Backup] Uploading {}%...", pct);
-        })
+        upload_backup_archive(&archive_path, &job.id, &job.job_id, progress_tx.clone())
         .await?;
 
         let upload_sec = start_upload.elapsed().as_secs_f64();
