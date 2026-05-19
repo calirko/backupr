@@ -1,16 +1,15 @@
 import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import {
-	CheckSquare,
-	ClipboardText,
-	CodeSimple,
-	Eye,
-	FloppyDisk,
-	Package,
-	Pencil,
-	Plus,
-	XSquare,
+	CheckSquareIcon,
+	ClipboardTextIcon,
+	CodeSimpleIcon,
+	PackageIcon,
+	PencilIcon,
+	PlusIcon,
+	XSquareIcon,
 } from "@phosphor-icons/react";
 import { PageNav } from "./page-nav";
+import { EyeIcon, FloppyDiskIcon } from "@phosphor-icons/react/dist/ssr";
 
 interface Props {
 	nextPage: { id: string; name: string } | null;
@@ -30,7 +29,10 @@ const content = {
 			{ label: "Connected", desc: "Agent is online and idle." },
 			{ label: "Running", desc: "Currently executing a backup job." },
 			{ label: "Queued", desc: "Has jobs waiting to run." },
-			{ label: "Stale", desc: "Connected but no heartbeat in the last 60 seconds." },
+			{
+				label: "Stale",
+				desc: "Connected but no heartbeat in the last 60 seconds.",
+			},
 			{ label: "Disconnected", desc: "Offline or not reachable." },
 		],
 		createTitle: "Registering an agent",
@@ -68,8 +70,14 @@ const content = {
 			{ name: "Install", desc: "Download and register the service." },
 			{ name: "Setup", desc: "Enter pairing code and write config." },
 			{ name: "Start / Stop / Restart", desc: "Control the Windows service." },
-			{ name: "Status", desc: "Show paths, config presence, and service state." },
-			{ name: "Remove", desc: "Unregister the service. Files are kept in place." },
+			{
+				name: "Status",
+				desc: "Show paths, config presence, and service state.",
+			},
+			{
+				name: "Remove",
+				desc: "Unregister the service. Files are kept in place.",
+			},
 		],
 		viewTitle: "Viewing agent details",
 		viewDesc:
@@ -94,7 +102,10 @@ const content = {
 			{ label: "Conectado", desc: "Agente online e ocioso." },
 			{ label: "Executando", desc: "Executando um job de backup no momento." },
 			{ label: "Na fila", desc: "Possui jobs aguardando execução." },
-			{ label: "Instável", desc: "Conectado, mas sem heartbeat nos últimos 60 segundos." },
+			{
+				label: "Instável",
+				desc: "Conectado, mas sem heartbeat nos últimos 60 segundos.",
+			},
 			{ label: "Desconectado", desc: "Offline ou inacessível." },
 		],
 		createTitle: "Registrando um agente",
@@ -130,10 +141,22 @@ const content = {
 		menuTitle: "Ações do menu do instalador",
 		menuItems: [
 			{ name: "Instalar", desc: "Baixa e registra o serviço." },
-			{ name: "Configurar", desc: "Insere o código de pareamento e grava a configuração." },
-			{ name: "Iniciar / Parar / Reiniciar", desc: "Controla o serviço do Windows." },
-			{ name: "Status", desc: "Exibe caminhos, presença de configuração e estado do serviço." },
-			{ name: "Remover", desc: "Cancela o registro do serviço. Os arquivos são mantidos no lugar." },
+			{
+				name: "Configurar",
+				desc: "Insere o código de pareamento e grava a configuração.",
+			},
+			{
+				name: "Iniciar / Parar / Reiniciar",
+				desc: "Controla o serviço do Windows.",
+			},
+			{
+				name: "Status",
+				desc: "Exibe caminhos, presença de configuração e estado do serviço.",
+			},
+			{
+				name: "Remover",
+				desc: "Cancela o registro do serviço. Os arquivos são mantidos no lugar.",
+			},
 		],
 		viewTitle: "Visualizando detalhes do agente",
 		viewDesc:
@@ -194,7 +217,7 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 						type="button"
 						className="inline-flex items-center gap-1.5 rounded-md border bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 pointer-events-none"
 					>
-						<Plus size={13} weight="bold" />
+						<PlusIcon size={13} weight="bold" />
 						{lang === "en" ? "New Agent" : "Novo Agente"}
 					</button>
 
@@ -215,14 +238,14 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 								type="button"
 								className="inline-flex items-center gap-1.5 rounded-md border text-xs font-medium px-3 py-1.5 pointer-events-none"
 							>
-								<XSquare size={13} />
+								<XSquareIcon size={13} />
 								{lang === "en" ? "Cancel" : "Cancelar"}
 							</button>
 							<button
 								type="button"
 								className="inline-flex items-center gap-1.5 rounded-md border bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 pointer-events-none"
 							>
-								<Plus size={13} weight="bold" />
+								<PlusIcon size={13} weight="bold" />
 								{lang === "en" ? "Add" : "Adicionar"}
 							</button>
 						</div>
@@ -245,7 +268,7 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 						type="button"
 						className="inline-flex items-center gap-1.5 rounded-md border text-xs font-medium px-3 py-1.5 pointer-events-none"
 					>
-						<CodeSimple size={13} />
+						<CodeSimpleIcon size={13} />
 						{lang === "en" ? "Pairing Code" : "Código de Pareamento"}
 					</button>
 
@@ -266,14 +289,14 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 								type="button"
 								className="inline-flex items-center gap-1.5 rounded-md border text-xs font-medium px-3 py-1.5 pointer-events-none"
 							>
-								<XSquare size={13} />
+								<XSquareIcon size={13} />
 								{lang === "en" ? "Close" : "Fechar"}
 							</button>
 							<button
 								type="button"
 								className="inline-flex items-center gap-1.5 rounded-md border bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 pointer-events-none"
 							>
-								<ClipboardText size={13} />
+								<ClipboardTextIcon size={13} />
 								{lang === "en" ? "Copy" : "Copiar"}
 							</button>
 						</div>
@@ -314,15 +337,23 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 
 				<div className="dynround w-full min-h-20 flex items-center justify-center px-4">
 					<div className="border rounded-lg bg-background shadow-sm p-3 w-64 flex flex-col gap-1 text-xs font-mono">
-						<p className="text-muted-foreground">+------------------------------+</p>
-						<p className="text-primary font-semibold">|   Backupr Agent Manager      |</p>
-						<p className="text-muted-foreground">+------------------------------+</p>
+						<p className="text-muted-foreground">
+							+------------------------------+
+						</p>
+						<p className="text-primary font-semibold">
+							| Backupr Agent Manager |
+						</p>
+						<p className="text-muted-foreground">
+							+------------------------------+
+						</p>
 						{c.menuItems.map((m) => (
 							<p key={m.name} className="text-muted-foreground">
 								| <span className="text-foreground">{m.name}</span> — {m.desc}
 							</p>
 						))}
-						<p className="text-muted-foreground">+------------------------------+</p>
+						<p className="text-muted-foreground">
+							+------------------------------+
+						</p>
 					</div>
 				</div>
 
@@ -346,15 +377,23 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 							{lang === "en" ? "Agent Details" : "Detalhes do Agente"}
 						</p>
 						<div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-							<span className="text-muted-foreground">{lang === "en" ? "Status" : "Status"}</span>
-							<span className="flex items-center gap-1 text-green-600">
-								<CheckSquare size={12} /> {lang === "en" ? "Active" : "Ativo"}
+							<span className="text-muted-foreground">
+								{lang === "en" ? "Status" : "Status"}
+							</span>
+							<span
+								className="flex items-center gap-1"
+								style={{ color: "var(--greenish)" }}
+							>
+								<CheckSquareIcon size={12} />{" "}
+								{lang === "en" ? "Active" : "Ativo"}
 							</span>
 							<span className="text-muted-foreground">Hostname</span>
 							<span>WIN-SRV01</span>
 							<span className="text-muted-foreground">OS</span>
 							<span>Windows 11</span>
-							<span className="text-muted-foreground">{lang === "en" ? "Version" : "Versão"}</span>
+							<span className="text-muted-foreground">
+								{lang === "en" ? "Version" : "Versão"}
+							</span>
 							<span>1.0.0</span>
 						</div>
 					</div>
@@ -379,20 +418,35 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 				<div className="dynround w-full min-h-20 flex items-center justify-center">
 					<div className="flex items-center gap-1.5 text-xs text-muted-foreground border rounded-lg px-3 py-2 bg-background">
 						<span className="font-medium text-foreground mr-2">WIN-SRV01</span>
-						<button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none">
-							<CodeSimple size={12} />
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+						>
+							<CodeSimpleIcon size={12} />
 						</button>
-						<button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none">
-							<Package size={12} />
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+						>
+							<PackageIcon size={12} />
 						</button>
-						<button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none">
-							<Eye size={12} />
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+						>
+							<EyeIcon size={12} />
 						</button>
-						<button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none">
-							<Pencil size={12} />
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+						>
+							<PencilIcon size={12} />
 						</button>
-						<button type="button" className="inline-flex items-center gap-1 rounded border border-destructive text-destructive px-2 py-1 pointer-events-none">
-							<XSquare size={12} />
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 rounded border border-destructive text-destructive px-2 py-1 pointer-events-none"
+						>
+							<XSquareIcon size={12} />
 						</button>
 					</div>
 				</div>
@@ -403,7 +457,7 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 						type="button"
 						className="inline-flex items-center gap-1.5 rounded-md border text-xs font-medium px-3 py-1.5 pointer-events-none"
 					>
-						<Pencil size={13} />
+						<PencilIcon size={13} />
 						{lang === "en" ? "Edit" : "Editar"}
 					</button>
 					<div className="border rounded-lg bg-background shadow-sm p-4 w-56 flex flex-col gap-3">
@@ -423,14 +477,14 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 								type="button"
 								className="inline-flex items-center gap-1.5 rounded-md border text-xs font-medium px-3 py-1.5 pointer-events-none"
 							>
-								<XSquare size={13} />
+								<XSquareIcon size={13} />
 								{lang === "en" ? "Cancel" : "Cancelar"}
 							</button>
 							<button
 								type="button"
 								className="inline-flex items-center gap-1.5 rounded-md border bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 pointer-events-none"
 							>
-								<FloppyDisk size={13} />
+								<FloppyDiskIcon size={13} />
 								{lang === "en" ? "Save" : "Salvar"}
 							</button>
 						</div>

@@ -84,7 +84,7 @@
 
     --greenish: oklch(0.7559 0.0814 145);
     --purpleish: oklch(0.64 0.07 272);
-    --blueish: oklch(0.4544 0.0937 267.05);
+    --blueish: oklch(0.75 0.09 267);
 }
 
 /* flash fast, exhale slow */

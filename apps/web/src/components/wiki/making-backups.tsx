@@ -53,10 +53,22 @@ const content = {
 			"While a job is running, the agent sends live status messages back to the server over WebSocket. The job card shows a Progress row in blue monospace text that updates in real time — including the current file being compressed or uploaded.",
 		statusTitle: "Backup statuses",
 		statuses: [
-			{ label: "Pending", desc: "Job has been queued but the agent has not started yet." },
-			{ label: "In Progress", desc: "Agent is actively compressing and uploading." },
-			{ label: "Completed", desc: "Backup finished successfully and is available for download." },
-			{ label: "Failed", desc: "Something went wrong. Check the agent logs for details." },
+			{
+				label: "Pending",
+				desc: "Job has been queued but the agent has not started yet.",
+			},
+			{
+				label: "In Progress",
+				desc: "Agent is actively compressing and uploading.",
+			},
+			{
+				label: "Completed",
+				desc: "Backup finished successfully and is available for download.",
+			},
+			{
+				label: "Failed",
+				desc: "Something went wrong. Check the agent logs for details.",
+			},
 		],
 		downloadTitle: "Downloading backups",
 		downloadLatestDesc:
@@ -73,8 +85,7 @@ const content = {
 		scheduledDesc:
 			"Todo job de backup tem uma expressão cron que controla quando ele é executado automaticamente. O servidor despacha o job ao agente no horário agendado via a conexão WebSocket aberta. Nenhuma ação do usuário é necessária — enquanto o agente estiver conectado e o job ativo, os backups rodam conforme o agendamento.",
 		manualTitle: "Acionamento manual",
-		manualDesc:
-			"Há duas formas de acionar um backup fora do seu agendamento:",
+		manualDesc: "Há duas formas de acionar um backup fora do seu agendamento:",
 		manualMethods: [
 			{
 				name: "Botão raio (página de Backups)",
@@ -105,10 +116,22 @@ const content = {
 			"Enquanto um job está rodando, o agente envia mensagens de status em tempo real ao servidor pelo WebSocket. O card do job exibe uma linha de Progresso em texto monoespaçado azul que atualiza em tempo real — incluindo o arquivo atual sendo comprimido ou enviado.",
 		statusTitle: "Status dos backups",
 		statuses: [
-			{ label: "Pendente", desc: "O job foi enfileirado, mas o agente ainda não começou." },
-			{ label: "Em andamento", desc: "O agente está ativamente comprimindo e enviando." },
-			{ label: "Concluído", desc: "Backup finalizado com sucesso e disponível para download." },
-			{ label: "Falhou", desc: "Algo deu errado. Verifique os logs do agente para detalhes." },
+			{
+				label: "Pendente",
+				desc: "O job foi enfileirado, mas o agente ainda não começou.",
+			},
+			{
+				label: "Em andamento",
+				desc: "O agente está ativamente comprimindo e enviando.",
+			},
+			{
+				label: "Concluído",
+				desc: "Backup finalizado com sucesso e disponível para download.",
+			},
+			{
+				label: "Falhou",
+				desc: "Algo deu errado. Verifique os logs do agente para detalhes.",
+			},
 		],
 		downloadTitle: "Baixando backups",
 		downloadLatestDesc:
@@ -161,7 +184,9 @@ export function MakingBackupsPage({ nextPage, onNext, lang }: Props) {
 			<div className="flex flex-col gap-3">
 				<div>
 					<h3 className="text-sm font-semibold">{c.lightningTitle}</h3>
-					<p className="text-sm text-muted-foreground mt-1">{c.lightningDesc}</p>
+					<p className="text-sm text-muted-foreground mt-1">
+						{c.lightningDesc}
+					</p>
 				</div>
 
 				{/* Job card mockup */}
@@ -172,7 +197,10 @@ export function MakingBackupsPage({ nextPage, onNext, lang }: Props) {
 								<p className="text-xs font-semibold">
 									{lang === "en" ? "Daily Backup" : "Backup Diário"}
 								</p>
-								<span className="text-xs font-medium" style={{ color: "var(--greenish, #4ade80)" }}>
+								<span
+									className="text-xs font-medium"
+									style={{ color: "var(--greenish, #4ade80)" }}
+								>
 									{lang === "en" ? "Active" : "Ativo"}
 								</span>
 							</div>
@@ -180,27 +208,37 @@ export function MakingBackupsPage({ nextPage, onNext, lang }: Props) {
 						</div>
 						<div className="px-4 py-2 flex flex-col gap-1.5 text-xs">
 							<div className="flex justify-between">
-								<span className="text-muted-foreground">{lang === "en" ? "Files" : "Arquivos"}</span>
+								<span className="text-muted-foreground">
+									{lang === "en" ? "Files" : "Arquivos"}
+								</span>
 								<span>3 items</span>
 							</div>
 							<div className="flex justify-between">
-								<span className="text-muted-foreground">{lang === "en" ? "Total backups" : "Total de backups"}</span>
+								<span className="text-muted-foreground">
+									{lang === "en" ? "Total backups" : "Total de backups"}
+								</span>
 								<span>12</span>
 							</div>
 							<div className="flex justify-between">
-								<span className="text-muted-foreground">{lang === "en" ? "Last run" : "Última execução"}</span>
+								<span className="text-muted-foreground">
+									{lang === "en" ? "Last run" : "Última execução"}
+								</span>
 								<span>2h ago</span>
 							</div>
 							<div className="flex justify-between">
-								<span className="text-muted-foreground">{lang === "en" ? "Last status" : "Último status"}</span>
+								<span className="text-muted-foreground">
+									{lang === "en" ? "Last status" : "Último status"}
+								</span>
 								<span style={{ color: "var(--greenish, #4ade80)" }}>
 									{lang === "en" ? "Completed" : "Concluído"}
 								</span>
 							</div>
 							{/* Live progress row */}
 							<div className="flex justify-between">
-								<span className="text-muted-foreground">{lang === "en" ? "Progress" : "Progresso"}</span>
-								<span className="font-mono text-blue-400 text-xs">
+								<span className="text-muted-foreground">
+									{lang === "en" ? "Progress" : "Progresso"}
+								</span>
+								<span className="text-xs" style={{ color: "var(--blueish)" }}>
 									7z: 42%...
 								</span>
 							</div>
@@ -209,7 +247,9 @@ export function MakingBackupsPage({ nextPage, onNext, lang }: Props) {
 							<button
 								type="button"
 								className="inline-flex items-center justify-center rounded-md border text-xs p-1.5 pointer-events-none"
-								title={lang === "en" ? "Trigger backup now" : "Acionar backup agora"}
+								title={
+									lang === "en" ? "Trigger backup now" : "Acionar backup agora"
+								}
 							>
 								<Lightning size={14} />
 							</button>
@@ -318,7 +358,9 @@ export function MakingBackupsPage({ nextPage, onNext, lang }: Props) {
 			<div className="flex flex-col gap-3">
 				<h3 className="text-sm font-semibold">{c.downloadTitle}</h3>
 				<p className="text-sm text-muted-foreground">{c.downloadLatestDesc}</p>
-				<p className="text-sm text-muted-foreground">{c.downloadVersionsDesc}</p>
+				<p className="text-sm text-muted-foreground">
+					{c.downloadVersionsDesc}
+				</p>
 
 				<div className="dynround w-full min-h-20 flex items-center justify-center gap-3">
 					<button
