@@ -10,7 +10,7 @@ export const BACKUP_STATUS_LABEL: Record<BackupStatus, string> = {
 export const BACKUP_STATUS_STYLE: Record<BackupStatus, React.CSSProperties> = {
 	COMPLETED: { color: "var(--greenish)" },
 	FAILED: { color: "var(--destructive)" },
-	IN_PROGRESS: { color: "oklch(0.64 0.08 228)" },
+	IN_PROGRESS: { color: "var(--blueish)" },
 	PENDING: {},
 };
 
