@@ -47,7 +47,9 @@ export default async function backupJobRoutes(app: Hono) {
 				},
 			}),
 			db.backupJob.count({ where: baseWhere }),
-			db.backupJob.count({ where: { deleted_at: null } }),
+			db.backupJob.count({
+				where: { deleted_at: null, agent_id: parsedFilters.agent_id },
+			}),
 		]);
 		return c.json({ data, total, absoluteTotal, skip: s, take: t });
 	});

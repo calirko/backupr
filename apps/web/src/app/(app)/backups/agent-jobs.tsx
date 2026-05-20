@@ -1,3 +1,4 @@
+import { Cron } from "croner";
 import {
 	ArrowLeftIcon,
 	CheckSquareIcon,
@@ -94,6 +95,8 @@ export default function AgentJobsPage() {
 	const [loading, setLoading] = useState(false);
 	const [search, setSearch] = useState("");
 	const [appliedSearch, setAppliedSearch] = useState("");
+	const [total, setTotal] = useState(0);
+	const [dataIsFiltered, setDataIsFiltered] = useState(false);
 
 	async function fetchData() {
 		if (!agentId) return;
@@ -119,6 +122,7 @@ export default function AgentJobsPage() {
 			if (jobsRes.ok) {
 				const result = await jobsRes.json();
 				setJobs(result.data);
+				setTotal(result.absoluteTotal);
 			} else {
 				const err = await jobsRes.json();
 				toast.error("Failed to load jobs", { description: err.error });
@@ -176,11 +180,13 @@ export default function AgentJobsPage() {
 
 	function applySearch() {
 		setAppliedSearch(search);
+		setDataIsFiltered(search !== "");
 	}
 
 	function clearSearch() {
 		setSearch("");
 		setAppliedSearch("");
+		setDataIsFiltered(false);
 	}
 
 	useEffect(() => {
@@ -340,6 +346,21 @@ export default function AgentJobsPage() {
 												{formatRelative(last?.started_at)}
 											</span>
 										</div>
+										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+											<span className="text-xs text-muted-foreground shrink-0">
+												Next Run
+											</span>
+											<span className="text-xs text-right">
+												{(() => {
+													try {
+														const next = new Cron(job.cron).nextRun();
+														return next ? next.toLocaleString() : "—";
+													} catch {
+														return "—";
+													}
+												})()}
+											</span>
+										</div>
 										{last && (
 											<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
 												<span className="text-xs text-muted-foreground shrink-0">
@@ -432,6 +453,12 @@ export default function AgentJobsPage() {
 						);
 					})}
 				</div>
+			)}
+
+			{dataIsFiltered && (
+				<p className="text-muted-foreground text-center text-xs">
+					Showing {visibleJobs.length} of {total} agent jobs
+				</p>
 			)}
 		</div>
 	);

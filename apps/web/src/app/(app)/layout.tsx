@@ -7,7 +7,7 @@ import { SocketProvider } from "@/hooks/use-socket";
 
 export default function AppLayout() {
 	return (
-		<div className="h-full flex flex-col">
+		<div className="h-fit flex flex-col pb-4">
 			<Navbar />
 			<DataProvider>
 				<SocketProvider token={localStorage.getItem("token") || ""}>

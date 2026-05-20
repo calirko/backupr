@@ -231,13 +231,19 @@ fn build_7z_args(
 
 #[cfg(target_os = "windows")]
 async fn run_powershell(script: &str) -> Result<String> {
-    let output = Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    let mut cmd = Command::new("powershell.exe");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", script])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .stdin(Stdio::null())
-        .output()
-        .await?;
+        .creation_flags(CREATE_NO_WINDOW);
+
+    let output_future = cmd.output();
+    let output = tokio::time::timeout(std::time::Duration::from_secs(60), output_future)
+        .await
+        .map_err(|_| anyhow::anyhow!("PowerShell timed out after 60 seconds"))??;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
@@ -265,7 +271,11 @@ async fn create_vss_shadow(volume: &str) -> Option<String> {
          (Get-WmiObject Win32_ShadowCopy | Where-Object {{ $_.ID -eq $result.ShadowID }}).DeviceObject"
     );
 
-    match run_powershell(&script).await {
+    println!("[Backup] VSS: spawning powershell for {}...", volume);
+    let result = run_powershell(&script).await;
+    println!("[Backup] VSS: powershell returned for {}", volume);
+
+    match result {
         Ok(out) if out.starts_with('\\') => Some(out),
         Ok(out) => {
             eprintln!("[Backup] VSS output unexpected: {}", out);
@@ -312,7 +322,7 @@ fn shadow_resolve_path(
 
 // ─── Staging ──────────────────────────────────────────────────────────────────
 
-async fn stage_files(files: &[String], stage_dir: &Path, progress_tx: &tokio::sync::mpsc::Sender<String>) -> Result<Vec<PathBuf>> {
+async fn stage_files(files: &[String], stage_dir: &Path, _progress_tx: &tokio::sync::mpsc::Sender<String>) -> Result<Vec<PathBuf>> {
     tokio::fs::create_dir_all(stage_dir).await?;
     let mut staged = Vec::new();
 
@@ -323,28 +333,36 @@ async fn stage_files(files: &[String], stage_dir: &Path, progress_tx: &tokio::sy
         let mut map: HashMap<String, String> = HashMap::new();
         let mut shadow_devices: Vec<String> = Vec::new();
 
-        let volumes: std::collections::HashSet<String> = files
-            .iter()
-            .filter_map(|f| {
-                Path::new(f)
-                    .components()
-                    .next()
-                    .map(|c| c.as_os_str().to_string_lossy().to_string())
-            })
-            .collect();
+        let vss_enabled = ConfigManager::load().await
+            .map(|c| c.vss_enabled.unwrap_or(true))
+            .unwrap_or(true);
 
-        for vol in &volumes {
-            let _ = progress_tx.try_send(format!("Creating VSS snapshot for {}...", vol));
-            println!("[Backup] Creating VSS shadow copy for {}...", vol);
-            if let Some(device) = create_vss_shadow(vol).await {
-                println!("[Backup] VSS shadow ready: {}", device);
-                map.insert(vol.clone(), device.clone());
-                shadow_devices.push(device);
-            } else {
-                eprintln!(
-                    "[Backup] VSS unavailable for {} — copying live files (consistency not guaranteed)",
-                    vol
-                );
+        if !vss_enabled {
+            println!("[Backup] VSS disabled by config — copying live files");
+        } else {
+            let volumes: std::collections::HashSet<String> = files
+                .iter()
+                .filter_map(|f| {
+                    Path::new(f)
+                        .components()
+                        .next()
+                        .map(|c| c.as_os_str().to_string_lossy().to_string())
+                })
+                .collect();
+
+            for vol in &volumes {
+                let _ = _progress_tx.try_send(format!("Creating VSS snapshot for {}...", vol));
+                println!("[Backup] Creating VSS shadow copy for {}...", vol);
+                if let Some(device) = create_vss_shadow(vol).await {
+                    println!("[Backup] VSS shadow ready: {}", device);
+                    map.insert(vol.clone(), device.clone());
+                    shadow_devices.push(device);
+                } else {
+                    eprintln!(
+                        "[Backup] VSS unavailable for {} — copying live files (consistency not guaranteed)",
+                        vol
+                    );
+                }
             }
         }
 

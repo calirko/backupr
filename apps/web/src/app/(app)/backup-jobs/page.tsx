@@ -1,5 +1,6 @@
 "use client";
 
+import { Cron } from "croner";
 import {
 	CopyIcon,
 	EyeIcon,
@@ -64,6 +65,12 @@ export default function BackupJobsPage() {
 			orderByKey: "agent.name",
 		},
 		{ key: "cron", label: "Schedule", orderable: true },
+		{
+			key: "next_run",
+			label: "Next Run",
+			format: (value) =>
+				value ? new Date(value).toLocaleString() : <span className="text-muted-foreground">—</span>,
+		},
 		{
 			key: "policy",
 			label: "Policy",
@@ -248,11 +255,18 @@ export default function BackupJobsPage() {
 						policyParts.push(`Keep last ${policy.keep_last_n_backups}`);
 					if (policy?.max_backup_age_in_days != null)
 						policyParts.push(`Max ${policy.max_backup_age_in_days}d`);
+					let next_run: Date | null = null;
+					try {
+						next_run = new Cron(item.cron).nextRun();
+					} catch {
+						next_run = null;
+					}
 					return {
 						...item,
 						agent: item.agent.name || null,
 						policy_id: item.backupJobPolicies?.[0]?.backup_policy_id ?? null,
 						policy: policyParts.length ? policyParts.join(" · ") : null,
+						next_run,
 					};
 				});
 				setData({

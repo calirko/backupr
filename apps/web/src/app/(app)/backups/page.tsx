@@ -166,22 +166,40 @@ export default function BackupsPage() {
 							<CardContent>
 								<div className="space-y-0">
 									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-										<span className="text-xs text-muted-foreground shrink-0">Status</span>
+										<span className="text-xs text-muted-foreground shrink-0">
+											Status
+										</span>
 										<span
 											className="text-xs text-right"
-											style={agent.is_active ? { color: "var(--greenish)" } : undefined}
+											style={
+												agent.is_active
+													? { color: "var(--greenish)" }
+													: undefined
+											}
 										>
-											{agent.is_active ? "Active" : <span className="text-destructive">Inactive</span>}
+											{agent.is_active ? (
+												"Active"
+											) : (
+												<span className="text-destructive">Inactive</span>
+											)}
 										</span>
 									</div>
 									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-										<span className="text-xs text-muted-foreground shrink-0">Total Size</span>
-										<span className="text-xs text-right font-mono">{formatBytes(agent.total_size_bytes)}</span>
+										<span className="text-xs text-muted-foreground shrink-0">
+											Total Size
+										</span>
+										<span className="text-xs text-right font-mono">
+											{formatBytes(agent.total_size_bytes)}
+										</span>
 									</div>
 									{agent.created_by && (
 										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-											<span className="text-xs text-muted-foreground shrink-0">Created By</span>
-											<span className="text-xs text-right truncate max-w-32">{agent.created_by.name}</span>
+											<span className="text-xs text-muted-foreground shrink-0">
+												Created By
+											</span>
+											<span className="text-xs text-right truncate max-w-32">
+												{agent.created_by.name}
+											</span>
 										</div>
 									)}
 								</div>

@@ -10,16 +10,20 @@ pub struct AgentConfig {
     pub ws_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_token: Option<String>,
+    /// Set to false to skip VSS shadow copy creation entirely (copies live files instead).
+    /// Use on machines where AV/EDR software terminates the agent during VSS operations.
+    #[serde(rename = "vssEnabled", skip_serializing_if = "Option::is_none")]
+    pub vss_enabled: Option<bool>,
 }
 
 pub struct ConfigManager;
 
 impl ConfigManager {
     fn config_path() -> PathBuf {
-        // Same behavior as your TS: config file sits next to the binary (cwd)
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join("backupr.conf")
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("backupr.conf")))
+            .unwrap_or_else(|| PathBuf::from("backupr.conf"))
     }
 
     pub async fn load() -> Result<AgentConfig> {
@@ -58,6 +62,9 @@ impl ConfigManager {
         }
         if partial.agent_token.is_some() {
             current.agent_token = partial.agent_token;
+        }
+        if partial.vss_enabled.is_some() {
+            current.vss_enabled = partial.vss_enabled;
         }
 
         Self::write(&current).await?;

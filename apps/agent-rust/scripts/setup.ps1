@@ -21,7 +21,7 @@
 #>
 
 param(
-    [ValidateSet("install", "setup", "start", "stop", "restart", "remove", "status", "logs", "update", "")]
+    [ValidateSet("install", "setup", "start", "stop", "restart", "remove", "status", "logs", "update", "vss", "")]
     [string]$Action = ""
 )
 
@@ -335,6 +335,54 @@ function Action-Logs {
     Write-Host "  --- end ---" -ForegroundColor DarkCyan
 }
 
+function Action-Vss {
+    Write-Header "VSS (Volume Shadow Copy) toggle"
+
+    if (-not (Test-Path $ConfigFile)) {
+        Write-Warning "Config file not found at $ConfigFile. Run 'setup' first."
+        return
+    }
+
+    $json = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+
+    $current = if ($null -ne $json.vssEnabled) { $json.vssEnabled } else { $true }
+    $label   = if ($current) { "enabled" } else { "disabled" }
+    Write-Host "  VSS is currently: $label" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  1) Enable VSS  (default — consistent snapshots)"
+    Write-Host "  2) Disable VSS (live file copy — use if AV/EDR kills the service during backup)"
+    Write-Host ""
+    $choice = Read-Host "  Choose (1/2, Enter to cancel)"
+
+    $newValue = switch ($choice.Trim()) {
+        "1" { $true  }
+        "2" { $false }
+        default {
+            Write-Host "  Cancelled." -ForegroundColor DarkGray
+            return
+        }
+    }
+
+    if ($newValue -eq $current) {
+        Write-Host "  No change." -ForegroundColor DarkGray
+        return
+    }
+
+    $json | Add-Member -MemberType NoteProperty -Name vssEnabled -Value $newValue -Force
+    $json | ConvertTo-Json -Depth 10 | Set-Content -Path $ConfigFile -Encoding UTF8
+
+    $newLabel = if ($newValue) { "enabled" } else { "disabled" }
+    Write-Host "  VSS $newLabel — config saved." -ForegroundColor Green
+
+    if (Get-ServiceExists) {
+        $svc = Get-Service -Name $ServiceName
+        if ($svc.Status -eq "Running") {
+            Write-Host "  Restarting service to apply change..." -ForegroundColor Yellow
+            Action-Restart
+        }
+    }
+}
+
 function Action-Update {
     Write-Header "Updating Backupr Agent"
 
@@ -407,6 +455,7 @@ function Show-Menu {
         Write-Host "  |  7) Status                   |"
         Write-Host "  |  8) View logs                |"
         Write-Host "  |  9) Update agent             |"
+        Write-Host "  | 10) Toggle VSS               |"
         Write-Host "  |  Q) Quit                     |"
         Write-Host "  +------------------------------+" -ForegroundColor Cyan
         Write-Host ""
@@ -421,8 +470,9 @@ function Show-Menu {
             "6" { Action-Remove  }
             "7" { Action-Status  }
             "8" { Action-Logs    }
-            "9" { Action-Update  }
-            "Q" { Write-Host "  Bye." -ForegroundColor DarkGray; return }
+            "9"  { Action-Update }
+            "10" { Action-Vss    }
+            "Q"  { Write-Host "  Bye." -ForegroundColor DarkGray; return }
             default { Write-Warning "Unknown option: $choice" }
         }
     }
@@ -441,6 +491,7 @@ switch ($Action.ToLower()) {
     "remove"  { Action-Remove  }
     "status"  { Action-Status  }
     "logs"    { Action-Logs    }
-    "update"  { Action-Update  }
-    ""        { Show-Menu      }
+    "update"  { Action-Update }
+    "vss"     { Action-Vss    }
+    ""        { Show-Menu     }
 }

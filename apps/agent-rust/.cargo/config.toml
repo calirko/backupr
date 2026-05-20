@@ -1,3 +1,1 @@
-[build]
-# Windows-specific settings
-rustflags-x86_64-pc-windows-gnu = ["-C", "link-args=-Wl,--subsystem,windows"]
+[target.x86_64-pc-windows-gnu]

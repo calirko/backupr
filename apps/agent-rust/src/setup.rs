@@ -138,6 +138,7 @@ pub async fn run_setup(agent_code: &str) -> Result<()> {
         server_url: Some(server_url),
         ws_url: Some(ws_url),
         agent_token: Some(token),
+        vss_enabled: None,
     })
     .await?;
 
