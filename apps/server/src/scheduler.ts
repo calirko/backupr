@@ -167,7 +167,7 @@ async function triggerDueBackups(): Promise<void> {
 			`[Scheduler] Triggering backup for job ${job.id} (cron: ${job.cron})`,
 		);
 
-		await triggerBackup(job.id);
+		backupQueue.enqueue(job.id);
 	}
 }
 
@@ -192,6 +192,53 @@ async function triggerBackup(jobId: string): Promise<void> {
 			);
 		}
 	}
+}
+
+// ─── Backup concurrency queue ────────────────────────────────────────────────
+
+class BackupQueue {
+	private readonly MAX_CONCURRENT = 4;
+	private running = 0;
+	private readonly queue: string[] = [];
+	// Prevent the same jobId from being enqueued twice while already waiting
+	readonly pending = new Set<string>();
+
+	enqueue(jobId: string): void {
+		if (this.pending.has(jobId)) {
+			console.log(`[BackupQueue] Job ${jobId} already queued, skipping.`);
+			return;
+		}
+		this.pending.add(jobId);
+		this.queue.push(jobId);
+		console.log(
+			`[BackupQueue] Enqueued job ${jobId} (queued: ${this.queue.length}, running: ${this.running}/${this.MAX_CONCURRENT})`,
+		);
+		this.drain();
+	}
+
+	private drain(): void {
+		while (this.running < this.MAX_CONCURRENT && this.queue.length > 0) {
+			const jobId = this.queue.shift()!;
+			this.pending.delete(jobId);
+			this.running++;
+			console.log(
+				`[BackupQueue] Starting job ${jobId} (running: ${this.running}/${this.MAX_CONCURRENT})`,
+			);
+			triggerBackup(jobId).finally(() => {
+				this.running--;
+				console.log(
+					`[BackupQueue] Job ${jobId} finished (running: ${this.running}/${this.MAX_CONCURRENT}, queued: ${this.queue.length})`,
+				);
+				this.drain();
+			});
+		}
+	}
+}
+
+const backupQueue = new BackupQueue();
+
+export function getSchedulerQueuedJobIds(): ReadonlySet<string> {
+	return backupQueue.pending;
 }
 
 // ─── Cron helpers ────────────────────────────────────────────────────────────

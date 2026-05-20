@@ -4,6 +4,7 @@ export type AgentConnectionStatus =
 	| "stale"
 	| "running"
 	| "queued"
+	| "scheduler_queued"
 	| "unknown"
 	| "none";
 
@@ -11,6 +12,7 @@ const STATUS_LABEL: Record<AgentConnectionStatus, string> = {
 	connected: "Connected",
 	running: "Running",
 	queued: "Queued",
+	scheduler_queued: "In Queue",
 	stale: "Stale",
 	disconnected: "Disconnected",
 	unknown: "Unknown",
@@ -21,6 +23,7 @@ const ACTIVE_STATUSES = new Set<AgentConnectionStatus>([
 	"connected",
 	"running",
 	"queued",
+	"scheduler_queued",
 	"stale",
 ]);
 

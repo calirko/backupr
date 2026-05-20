@@ -32,6 +32,8 @@ export interface AgentStatus {
 	lastSeen: string | null;
 	currentJob?: AgentJobState | null;
 	jobQueue?: AgentJobState[];
+	/** True when the server-side scheduler queue holds a job for this agent but hasn't dispatched it yet. */
+	schedulerQueued?: boolean;
 }
 
 interface SocketContextValue {

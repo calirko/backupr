@@ -85,6 +85,7 @@ export default function AgentDetailDialog({
 			Date.now() - new Date(status.lastSeen || 0).getTime() > 60000;
 		if (isStale) return "stale";
 		if (status.currentJob?.status === "running") return "running";
+		if (status.schedulerQueued) return "scheduler_queued";
 		if (status.jobQueue && status.jobQueue.length > 0) return "queued";
 		if (status.status === "connected") return "connected";
 		return "unknown";

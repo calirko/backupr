@@ -1,5 +1,6 @@
 import { upgradeWebSocket } from "hono/bun";
 import { prisma } from "./lib/prisma";
+import { getSchedulerQueuedJobIds } from "./scheduler";
 import { agentRegistry, setOnAgentStatusChange } from "./ws.agent";
 
 setOnAgentStatusChange(() => pushAgentStatuses());
@@ -25,6 +26,18 @@ function send(ws: WebSocket, message: Record<string, unknown>) {
 
 async function buildAgentStatusPayload() {
 	const agents = await db.agent.findMany({ where: { is_active: true, deleted_at: null } });
+
+	// Resolve which agents have jobs waiting in the server-side scheduler queue
+	const queuedJobIds = getSchedulerQueuedJobIds();
+	const schedulerQueuedAgentIds = new Set<string>();
+	if (queuedJobIds.size > 0) {
+		const jobs = await db.backupJob.findMany({
+			where: { id: { in: [...queuedJobIds] } },
+			select: { agent_id: true },
+		});
+		for (const job of jobs) schedulerQueuedAgentIds.add(job.agent_id);
+	}
+
 	return agents.map((agent) => {
 		const state = agentRegistry.get(agent.id);
 		if (state) {
@@ -34,12 +47,14 @@ async function buildAgentStatusPayload() {
 				lastSeen: state.lastSeen,
 				currentJob: state.currentJob ?? null,
 				jobQueue: state.jobQueue ?? [],
+				schedulerQueued: schedulerQueuedAgentIds.has(agent.id),
 			};
 		}
 		return {
 			agentId: agent.id,
 			status: "disconnected",
 			lastSeen: null,
+			schedulerQueued: schedulerQueuedAgentIds.has(agent.id),
 		};
 	});
 }
