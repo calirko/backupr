@@ -52,6 +52,7 @@ model Agent {
   agentCodes    AgentCode[]
   backupJobs    BackupJob[]
   agentSessions AgentSession[]
+  agentStatuses AgentStatus[]
 
   @@map("agents")
 }
@@ -162,4 +163,23 @@ model BackupJobPolicy {
   updated_at DateTime @updatedAt
 
   @@map("backup_job_policies")
+}
+
+enum AgentStatusEnum {
+  ONLINE
+  OFFLINE
+  RUNNING_BACKUP
+  FAILED_BACKUP
+}
+
+// saving the status of agents to get a history of their connectivity
+// purge max 1 week per agent
+model AgentStatus {
+  id       String          @id @default(uuid())
+  agent_id String
+  agent    Agent           @relation(fields: [agent_id], references: [id])
+  status   AgentStatusEnum
+  date     DateTime        @default(now())
+
+  @@map("agent_status")
 }

@@ -72,6 +72,18 @@ export function setOnAgentStatusChange(cb: StatusChangeCallback) {
 	onStatusChange = cb;
 }
 
+type AgentConnectCallback = (agentId: string) => void;
+type AgentDisconnectCallback = (agentId: string) => void;
+type AgentBackupStatusCallback = (agentId: string, status: string) => void;
+
+let onAgentConnect: AgentConnectCallback | null = null;
+let onAgentDisconnect: AgentDisconnectCallback | null = null;
+let onAgentBackupStatus: AgentBackupStatusCallback | null = null;
+
+export function setOnAgentConnect(cb: AgentConnectCallback) { onAgentConnect = cb; }
+export function setOnAgentDisconnect(cb: AgentDisconnectCallback) { onAgentDisconnect = cb; }
+export function setOnAgentBackupStatus(cb: AgentBackupStatusCallback) { onAgentBackupStatus = cb; }
+
 function send(ws: WebSocket, message: Record<string, unknown>) {
 	ws.send(JSON.stringify(message));
 }
@@ -168,6 +180,7 @@ export default upgradeWebSocket((c) => {
 				sessionId,
 			});
 			onStatusChange?.();
+			onAgentConnect?.(agentId);
 
 			startPingCycle(ws as unknown as WebSocket);
 		},
@@ -269,6 +282,7 @@ export default upgradeWebSocket((c) => {
 					});
 
 					onStatusChange?.();
+					onAgentBackupStatus?.(agentId, statusStr);
 					break;
 				}
 
@@ -298,6 +312,7 @@ export default upgradeWebSocket((c) => {
 				agentRegistry.delete(agentId);
 				console.log(`[ws agent] Agent disconnected: ${agentId}`);
 				onStatusChange?.();
+				onAgentDisconnect?.(agentId);
 			}
 		},
 	};

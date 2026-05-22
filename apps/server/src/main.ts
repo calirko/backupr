@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { websocket } from "hono/bun";
 import { ensureBucket } from "./lib/storage";
 import { scheduler } from "./scheduler";
+import { initAgentStatusTracking } from "./agent-status";
 import upgradeAgentWebSocket from "./ws.agent";
 import upgradeWebWebSocket from "./ws.web";
 import userRoutes from "./routes/users";
@@ -26,6 +27,7 @@ ensureBucket().catch((err) =>
 	console.error("[storage] Failed to ensure bucket:", err),
 );
 
+initAgentStatusTracking();
 scheduler.start();
 
 export default {

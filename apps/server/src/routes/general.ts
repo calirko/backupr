@@ -188,6 +188,7 @@ export default async function generalRoutes(app: Hono) {
 					backup_job: {
 						select: {
 							files: true,
+							name: true,
 							agent: { select: { name: true } },
 						},
 					},
@@ -258,6 +259,7 @@ export default async function generalRoutes(app: Hono) {
 				agent_name: b.backup_job.agent.name,
 				files: b.backup_job.files,
 				error: b.error,
+				job_name: b.backup_job.name,
 			})),
 			backups_by_day: backupsByDay.map((r) => ({
 				day: r.day,

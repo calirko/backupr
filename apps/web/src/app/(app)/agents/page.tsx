@@ -4,6 +4,7 @@ import DataHeader, { type SearchField } from "@/components/data/dataHeader";
 import AgentDialog from "@/components/dialog/agent";
 import AgentCodeDialog from "@/components/dialog/agent-code";
 import AgentDetailDialog from "@/components/dialog/agent-detail";
+import AgentStatusHistoryDialog from "@/components/dialog/agent-status-history";
 import ConfirmDialog from "@/components/dialog/confirm";
 import ErrorDialog from "@/components/dialog/error";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
 import { useSocket } from "@/hooks/use-socket";
 import {
+	ChartBarIcon,
 	CodeSimpleIcon,
 	EyeIcon,
 	PackageIcon,
@@ -153,6 +155,17 @@ export default function AgentsPage() {
 			},
 		},
 		{
+			id: "status-history",
+			label: "Status History",
+			icon: <ChartBarIcon />,
+			onClick: (row) => {
+				openDialog(AgentStatusHistoryDialog, {
+					agentId: row.id,
+					agentName: row.name,
+				});
+			},
+		},
+		{
 			id: "separator",
 			divider: true,
 		},
@@ -176,6 +189,7 @@ export default function AgentsPage() {
 				});
 			},
 		},
+
 		{
 			id: "edit",
 			label: "Edit",
@@ -234,7 +248,8 @@ export default function AgentsPage() {
 				if (response.status === 409) {
 					openDialog(ErrorDialog, {
 						title: "Cannot Delete Agent",
-						description: "This agent cannot be deleted while it has backup jobs assigned.",
+						description:
+							"This agent cannot be deleted while it has backup jobs assigned.",
 						message: error.error || "Unknown error",
 					});
 				} else {

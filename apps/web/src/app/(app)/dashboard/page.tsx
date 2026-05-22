@@ -30,6 +30,7 @@ interface DashboardData {
 		started_at: string | null;
 		completed_at: string | null;
 		agent_name: string;
+		job_name: string;
 		files: string[];
 		error: string | null;
 	}>;
@@ -366,7 +367,7 @@ export default function DashboardPage() {
 										<div key={b.id} className="flex items-center gap-2 text-xs">
 											<StatusDot status={b.status} />
 											<span className="font-medium flex-1 truncate">
-												{b.agent_name}
+												{b.job_name} ─ {b.agent_name}
 											</span>
 											<span className="text-muted-foreground shrink-0">
 												{formatBytes(b.size_bytes)}

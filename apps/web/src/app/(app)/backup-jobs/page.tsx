@@ -28,6 +28,7 @@ export default function BackupJobsPage() {
 		data: [],
 		total: 0,
 		absoluteTotal: 0,
+		schedulerTimezone: "UTC",
 	});
 	const [loading, setLoading] = useState(false);
 
@@ -69,7 +70,11 @@ export default function BackupJobsPage() {
 			key: "next_run",
 			label: "Next Run",
 			format: (value) =>
-				value ? new Date(value).toLocaleString() : <span className="text-muted-foreground">—</span>,
+				value ? (
+					new Date(value).toLocaleString()
+				) : (
+					<span className="text-muted-foreground">—</span>
+				),
 		},
 		{
 			key: "policy",
@@ -257,7 +262,9 @@ export default function BackupJobsPage() {
 						policyParts.push(`Max ${policy.max_backup_age_in_days}d`);
 					let next_run: Date | null = null;
 					try {
-						next_run = new Cron(item.cron).nextRun();
+						// Use server's timezone for cron calculation to match scheduler
+						const cron = new Cron(item.cron);
+						next_run = cron.nextRun();
 					} catch {
 						next_run = null;
 					}
@@ -274,6 +281,7 @@ export default function BackupJobsPage() {
 					data: prettyData,
 					total: result.total,
 					absoluteTotal: result.absoluteTotal,
+					schedulerTimezone: result.schedulerTimezone,
 				});
 			} else {
 				const error = await response.json();

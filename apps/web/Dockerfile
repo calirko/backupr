@@ -12,6 +12,9 @@ COPY apps/web ./apps/web
 
 WORKDIR /app/apps/web
 
+ARG VITE_TZ=America/Sao_Paulo
+ENV VITE_TZ=$VITE_TZ
+
 RUN bun run build
 
 FROM nginx:alpine

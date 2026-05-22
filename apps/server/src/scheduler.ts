@@ -243,6 +243,31 @@ export function getSchedulerQueuedJobIds(): ReadonlySet<string> {
 
 // ─── Cron helpers ────────────────────────────────────────────────────────────
 
+const SCHEDULER_TZ = process.env.TZ ?? "UTC";
+const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function getZonedParts(date: Date): { minute: number; hour: number; dom: number; month: number; dow: number } {
+	const parts = new Intl.DateTimeFormat("en-US", {
+		timeZone: SCHEDULER_TZ,
+		minute: "2-digit",
+		hour: "2-digit",
+		day: "2-digit",
+		month: "2-digit",
+		hour12: false,
+	}).formatToParts(date);
+
+	const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value ?? "0", 10);
+	const weekday = new Intl.DateTimeFormat("en-US", { timeZone: SCHEDULER_TZ, weekday: "long" }).format(date);
+
+	return {
+		minute: get("minute"),
+		hour: get("hour") % 24, // hour12:false can return "24" for midnight
+		dom: get("day"),
+		month: get("month"),
+		dow: DOW_NAMES.indexOf(weekday),
+	};
+}
+
 /**
  * Very lightweight cron-due check.
  *
@@ -250,15 +275,14 @@ export function getSchedulerQueuedJobIds(): ReadonlySet<string> {
  * decides whether `now` falls within the same "minute slot" as the expression
  * AND the last run was not within that same slot.
  *
+ * All time comparisons use the timezone from process.env.TZ (SCHEDULER_TZ).
+ *
  * Supported syntax:
  *   *        – every unit
  *   n        – exact value
  *   n/s      – every s steps starting from n  (e.g. 0/15)
  *   n-m      – inclusive range
  *   a,b,c    – list of values
- *
- * This is intentionally minimal — for production use consider a library like
- * `croner` or `node-cron`.
  */
 function isCronDue(
 	expression: string,
@@ -279,11 +303,7 @@ function isCronDue(
 		string,
 	];
 
-	const minute = now.getMinutes();
-	const hour = now.getHours();
-	const dom = now.getDate();
-	const month = now.getMonth() + 1; // cron months are 1-based
-	const dow = now.getDay(); // 0 = Sunday
+	const { minute, hour, dom, month, dow } = getZonedParts(now);
 
 	// Validate each field is parseable before evaluating — log once if malformed
 	for (const [label, field] of [["minute", minuteField], ["hour", hourField], ["dom", domField], ["month", monthField], ["dow", dowField]] as const) {
@@ -302,16 +322,9 @@ function isCronDue(
 
 	if (!matches) return false;
 
-	// Guard: don't fire again within the same calendar minute
-	if (lastRun) {
-		const sameMinute =
-			lastRun.getFullYear() === now.getFullYear() &&
-			lastRun.getMonth() === now.getMonth() &&
-			lastRun.getDate() === now.getDate() &&
-			lastRun.getHours() === now.getHours() &&
-			lastRun.getMinutes() === now.getMinutes();
-
-		if (sameMinute) return false;
+	// Guard: don't fire again within the same UTC minute (timezone-independent)
+	if (lastRun && Math.floor(lastRun.getTime() / 60_000) === Math.floor(now.getTime() / 60_000)) {
+		return false;
 	}
 
 	return true;

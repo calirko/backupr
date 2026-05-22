@@ -378,6 +378,27 @@ export default async function agentRoutes(app: Hono) {
 		return c.json(updated);
 	});
 
+	// Get Agent Status History (last 7 days)
+	app.get("/api/agents/:id/status", rateLimit, auth, async (c) => {
+		const id = c.req.param("id");
+
+		const agent = await db.agent.findFirst({
+			where: { id, deleted_at: null },
+			select: { id: true, name: true },
+		});
+		if (!agent) return c.json({ error: "Agent not found" }, 404);
+
+		const since = new Date();
+		since.setDate(since.getDate() - 7);
+
+		const records = await db.agentStatus.findMany({
+			where: { agent_id: id, date: { gte: since } },
+			orderBy: { date: "asc" },
+		});
+
+		return c.json({ agent, records });
+	});
+
 	// Get Agent Details with Sessions
 	app.get("/api/agents/:id", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");

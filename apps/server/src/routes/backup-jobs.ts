@@ -51,7 +51,8 @@ export default async function backupJobRoutes(app: Hono) {
 				where: { deleted_at: null, agent_id: parsedFilters.agent_id },
 			}),
 		]);
-		return c.json({ data, total, absoluteTotal, skip: s, take: t });
+		const schedulerTimezone = process.env.TZ ?? "UTC";
+		return c.json({ data, total, absoluteTotal, skip: s, take: t, schedulerTimezone });
 	});
 
 	// Create Backup Job

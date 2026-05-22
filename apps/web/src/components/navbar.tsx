@@ -1,9 +1,9 @@
 import {
-	HardDrivesIcon,
+	DatabaseIcon,
+	DesktopTowerIcon,
 	HouseIcon,
 	ListIcon,
-	RulerIcon,
-	StackIcon,
+	ScalesIcon,
 	TimerIcon,
 	UserIcon,
 	XIcon,
@@ -16,10 +16,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const NAV_ITEMS = [
 	{ label: "Dashboard", path: "/dashboard", icon: <HouseIcon /> },
-	{ label: "Backups", path: "/backups", icon: <StackIcon /> },
-	{ label: "Agents", path: "/agents", icon: <HardDrivesIcon /> },
+	{ label: "Backups", path: "/backups", icon: <DatabaseIcon /> },
+	{ label: "Agents", path: "/agents", icon: <DesktopTowerIcon /> },
 	{ label: "Jobs", path: "/backup-jobs", icon: <TimerIcon /> },
-	{ label: "Policies", path: "/backup-policies", icon: <RulerIcon /> },
+	{ label: "Policies", path: "/backup-policies", icon: <ScalesIcon /> },
 	{ label: "Users", path: "/users", icon: <UserIcon /> },
 ];
 
