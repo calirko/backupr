@@ -82,10 +82,12 @@
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
 
-    --greenish: oklch(0.7926 0.0789 145);
-    --purpleish: oklch(0.64 0.07 272);
-    --blueish: oklch(0.75 0.09 267);
-    --yellowish: oklch(0.78 0.09 88);
+
+    --greenish: oklch(0.78 0.038 145);
+    --purpleish: oklch(0.64 0.036 272);
+    --blueish: oklch(0.75 0.040 267);
+    --yellowish: oklch(0.78 0.038 88);
+
 }
 
 /* flash fast, exhale slow */

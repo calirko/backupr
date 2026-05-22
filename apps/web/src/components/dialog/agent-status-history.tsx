@@ -147,10 +147,51 @@ function formatDuration(ms: number): string {
 
 // ─── Sub-components ────────────────────────────────────────────────────────
 
+// Returns inline style overrides that zero-out border-radius on edges that
+// touch an adjacent segment, letting dynround handle the exposed outer corners.
+function segmentEdgeRadius(segs: Segment[], i: number) {
+	const touchLeft =
+		i > 0 &&
+		Math.abs(
+			segs[i].startFrac - (segs[i - 1].startFrac + segs[i - 1].widthFrac),
+		) < 0.0001;
+	const touchRight =
+		i < segs.length - 1 &&
+		Math.abs(segs[i].startFrac + segs[i].widthFrac - segs[i + 1].startFrac) <
+			0.0001;
+	return {
+		borderTopLeftRadius: touchLeft ? 0 : undefined,
+		borderBottomLeftRadius: touchLeft ? 0 : undefined,
+		borderTopRightRadius: touchRight ? 0 : undefined,
+		borderBottomRightRadius: touchRight ? 0 : undefined,
+	};
+}
+
 function DayRow({ day, records }: { day: Date; records: StatusRecord[] }) {
-	const segments = buildDaySegments(records, day);
+	// Base layer: RUNNING_BACKUP and FAILED_BACKUP collapse to ONLINE so the
+	// green strip shows the full "agent was alive" window underneath.
+	const baseRecords = records.map((r) => ({
+		...r,
+		status:
+			r.status === "RUNNING_BACKUP" || r.status === "FAILED_BACKUP"
+				? ("ONLINE" as const)
+				: r.status,
+	}));
+	const baseSegments = buildDaySegments(baseRecords, day);
+
+	// Overlay layer: only the elevated statuses, drawn as a thinner pill on top.
+	const allSegments = buildDaySegments(records, day);
+	const overlaySegments = allSegments.filter(
+		(s) => s.status === "RUNNING_BACKUP" || s.status === "FAILED_BACKUP",
+	);
+
 	const isToday =
 		startOfDay(day).getTime() === startOfDay(new Date()).getTime();
+
+	const nowFrac = isToday
+		? (Date.now() - startOfDay(day).getTime()) /
+			(endOfDay(day).getTime() - startOfDay(day).getTime())
+		: null;
 
 	return (
 		<div className="flex items-center gap-3 text-xs">
@@ -158,10 +199,11 @@ function DayRow({ day, records }: { day: Date; records: StatusRecord[] }) {
 				{isToday ? "Today" : format(day, "EEE, MMM d")}
 			</span>
 			<div
-				className="relative h-5 flex-1 rounded overflow-hidden"
+				className="relative h-8 flex-1 border dynround overflow-hidden"
 				style={{ backgroundColor: "oklch(0.13 0 0)" }}
 			>
-				{segments.map((seg, i) => {
+				{/* Base layer — full height */}
+				{baseSegments.map((seg, i) => {
 					const startLabel = format(new Date(seg.startMs), "HH:mm");
 					const endLabel = seg.stillActive
 						? "now"
@@ -170,12 +212,13 @@ function DayRow({ day, records }: { day: Date; records: StatusRecord[] }) {
 						<Tooltip key={i}>
 							<TooltipTrigger asChild>
 								<div
-									className="absolute top-0 h-full cursor-default"
+									className="absolute top-0 h-full cursor-default dynround"
 									style={{
 										left: `${seg.startFrac * 100}%`,
 										width: `${seg.widthFrac * 100}%`,
 										backgroundColor: STATUS_COLORS[seg.status],
 										opacity: seg.status === "OFFLINE" ? 0.5 : 1,
+										...segmentEdgeRadius(baseSegments, i),
 									}}
 								/>
 							</TooltipTrigger>
@@ -193,6 +236,65 @@ function DayRow({ day, records }: { day: Date; records: StatusRecord[] }) {
 						</Tooltip>
 					);
 				})}
+
+				{/* Overlay layer — shorter pill so the green base peeks through */}
+				{overlaySegments.map((seg, i) => {
+					const startLabel = format(new Date(seg.startMs), "HH:mm");
+					const endLabel = seg.stillActive
+						? "now"
+						: format(new Date(seg.endMs), "HH:mm");
+					return (
+						<Tooltip key={`ov-${i}`}>
+							<TooltipTrigger asChild>
+								<div
+									className="absolute cursor-default dynround"
+									style={{
+										left: `${seg.startFrac * 100}%`,
+										width: `${seg.widthFrac * 100}%`,
+										minWidth: "20px",
+										top: "23%",
+										height: "55%",
+										backgroundColor: STATUS_COLORS[seg.status],
+										...segmentEdgeRadius(overlaySegments, i),
+									}}
+								/>
+							</TooltipTrigger>
+							<TooltipContent>
+								<div className="space-y-0.5">
+									<p className="font-semibold">{STATUS_LABELS[seg.status]}</p>
+									<p>
+										{startLabel} → {endLabel}
+									</p>
+									<p className="opacity-70">
+										{formatDuration(seg.endMs - seg.startMs)}
+									</p>
+								</div>
+							</TooltipContent>
+						</Tooltip>
+					);
+				})}
+
+				{/* Current-time marker */}
+				{nowFrac !== null && (
+					<div
+						className="absolute top-0 h-full pointer-events-none flex flex-col items-center"
+						style={{
+							left: `${nowFrac * 100}%`,
+							transform: "translateX(-50%)",
+						}}
+					>
+						<span
+							className="text-white/80 leading-none select-none"
+							style={{ fontSize: "9px", marginTop: "3px", marginBottom: "5px" }}
+						>
+							now
+						</span>
+						<div
+							className="flex-1 w-[2px]"
+							style={{ backgroundColor: "white", opacity: 0.8 }}
+						/>
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -254,7 +356,7 @@ function Content({
 			<div className="space-y-2">
 				<p className="text-xs text-muted-foreground font-medium">Last 7 days</p>
 				<TooltipProvider>
-					<div className="space-y-1.5">
+					<div className="space-y-3">
 						{days.map((day) => (
 							<DayRow
 								key={day.toISOString()}
@@ -277,16 +379,16 @@ function Content({
 				{(Object.keys(STATUS_COLORS) as StatusRecord["status"][]).map((s) => (
 					<div key={s} className="flex items-center gap-1.5 text-xs">
 						<span
-							className="inline-block w-2.5 h-2.5 rounded-sm"
-							style={{ backgroundColor: STATUS_COLORS[s] }}
+							className="inline-block w-2.5 h-2.5"
+							style={{ backgroundColor: STATUS_COLORS[s], borderRadius: "3px" }}
 						/>
 						<span className="text-muted-foreground">{STATUS_LABELS[s]}</span>
 					</div>
 				))}
 				<div className="flex items-center gap-1.5 text-xs">
 					<span
-						className="inline-block w-2.5 h-2.5 rounded-sm"
-						style={{ backgroundColor: "oklch(0.13 0 0)" }}
+						className="inline-block w-2.5 h-2.5"
+						style={{ backgroundColor: "oklch(0.13 0 0)", borderRadius: "3px" }}
 					/>
 					<span className="text-muted-foreground">No data</span>
 				</div>
