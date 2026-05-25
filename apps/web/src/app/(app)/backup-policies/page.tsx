@@ -48,7 +48,7 @@ export default function BackupPoliciesPage() {
 			matching: "between" as const,
 		},
 		{
-			name: "created_by",
+			name: "created_by.name",
 			label: "Created By",
 			type: "string" as const,
 			matching: "contains" as const,
@@ -90,6 +90,10 @@ export default function BackupPoliciesPage() {
 	] as Column[];
 
 	const actions = [
+		{
+			id: "mange",
+			label: "Manage",
+		},
 		{
 			id: "view",
 			label: "View",

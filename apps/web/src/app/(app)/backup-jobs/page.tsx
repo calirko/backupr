@@ -68,6 +68,7 @@ export default function BackupJobsPage() {
 		{ key: "cron", label: "Schedule", orderable: true },
 		{
 			key: "next_run",
+			orderable: false,
 			label: "Next Run",
 			format: (value) =>
 				value ? (
@@ -79,6 +80,7 @@ export default function BackupJobsPage() {
 		{
 			key: "policy",
 			label: "Policy",
+			orderable: false,
 			format: (value) => value ?? "—",
 		},
 		{

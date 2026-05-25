@@ -73,8 +73,8 @@ export default function LoginPage() {
 	return (
 		<div className="flex w-full h-full items-center justify-center flex-col gap-10">
 			<div className="flex gap-6 items-center">
-				<img src="/icon.png" className="h-30" />
-				<h1 className="text-7xl font-black">Backupr</h1>
+				<img src="/icon.png" className="h-24 sm:h-30" />
+				<h1 className="text-5xl sm:text-7xl font-black">Backupr</h1>
 			</div>
 			<Card className="w-full max-w-sm">
 				<CardHeader>

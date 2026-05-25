@@ -141,6 +141,10 @@ export default function AgentsPage() {
 
 	const actions = [
 		{
+			id: "actions",
+			label: "Actions",
+		},
+		{
 			id: "gen-code",
 			label: "Pairing Code",
 			icon: <CodeSimpleIcon />,
@@ -155,15 +159,10 @@ export default function AgentsPage() {
 			},
 		},
 		{
-			id: "status-history",
-			label: "Status History",
-			icon: <ChartBarIcon />,
-			onClick: (row) => {
-				openDialog(AgentStatusHistoryDialog, {
-					agentId: row.id,
-					agentName: row.name,
-				});
-			},
+			id: "backup_jobs",
+			label: "Backup Jobs",
+			href: (row) => `/backups/${row.id}/jobs`,
+			icon: <PackageIcon />,
 		},
 		{
 			id: "separator",
@@ -174,10 +173,15 @@ export default function AgentsPage() {
 			label: "Manage",
 		},
 		{
-			id: "backup_jobs",
-			label: "Backup Jobs",
-			href: (row) => `/backups/${row.id}/jobs`,
-			icon: <PackageIcon />,
+			id: "status-history",
+			label: "Status History",
+			icon: <ChartBarIcon />,
+			onClick: (row) => {
+				openDialog(AgentStatusHistoryDialog, {
+					agentId: row.id,
+					agentName: row.name,
+				});
+			},
 		},
 		{
 			id: "view",

@@ -5,8 +5,8 @@ fn main() {
         res.set("ProductName", "Backupr Agent");
         res.set("CompanyName", "calirko");
         res.set("FileDescription", "Backupr backup agent service");
-        res.set("ProductVersion", "2.0.6");
-        res.set("FileVersion", "2.0.6");
+        res.set("ProductVersion", "2.0.7");
+        res.set("FileVersion", "2.0.7");
         res.set("OriginalFilename", "backupr-agent.exe");
         res.set("InternalName", "backupr-agent");
         res.set("LegalCopyright", "Created by calirko");

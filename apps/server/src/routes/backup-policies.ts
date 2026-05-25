@@ -32,6 +32,13 @@ export default async function backupPolicyRoutes(app: Hono) {
 					: { created_at: "desc" },
 				skip: s,
 				take: t,
+				include: {
+					created_by: {
+						select: {
+							name: true,
+						},
+					},
+				},
 			}),
 			db.backupPolicy.count({ where: baseWhere }),
 			db.backupPolicy.count({ where: { deleted_at: null } }),

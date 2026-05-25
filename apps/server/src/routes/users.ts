@@ -24,7 +24,20 @@ export default async function userRoutes(app: Hono) {
 
 		const baseWhere = { deleted_at: null, ...parsedFilters };
 
-		const [data, total, absoluteTotal] = await Promise.all([
+		// last_login_at is virtual (derived from userSessions); translate it to a
+		// Prisma relation-aggregate orderBy so server-side sorting works correctly.
+		let resolvedOrderBy: object = { created_at: "desc" };
+		if (Object.keys(parsedOrderBy).length) {
+			if ("last_login_at" in parsedOrderBy) {
+				resolvedOrderBy = {
+					userSessions: { _max: { created_at: parsedOrderBy.last_login_at } },
+				};
+			} else {
+				resolvedOrderBy = parsedOrderBy;
+			}
+		}
+
+		const [raw, total, absoluteTotal] = await Promise.all([
 			db.user.findMany({
 				select: {
 					id: true,
@@ -33,17 +46,26 @@ export default async function userRoutes(app: Hono) {
 					name: true,
 					updated_at: true,
 					username: true,
+					userSessions: {
+						orderBy: { created_at: "desc" },
+						take: 1,
+						select: { created_at: true },
+					},
 				},
 				where: baseWhere,
-				orderBy: Object.keys(parsedOrderBy).length
-					? parsedOrderBy
-					: { created_at: "desc" },
+				orderBy: resolvedOrderBy,
 				skip: s,
 				take: t,
 			}),
 			db.user.count({ where: baseWhere }),
 			db.user.count({ where: { deleted_at: null } }),
 		]);
+
+		const data = raw.map(({ userSessions, ...u }) => ({
+			...u,
+			last_login_at: userSessions[0]?.created_at ?? null,
+		}));
+
 		return c.json({ data, total, absoluteTotal });
 	});
 
@@ -156,16 +178,14 @@ export default async function userRoutes(app: Hono) {
 			return c.json({ error: "You cannot delete your own account" }, 400);
 		}
 
-		await db.user.update({
-			where: { id: c.req.param("id") },
-			data: { deleted_at: new Date() },
-		});
-
-		await db.userSession.deleteMany({
-			where: {
-				user_id: userId,
-			},
-		});
+		const targetId = c.req.param("id");
+		await db.$transaction([
+			db.user.update({
+				where: { id: targetId },
+				data: { deleted_at: new Date() },
+			}),
+			db.userSession.deleteMany({ where: { user_id: targetId } }),
+		]);
 
 		return c.json({ message: "User deleted" });
 	});

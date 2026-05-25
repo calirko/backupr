@@ -143,15 +143,17 @@ export default async function generalRoutes(app: Hono) {
 
 		const newToken = await Token.generate(payload);
 
-		await db.userSession.delete({ where: { token: oldToken } });
-		await db.userSession.create({
-			data: {
-				token: newToken,
-				user_id: user.id,
-				expires_at: Token.secondsToDate(exp),
-				info: parseSessionInfo(c),
-			},
-		});
+		await db.$transaction([
+			db.userSession.delete({ where: { token: oldToken } }),
+			db.userSession.create({
+				data: {
+					token: newToken,
+					user_id: user.id,
+					expires_at: Token.secondsToDate(exp),
+					info: parseSessionInfo(c),
+				},
+			}),
+		]);
 
 		return c.json({ token: newToken });
 	});
@@ -232,6 +234,7 @@ export default async function generalRoutes(app: Hono) {
          FROM backup_jobs bj
          LEFT JOIN agents a ON a.id = bj.agent_id
          LEFT JOIN backups b ON b.backup_job_id = bj.id AND b.status = 'COMPLETED'
+         WHERE bj.deleted_at IS NULL AND (a.id IS NULL OR a.deleted_at IS NULL)
          GROUP BY bj.id, bj.name, a.name
          ORDER BY size_bytes DESC
          LIMIT 8

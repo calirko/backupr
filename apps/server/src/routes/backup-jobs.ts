@@ -73,16 +73,18 @@ export default async function backupJobRoutes(app: Hono) {
 		if (!cron || !files || !agent_id)
 			return c.json({ error: "Missing required fields" }, 400);
 
-		const job = await db.backupJob.create({
-			data: { ...rest, cron, files, agent_id, created_by_id },
-			include: { agent: { select: { id: true } } },
-		});
-
-		if (policy_id) {
-			await db.backupJobPolicy.create({
-				data: { backup_job_id: job.id, backup_policy_id: policy_id },
+		const job = await db.$transaction(async (tx) => {
+			const created = await tx.backupJob.create({
+				data: { ...rest, cron, files, agent_id, created_by_id },
+				include: { agent: { select: { id: true } } },
 			});
-		}
+			if (policy_id) {
+				await tx.backupJobPolicy.create({
+					data: { backup_job_id: created.id, backup_policy_id: policy_id },
+				});
+			}
+			return created;
+		});
 
 		return c.json(job, 201);
 	});
@@ -99,19 +101,21 @@ export default async function backupJobRoutes(app: Hono) {
 
 		const { policy_id, ...jobData } = json;
 
-		const job = await db.backupJob.update({
-			where: { id },
-			data: jobData,
-			include: { agent: { select: { id: true } } },
-		});
-
-		// Replace all policies for this job (single-policy UI model)
-		await db.backupJobPolicy.deleteMany({ where: { backup_job_id: id } });
-		if (policy_id) {
-			await db.backupJobPolicy.create({
-				data: { backup_job_id: id, backup_policy_id: policy_id },
+		// Replace all policies atomically with the job update (single-policy UI model)
+		const job = await db.$transaction(async (tx) => {
+			const updated = await tx.backupJob.update({
+				where: { id },
+				data: jobData,
+				include: { agent: { select: { id: true } } },
 			});
-		}
+			await tx.backupJobPolicy.deleteMany({ where: { backup_job_id: id } });
+			if (policy_id) {
+				await tx.backupJobPolicy.create({
+					data: { backup_job_id: id, backup_policy_id: policy_id },
+				});
+			}
+			return updated;
+		});
 
 		return c.json(job);
 	});

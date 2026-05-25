@@ -2,6 +2,7 @@
 
 mod backup;
 mod lib;
+mod notifications;
 mod setup;
 
 use anyhow::Result;
@@ -616,6 +617,7 @@ impl BackuprAgent {
         drop(queue);
 
         println!("[Agent] Starting backup job {}...", job.id);
+        notifications::notify_started();
 
         // Send status update
         Self::send_backup_status(&job.id, "running", None, None, cmd_tx).await;
@@ -661,6 +663,7 @@ impl BackuprAgent {
                             "[Agent] Backup job {} completed successfully.",
                             job_clone.id
                         );
+                        notifications::notify_finished(size_bytes);
                         if let Some(ref mut j) = *current {
                             j.status = JobStatus::Completed;
                             j.completed_at = Some(chrono::Utc::now().to_rfc3339());
@@ -676,6 +679,7 @@ impl BackuprAgent {
                     }
                     Err(e) => {
                         eprintln!("[Agent] Backup job {} failed: {}", job_clone.id, e);
+                        notifications::notify_failed(&e.to_string());
                         if let Some(ref mut j) = *current {
                             j.status = JobStatus::Failed;
                             j.error = Some(e.to_string());

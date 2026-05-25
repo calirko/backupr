@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const CELL_SIZE = 37;
 const GLOW_RADIUS = 160;
@@ -10,6 +11,7 @@ export default function GridBackground() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const mouseRef = useRef({ x: -9999, y: -9999 });
 	const rafRef = useRef<number>(0);
+	const isMobile = useIsMobile();
 
 	useEffect(() => {
 		const canvas = canvasRef.current!;
@@ -54,7 +56,7 @@ export default function GridBackground() {
 			}
 
 			// Glow effect (GPU-friendly)
-			if (mx > 0) {
+			if (!isMobile && mx > 0) {
 				const gradient = ctx.createRadialGradient(
 					mx,
 					my,
@@ -103,8 +105,11 @@ export default function GridBackground() {
 		draw();
 
 		window.addEventListener("resize", resize);
-		window.addEventListener("mousemove", onMouseMove);
-		window.addEventListener("mouseleave", onMouseLeave);
+
+		if (!isMobile) {
+			window.addEventListener("mousemove", onMouseMove);
+			window.addEventListener("mouseleave", onMouseLeave);
+		}
 
 		return () => {
 			cancelAnimationFrame(rafRef.current);
@@ -112,7 +117,7 @@ export default function GridBackground() {
 			window.removeEventListener("mousemove", onMouseMove);
 			window.removeEventListener("mouseleave", onMouseLeave);
 		};
-	}, []);
+	}, [isMobile]);
 
 	return (
 		<canvas

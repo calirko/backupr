@@ -67,9 +67,19 @@ export default function UsersPage() {
 			orderable: true,
 			format: (value) => new Date(value).toLocaleString(),
 		},
+		{
+			key: "last_login_at",
+			label: "Last Login",
+			orderable: true,
+			format: (value) => (value ? new Date(value).toLocaleString() : "Never"),
+		},
 	] as Column[];
 
 	const actions = [
+		{
+			id: "mange",
+			label: "Manage",
+		},
 		{
 			id: "view",
 			label: "View",

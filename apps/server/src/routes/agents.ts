@@ -471,12 +471,14 @@ export default async function agentRoutes(app: Hono) {
 					409,
 				);
 			}
-			await db.agent.update({
-				where: { id },
-				data: { deleted_at: new Date() },
-			});
-			await db.agentSession.deleteMany({ where: { agent_id: id } });
-			await db.agentCode.deleteMany({ where: { agent_id: id } });
+			await db.$transaction([
+				db.agent.update({
+					where: { id },
+					data: { deleted_at: new Date() },
+				}),
+				db.agentSession.deleteMany({ where: { agent_id: id } }),
+				db.agentCode.deleteMany({ where: { agent_id: id } }),
+			]);
 			const state = agentRegistry.get(id);
 			if (state) {
 				state.websocket.close();
