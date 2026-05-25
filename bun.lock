@@ -16,7 +16,7 @@
     },
     "apps/server": {
       "name": "server",
-      "version": "2.0.2",
+      "version": "2.0.4",
       "dependencies": {
         "@prisma/adapter-pg": "^7.7.0",
         "@prisma/client": "^7.7.0",
@@ -38,10 +38,10 @@
     },
     "apps/web": {
       "name": "web",
-      "version": "2.0.2",
+      "version": "2.0.4",
       "dependencies": {
         "@fontsource-variable/inter": "^5.2.8",
-        "@fontsource-variable/space-grotesk": "^5.2.10",
+        "@fontsource/archivo-black": "^5.2.8",
         "@phosphor-icons/react": "^2.1.10",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -180,7 +180,7 @@
 
     "@fontsource-variable/inter": ["@fontsource-variable/inter@5.2.8", "", {}, "sha512-kOfP2D+ykbcX/P3IFnokOhVRNoTozo5/JxhAIVYLpea/UBmCQ/YWPBfWIDuBImXX/15KH+eKh4xpEUyS2sQQGQ=="],
 
-    "@fontsource-variable/space-grotesk": ["@fontsource-variable/space-grotesk@5.2.10", "", {}, "sha512-yJQO/o35/hAP3CFnpdFTwQku2yzJOae2HIpBmqkOVoxhhXJaQP3g+b6Jrz7u+eI7A5ZdCIf88uMWpBJdFiGr5w=="],
+    "@fontsource/archivo-black": ["@fontsource/archivo-black@5.2.8", "", {}, "sha512-3zNj/o9LzWyDl/UEpY5IOHpAQyUtFr3hQaFS7NSKwCLLkXOfH/CMCt1L2b2Z+OF25OURtOYenCadgAebALz7/A=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.11", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g=="],
 

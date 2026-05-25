@@ -262,7 +262,7 @@ export default function DashboardPage() {
 			<WikiDialog open={wikiOpen} onClose={() => setWikiOpen(false)} />
 			<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6 pb-6">
 				<div>
-					<h1 className="text-4xl font-black">Dashboard</h1>
+					<h1 className="text-4xl font-heading">Dashboard</h1>
 					<p className="text-muted-foreground text-sm">
 						Overview of your agents and backup status.
 					</p>
@@ -275,7 +275,7 @@ export default function DashboardPage() {
 							<CardTitle>Storage Used</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<h2 className="text-3xl font-black">
+							<h2 className="text-3xl font-heading">
 								{formatBytes(data?.stats?.total_size_bytes)}
 							</h2>
 							<p className="text-muted-foreground text-xs mt-0.5">
@@ -300,7 +300,7 @@ export default function DashboardPage() {
 						</CardHeader>
 						<CardContent>
 							<h2
-								className={`text-3xl font-black ${failedCount > 0 ? "text-destructive" : ""}`}
+								className={`text-3xl font-heading ${failedCount > 0 ? "text-destructive" : ""}`}
 							>
 								{failedCount}
 							</h2>
@@ -400,7 +400,7 @@ export default function DashboardPage() {
 													? "var(--yellowish)"
 													: undefined,
 									}}
-									className={`text-4xl font-black ${
+									className={`text-4xl font-heading ${
 										successRate === null && "text-muted-foreground"
 									}`}
 								>
@@ -432,7 +432,7 @@ export default function DashboardPage() {
 							<CardTitle>Agents</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<h2 className="text-3xl font-black">
+							<h2 className="text-3xl font-heading">
 								{onlineCount}
 								<span className="text-muted-foreground text-xl font-normal">
 									/{data?.stats?.total_agents ?? "—"}
@@ -459,7 +459,7 @@ export default function DashboardPage() {
 							<CardTitle>Active Jobs</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<h2 className="text-3xl font-black">
+							<h2 className="text-3xl font-heading">
 								{data?.stats?.total_jobs ?? "—"}
 							</h2>
 							<p className="text-muted-foreground text-xs mt-0.5">
@@ -483,7 +483,7 @@ export default function DashboardPage() {
 							<CardTitle>Users</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<h2 className="text-3xl font-black">
+							<h2 className="text-3xl font-heading">
 								{data?.total_users ?? "—"}
 							</h2>
 							<p className="text-muted-foreground text-xs mt-0.5">
@@ -507,7 +507,7 @@ export default function DashboardPage() {
 							<CardTitle>Policies</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<h2 className="text-3xl font-black">
+							<h2 className="text-3xl font-heading">
 								{data?.total_policies ?? "—"}
 							</h2>
 							<p className="text-muted-foreground text-xs mt-0.5">

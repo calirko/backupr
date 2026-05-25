@@ -289,7 +289,7 @@ export default async function agentRoutes(app: Hono) {
 						select: {
 							backups: {
 								where: { status: "COMPLETED" },
-								select: { size_bytes: true },
+								select: { size_bytes: true, started_at: true },
 							},
 						},
 					},
@@ -299,15 +299,23 @@ export default async function agentRoutes(app: Hono) {
 			db.agent.count({ where: { deleted_at: null } }),
 		]);
 
-		const data = rawData.map(({ backupJobs, ...agent }) => ({
-			...agent,
-			total_size_bytes: backupJobs.reduce(
-				(sum, job) =>
-					sum +
-					job.backups.reduce((s, b) => s + (Number(b.size_bytes) || 0), 0),
-				0,
-			),
-		}));
+		const data = rawData.map(({ backupJobs, ...agent }) => {
+			let lastBackupAt: Date | null = null;
+			let totalSizeBytes = 0;
+			for (const job of backupJobs) {
+				for (const b of job.backups) {
+					totalSizeBytes += Number(b.size_bytes) || 0;
+					if (b.started_at && (!lastBackupAt || b.started_at > lastBackupAt)) {
+						lastBackupAt = b.started_at;
+					}
+				}
+			}
+			return {
+				...agent,
+				total_size_bytes: totalSizeBytes,
+				last_backup_at: lastBackupAt,
+			};
+		});
 
 		return c.json({ data, total, absoluteTotal, skip: s, take: t });
 	});

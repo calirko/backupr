@@ -112,7 +112,7 @@ export function IntroductionPage({ nextPage, onNext, lang }: Props) {
 			<div className="dynround bg-background w-full h-50">
 				<div className="flex gap-6 items-center justify-center w-full h-full">
 					<img src="/icon.png" className="h-30" />
-					<h1 className="text-7xl font-black">Backupr</h1>
+					<h1 className="text-7xl font-heading">Backupr</h1>
 				</div>
 			</div>
 			<div className="flex items-center gap-1.5 text-[12px] text-muted-foreground/50 select-none font-mono justify-center">

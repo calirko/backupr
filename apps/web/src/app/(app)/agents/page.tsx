@@ -316,7 +316,7 @@ export default function AgentsPage() {
 	return (
 		<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6">
 			<div>
-				<h1 className="text-4xl font-black">Agents</h1>
+				<h1 className="text-4xl font-heading">Agents</h1>
 				<p className="text-muted-foreground text-sm">
 					Manage your agents and view their backup status.
 				</p>

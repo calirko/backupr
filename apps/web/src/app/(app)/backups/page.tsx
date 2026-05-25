@@ -1,6 +1,8 @@
 import {
 	ArrowRightIcon,
 	MagnifyingGlassIcon,
+	RowsIcon,
+	SquaresFourIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
@@ -23,14 +25,31 @@ import {
 	ConnectionStatus,
 	type AgentConnectionStatus,
 } from "@/components/ui/connection-status";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 
 interface Agent {
 	id: string;
 	name: string;
 	is_active: boolean;
 	total_size_bytes: number;
+	last_backup_at: string | null;
 	created_by: { name: string } | null;
 }
+
+type SortOption = "name" | "date" | "status" | "last-backup";
+type ViewMode = "grid" | "list";
+
+const SERVER_SORT_ORDER_BY: Partial<Record<SortOption, object>> = {
+	name: { name: "asc" },
+	date: { created_at: "desc" },
+	status: { is_active: "desc" },
+};
 
 function getAgentStatus(
 	agentStatuses: AgentStatus[],
@@ -49,6 +68,17 @@ function getAgentStatus(
 	return "unknown";
 }
 
+function formatRelative(dateStr: string | null | undefined): string {
+	if (!dateStr) return "Never";
+	const diff = Date.now() - new Date(dateStr).getTime();
+	const mins = Math.floor(diff / 60000);
+	if (mins < 1) return "Just now";
+	if (mins < 60) return `${mins}m ago`;
+	const hours = Math.floor(mins / 60);
+	if (hours < 24) return `${hours}h ago`;
+	return `${Math.floor(hours / 24)}d ago`;
+}
+
 function formatBytes(bytes: number): string {
 	if (!bytes) return "0 B";
 	const units = ["B", "KB", "MB", "GB", "TB"];
@@ -61,19 +91,143 @@ function formatBytes(bytes: number): string {
 	return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
+interface AgentCardProps {
+	agent: Agent;
+	status: AgentConnectionStatus;
+	onNavigate: (id: string) => void;
+}
+
+function AgentCard({ agent, status, onNavigate }: AgentCardProps) {
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle className="truncate">{agent.name}</CardTitle>
+				<CardAction>
+					<ConnectionStatus status={status} type="long" />
+				</CardAction>
+			</CardHeader>
+			<CardContent>
+				<div className="space-y-0">
+					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+						<span className="text-xs text-muted-foreground shrink-0">
+							Status
+						</span>
+						<span
+							className="text-xs text-right"
+							style={agent.is_active ? { color: "var(--greenish)" } : undefined}
+						>
+							{agent.is_active ? (
+								"Active"
+							) : (
+								<span className="text-destructive">Inactive</span>
+							)}
+						</span>
+					</div>
+					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+						<span className="text-xs text-muted-foreground shrink-0">
+							Total Size
+						</span>
+						<span className="text-xs text-right font-mono">
+							{formatBytes(agent.total_size_bytes)}
+						</span>
+					</div>
+					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+						<span className="text-xs text-muted-foreground shrink-0">Last Backup</span>
+						<span className="text-xs text-right">{formatRelative(agent.last_backup_at)}</span>
+					</div>
+					{agent.created_by && (
+						<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+							<span className="text-xs text-muted-foreground shrink-0">
+								Created By
+							</span>
+							<span className="text-xs text-right truncate max-w-32">
+								{agent.created_by.name}
+							</span>
+						</div>
+					)}
+				</div>
+			</CardContent>
+			<CardFooter>
+				<Button
+					variant="outline"
+					className="w-full"
+					onClick={() => onNavigate(agent.id)}
+				>
+					<ArrowRightIcon />
+					View Backups
+				</Button>
+			</CardFooter>
+		</Card>
+	);
+}
+
+interface AgentRowProps {
+	agent: Agent;
+	status: AgentConnectionStatus;
+	onNavigate: (id: string) => void;
+}
+
+function AgentRow({ agent, status, onNavigate }: AgentRowProps) {
+	return (
+		<div className="flex items-center gap-4 px-3 py-2.5 border bg-card dynround transition-colors">
+			<div className="flex-1 min-w-0 flex items-center gap-3">
+				<span className="font-medium text-sm truncate">{agent.name}</span>
+				<ConnectionStatus status={status} />
+			</div>
+			<span
+				className="text-xs shrink-0 w-14 text-right"
+				style={agent.is_active ? { color: "var(--greenish)" } : undefined}
+			>
+				{agent.is_active ? (
+					"Active"
+				) : (
+					<span className="text-destructive">Inactive</span>
+				)}
+			</span>
+			<span className="text-xs font-mono shrink-0 w-20 text-right text-muted-foreground">
+				{formatBytes(agent.total_size_bytes)}
+			</span>
+			<span className="text-xs shrink-0 w-16 text-right text-muted-foreground">
+				{formatRelative(agent.last_backup_at)}
+			</span>
+			{agent.created_by && (
+				<span className="text-xs shrink-0 w-28 text-right text-muted-foreground truncate">
+					{agent.created_by.name}
+				</span>
+			)}
+			<Button
+				variant="outline"
+				size="sm"
+				className="shrink-0"
+				onClick={() => onNavigate(agent.id)}
+			>
+				<ArrowRightIcon />
+				View
+			</Button>
+		</div>
+	);
+}
+
 export default function BackupsPage() {
 	const [agents, setAgents] = useState<Agent[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [search, setSearch] = useState("");
 	const [appliedSearch, setAppliedSearch] = useState("");
+	const [sortBy, setSortBy] = useState<SortOption>("date");
+	const [viewMode, setViewMode] = useState<ViewMode>("grid");
 	const { agentStatuses } = useSocket();
 	const navigate = useNavigate();
 	const [absoluteTotal, setAbsoluteTotal] = useState(0);
 
-	async function fetchAgents() {
+	async function fetchAgents(sort: SortOption = sortBy) {
 		setLoading(true);
 		try {
-			const response = await fetch("/api/agents", {
+			const serverOrderBy = SERVER_SORT_ORDER_BY[sort];
+			const params = new URLSearchParams();
+			if (serverOrderBy) {
+				params.set("orderBy", encodeURIComponent(JSON.stringify(serverOrderBy)));
+			}
+			const response = await fetch(`/api/agents?${params}`, {
 				headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
 			});
 			if (response.ok) {
@@ -97,11 +251,22 @@ export default function BackupsPage() {
 		fetchAgents();
 	}, []);
 
-	const visibleAgents = appliedSearch
-		? agents.filter((a) =>
-				a.name.toLowerCase().includes(appliedSearch.toLowerCase()),
-			)
+	useEffect(() => {
+		fetchAgents(sortBy);
+	}, [sortBy]);
+
+	const filteredAgents = appliedSearch
+		? agents.filter((a) => a.name.toLowerCase().includes(appliedSearch.toLowerCase()))
 		: agents;
+
+	const visibleAgents =
+		sortBy === "last-backup"
+			? [...filteredAgents].sort((a, b) => {
+					const at = a.last_backup_at ? new Date(a.last_backup_at).getTime() : 0;
+					const bt = b.last_backup_at ? new Date(b.last_backup_at).getTime() : 0;
+					return bt - at;
+				})
+			: filteredAgents;
 
 	function applySearch() {
 		setAppliedSearch(search);
@@ -115,13 +280,45 @@ export default function BackupsPage() {
 	return (
 		<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6">
 			<div>
-				<h1 className="text-4xl font-black">Backups</h1>
+				<h1 className="text-4xl font-heading">Backups</h1>
 				<p className="text-muted-foreground text-sm">
 					Browse and download backups by agent.
 				</p>
 			</div>
 
-			<div className="w-full flex justify-end">
+			<div className="w-full flex justify-between">
+				<div className="flex gap-2">
+					<Select
+						value={sortBy}
+						onValueChange={(v) => setSortBy(v as SortOption)}
+					>
+						<SelectTrigger>
+							<SelectValue placeholder="Sort by" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="name">Name</SelectItem>
+							<SelectItem value="date">Date Created</SelectItem>
+							<SelectItem value="status">Status</SelectItem>
+							<SelectItem value="last-backup">Last Backup</SelectItem>
+						</SelectContent>
+					</Select>
+					<div className="dark:bg-input/30 dark:hover:bg-input/50 flex gap-0.5 items-center justify-between px-0.5 border-input border dynround h-8">
+						<Button
+							size={"icon-xs"}
+							variant={viewMode === "grid" ? "default" : "ghost"}
+							onClick={() => setViewMode("grid")}
+						>
+							<SquaresFourIcon />
+						</Button>
+						<Button
+							size={"icon-xs"}
+							variant={viewMode === "list" ? "default" : "ghost"}
+							onClick={() => setViewMode("list")}
+						>
+							<RowsIcon />
+						</Button>
+					</div>
+				</div>
 				<div className="flex gap-2">
 					<div className="flex items-center gap-2">
 						<Input
@@ -153,72 +350,30 @@ export default function BackupsPage() {
 				<p className="text-sm text-muted-foreground">No agents found.</p>
 			)}
 
-			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-				{visibleAgents.map((agent) => {
-					const status = getAgentStatus(agentStatuses, agent.id);
-					return (
-						<Card key={agent.id}>
-							<CardHeader>
-								<CardTitle className="truncate">{agent.name}</CardTitle>
-								<CardAction>
-									<ConnectionStatus status={status} type="long" />
-								</CardAction>
-							</CardHeader>
-							<CardContent>
-								<div className="space-y-0">
-									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-										<span className="text-xs text-muted-foreground shrink-0">
-											Status
-										</span>
-										<span
-											className="text-xs text-right"
-											style={
-												agent.is_active
-													? { color: "var(--greenish)" }
-													: undefined
-											}
-										>
-											{agent.is_active ? (
-												"Active"
-											) : (
-												<span className="text-destructive">Inactive</span>
-											)}
-										</span>
-									</div>
-									<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-										<span className="text-xs text-muted-foreground shrink-0">
-											Total Size
-										</span>
-										<span className="text-xs text-right font-mono">
-											{formatBytes(agent.total_size_bytes)}
-										</span>
-									</div>
-									{agent.created_by && (
-										<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-											<span className="text-xs text-muted-foreground shrink-0">
-												Created By
-											</span>
-											<span className="text-xs text-right truncate max-w-32">
-												{agent.created_by.name}
-											</span>
-										</div>
-									)}
-								</div>
-							</CardContent>
-							<CardFooter>
-								<Button
-									variant="outline"
-									className="w-full"
-									onClick={() => navigate(`/backups/${agent.id}/jobs`)}
-								>
-									<ArrowRightIcon />
-									View Backups
-								</Button>
-							</CardFooter>
-						</Card>
-					);
-				})}
-			</div>
+			{viewMode === "grid" ? (
+				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+					{visibleAgents.map((agent) => (
+						<AgentCard
+							key={agent.id}
+							agent={agent}
+							status={getAgentStatus(agentStatuses, agent.id)}
+							onNavigate={(id) => navigate(`/backups/${id}/jobs`)}
+						/>
+					))}
+				</div>
+			) : (
+				<div className="flex flex-col gap-2">
+					{visibleAgents.map((agent) => (
+						<AgentRow
+							key={agent.id}
+							agent={agent}
+							status={getAgentStatus(agentStatuses, agent.id)}
+							onNavigate={(id) => navigate(`/backups/${id}/jobs`)}
+						/>
+					))}
+				</div>
+			)}
+
 			{appliedSearch && (
 				<div className="h-4 w-full flex items-center justify-center">
 					<p className="text-xs text-muted-foreground">
