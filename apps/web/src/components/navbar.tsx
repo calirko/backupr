@@ -39,7 +39,7 @@ export default function Navbar() {
 			<div className="h-full flex justify-between items-center">
 				<div className="h-full flex">
 					<div className="h-full flex items-center p-2 border-r">
-						<img src="icon.png" alt="logo" className="h-full" />
+						<img src="/icon.png" alt="logo" className="h-full" />
 					</div>
 					{isMobile ? (
 						<div className="h-full flex items-center px-2">

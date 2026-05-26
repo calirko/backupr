@@ -111,7 +111,7 @@ export default function Data({
 				{showIndex && (
 					<TableCell
 						align="center"
-						className="p-0! w-8 min-h-8 text-xs text-muted-foreground"
+						className="p-0! w-8 min-h-8 min-w-8 text-xs text-muted-foreground"
 					>
 						{data.indexOf(row) + 1}
 					</TableCell>

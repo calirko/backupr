@@ -42,7 +42,9 @@ export function ConnectionStatus({
 		<span className={`cs-wrap cs-${status}${isActive ? " cs-active" : ""}`}>
 			<span className="cs-dot ml-1" />
 			{type === "long" && (
-				<span className="cs-label text-xs">{STATUS_LABEL[status]}</span>
+				<span className="cs-label text-xs font-sans font-semibold!">
+					{STATUS_LABEL[status]}
+				</span>
 			)}
 		</span>
 	);

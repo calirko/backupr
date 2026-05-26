@@ -397,20 +397,20 @@ export default function AgentJobsPage() {
 				filters: encodeURIComponent(JSON.stringify({ agent_id: agentId })),
 			});
 			if (serverOrderBy) {
-				jobsParams.set("orderBy", encodeURIComponent(JSON.stringify(serverOrderBy)));
+				jobsParams.set(
+					"orderBy",
+					encodeURIComponent(JSON.stringify(serverOrderBy)),
+				);
 			}
 			const [agentRes, jobsRes] = await Promise.all([
 				fetch(`/api/agents/${agentId}`, {
 					headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
 				}),
-				fetch(
-					`/api/backup-jobs?${jobsParams}`,
-					{
-						headers: {
-							Authorization: `Bearer ${localStorage.getItem("token")}`,
-						},
+				fetch(`/api/backup-jobs?${jobsParams}`, {
+					headers: {
+						Authorization: `Bearer ${localStorage.getItem("token")}`,
 					},
-				),
+				}),
 			]);
 			if (agentRes.ok) {
 				const a = await agentRes.json();
@@ -470,7 +470,9 @@ export default function AgentJobsPage() {
 	}
 
 	const filteredJobs = appliedSearch
-		? jobs.filter((j) => j.name.toLowerCase().includes(appliedSearch.toLowerCase()))
+		? jobs.filter((j) =>
+				j.name.toLowerCase().includes(appliedSearch.toLowerCase()),
+			)
 		: jobs;
 
 	const visibleJobs =
@@ -531,7 +533,7 @@ export default function AgentJobsPage() {
 					Backups
 				</button>
 				<div className="flex items-center gap-3">
-					<h1 className="text-4xl font-black">{agent?.name ?? "—"}</h1>
+					<h1 className="text-4xl font-heading">{agent?.name ?? "—"}</h1>
 					<span className="mt-0.5">
 						<ConnectionStatus
 							status={getAgentStatus(agentStatuses, agentId ?? "")}

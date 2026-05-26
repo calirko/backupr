@@ -260,7 +260,7 @@ export default function DashboardPage() {
 	return (
 		<>
 			<WikiDialog open={wikiOpen} onClose={() => setWikiOpen(false)} />
-			<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6 pb-6">
+			<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6">
 				<div>
 					<h1 className="text-4xl font-heading">Dashboard</h1>
 					<p className="text-muted-foreground text-sm">
