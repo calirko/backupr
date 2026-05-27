@@ -93,7 +93,7 @@ function Write-Banner {
     Write-Host "${Brand}   /        \/         /         /         /         /         /         /${Reset}"
     Write-Host "${Brand}  /         /         /       --/        _/         /       __/        _/ ${Reset}"
     Write-Host "${Brand}  \________/\___/____/\________/\____/___/\________/\______/  \____/___/  ${Reset}"
-    Write-Host "${Subtle}               Agent Installer & Service Manager${Reset}"
+    Write-Host "${Subtle}  Agent Installer & Service Manager${Reset}"
     # Write-Host ""
 }
 
@@ -539,7 +539,7 @@ function Action-Update {
 function Show-Menu {
     while ($true) {
         Write-Host ""
-        Write-Host "  ${Brand}┌──────────────────────────────┐${Reset}"
+        Write-Host "  ${Brand}┌───────────────────────────────┐${Reset}"
         Write-Host "  ${Brand}│${Reset}  1)  Install service          ${Brand}│${Reset}"
         Write-Host "  ${Brand}│${Reset}  2)  Setup agent code         ${Brand}│${Reset}"
         Write-Host "  ${Brand}│${Reset}  3)  Start service            ${Brand}│${Reset}"
@@ -551,7 +551,7 @@ function Show-Menu {
         Write-Host "  ${Brand}│${Reset}  9)  Update agent             ${Brand}│${Reset}"
         Write-Host "  ${Brand}│${Reset}  10) Toggle VSS               ${Brand}│${Reset}"
         Write-Host "  ${Brand}│${Reset}  Q)  Quit                     ${Brand}│${Reset}"
-        Write-Host "  ${Brand}└──────────────────────────────┘${Reset}"
+        Write-Host "  ${Brand}└───────────────────────────────┘${Reset}"
         Write-Host ""
         $choice = Read-Host "  Choose an option"
 
