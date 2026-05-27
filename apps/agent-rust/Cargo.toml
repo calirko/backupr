@@ -1,6 +1,6 @@
 [package]
 name = "backupr-agent"
-version = "2.1.0"
+version = "2.1.2"
 edition = "2024"
 authors = ["calirko"]
 description = "Backupr backup agent service"

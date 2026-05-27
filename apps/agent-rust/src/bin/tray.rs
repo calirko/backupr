@@ -183,7 +183,7 @@ fn toast(title: &str, body: &str, icon_uri: Option<&str>) {
          [Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom,ContentType=WindowsRuntime]|Out-Null;\
          $a='{{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}}\\WindowsPowerShell\\v1.0\\powershell.exe';\
          $x=New-Object Windows.Data.Xml.Dom.XmlDocument;\
-         $x.LoadXml('<toast><visual><binding template=\"ToastGeneric\">{image_xml}<text>{t}</text><text>{b}</text></binding></visual></toast>');\
+         $x.LoadXml('<toast><visual><binding template=\"ToastGeneric\">{image_xml}<text>{t}</text><text>{b}</text><text placement=\"attribution\">Backupr</text></binding></visual></toast>');\
          $tn=[Windows.UI.Notifications.ToastNotification]::new($x);\
          [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($a).Show($tn)",
     );
