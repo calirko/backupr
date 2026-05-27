@@ -46,10 +46,10 @@ try {
     $null = $k32::SetConsoleMode($h, $m -bor 0x4)   # ENABLE_VIRTUAL_TERMINAL_PROCESSING
 } catch {}
 
-$ESC    = [char]27
-$Brand  = "${ESC}[38;2;17;24;162m"     # #1118A2
-$Subtle = "${ESC}[38;2;100;115;200m"   # lighter tint for dim text
-$Reset  = "${ESC}[0m"
+$ESC   = [char]27
+$Brand = "${ESC}[1m${ESC}[38;2;17;24;162m"   # bold + #1118A2
+$Gray  = "${ESC}[38;2;160;160;160m"           # light gray
+$Reset = "${ESC}[0m"
 
 # Force TLS 1.2+ and TLS 1.3 when available
 $protocols = [Net.SecurityProtocolType]::Tls12
@@ -101,7 +101,7 @@ function Write-Header {
     param([string]$Text)
     Write-Host ""
     Write-Host "  ${Brand}${Text}${Reset}"
-    Write-Host "  ${Subtle}$('─' * $Text.Length)${Reset}"
+    Write-Host "  ${Gray}$('─' * $Text.Length)${Reset}"
 }
 
 function Confirm-Admin {
