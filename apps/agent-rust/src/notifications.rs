@@ -145,48 +145,9 @@ fn send(title: &str, body: &str, kind: Kind) {
 }
 
 #[cfg(windows)]
-fn send(title: &str, body: &str, kind: Kind) {
-    let exe = std::env::current_exe()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned();
-
-    let balloon_kind = match kind {
-        Kind::Info => "Info",
-        Kind::Error => "Error",
-    };
-
-    // Escape single-quoted PowerShell strings by doubling any embedded apostrophes.
-    let esc = |s: &str| s.replace('\'', "''");
-
-    // System.Windows.Forms.NotifyIcon + ShowBalloonTip works on Windows 7+.
-    // Icon is extracted from the agent's own exe so it always shows the correct icon.
-    // Sleep keeps the process alive long enough for the balloon to appear before Dispose().
-    let script = format!(
-        "Add-Type -AssemblyName System.Windows.Forms,System.Drawing;\
-         $n=New-Object System.Windows.Forms.NotifyIcon;\
-         try{{$n.Icon=[System.Drawing.Icon]::ExtractAssociatedIcon('{exe}')}}catch{{$n.Icon=[System.Drawing.SystemIcons]::Information}};\
-         $n.Visible=$true;\
-         $n.ShowBalloonTip(5000,'{title}','{body}','{kind}');\
-         Start-Sleep -Milliseconds 6000;\
-         $n.Visible=$false;\
-         $n.Dispose()",
-        exe = esc(&exe),
-        title = esc(title),
-        body = esc(body),
-        kind = balloon_kind,
-    );
-
-    let _ = std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-WindowStyle",
-            "Hidden",
-            "-Command",
-            &script,
-        ])
-        .status();
+fn send(_title: &str, _body: &str, _kind: Kind) {
+    // The service runs in Session 0 and cannot reach user desktops.
+    // Notifications are delivered by the tray app (src/bin/tray.rs) via IPC.
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]

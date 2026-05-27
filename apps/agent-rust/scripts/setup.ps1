@@ -46,18 +46,21 @@ $Arch = if ($env:PROCESSOR_ARCHITECTURE -eq "AMD64" -or
 
 # --- Constants ----------------------------------------------------------------
 
-$AgentUrl    = "https://github.com/calirko/backupr/releases/latest/download/backupr-agent-$Arch-windows.exe"
-$ServiceName = "backupr-agent"
-$InstallDir  = "C:\ProgramData\backupr"
-$AgentExe    = Join-Path $InstallDir "backupr-agent.exe"
-$ConfigFile  = Join-Path $InstallDir "backupr.conf"
-$WinSwDir    = Join-Path $InstallDir "winsw"
-$WinSwExe    = Join-Path $WinSwDir "winsw.exe"
-$WinSwUrl    = "https://github.com/winsw/winsw/releases/latest/download/WinSW-x64.exe"
-$WinSwConfig = Join-Path $WinSwDir "winsw.xml"
-$SevenZipDir = Join-Path $InstallDir "7zip"
-$SevenZipExe = Join-Path $SevenZipDir "7z.exe"
-$SevenZipUrl = "https://www.7-zip.org/a/7z2409-x64.exe"
+$AgentUrl     = "https://github.com/calirko/backupr/releases/latest/download/backupr-agent-$Arch-windows.exe"
+$TrayUrl      = "https://github.com/calirko/backupr/releases/latest/download/backupr-tray-$Arch-windows.exe"
+$ServiceName  = "backupr-agent"
+$TrayTaskName = "Backupr Agent"
+$InstallDir   = "C:\ProgramData\backupr"
+$AgentExe     = Join-Path $InstallDir "backupr-agent.exe"
+$TrayExe      = Join-Path $InstallDir "backupr-tray.exe"
+$ConfigFile   = Join-Path $InstallDir "backupr.conf"
+$WinSwDir     = Join-Path $InstallDir "winsw"
+$WinSwExe     = Join-Path $WinSwDir "winsw.exe"
+$WinSwUrl     = "https://github.com/winsw/winsw/releases/latest/download/WinSW-x64.exe"
+$WinSwConfig  = Join-Path $WinSwDir "winsw.xml"
+$SevenZipDir  = Join-Path $InstallDir "7zip"
+$SevenZipExe  = Join-Path $SevenZipDir "7z.exe"
+$SevenZipUrl  = "https://www.7-zip.org/a/7z2409-x64.exe"
 
 # --- Helpers ------------------------------------------------------------------
 
@@ -96,8 +99,8 @@ function Write-WinSwConfig {
     $xml = @"
 <service>
   <id>$ServiceName</id>
-  <name>Backupr Agent</name>
-  <description>Backupr backup agent service</description>
+  <name>Backupr Service</name>
+  <description>Backupr backup service (headless, no login required)</description>
   <executable>$AgentExe</executable>
   <workingdirectory>$InstallDir</workingdirectory>
   <startmode>$StartMode</startmode>
@@ -141,6 +144,33 @@ function Ensure-SevenZipPresent {
     Write-Host "  7-Zip installed at $SevenZipDir" -ForegroundColor Green
 }
 
+function Ensure-TrayPresent {
+    $null = New-Item -ItemType Directory -Force -Path $InstallDir
+    Write-Host "  Downloading backupr-tray.exe..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $TrayUrl -OutFile $TrayExe -UseBasicParsing
+    Write-Host "  Tray binary saved to $TrayExe" -ForegroundColor Green
+}
+
+function Register-TrayStartup {
+    # Scheduled task that launches the tray app for every user that logs in.
+    $action    = New-ScheduledTaskAction -Execute $TrayExe
+    $trigger   = New-ScheduledTaskTrigger -AtLogon
+    $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -MultipleInstances IgnoreNew
+    $principal = New-ScheduledTaskPrincipal -GroupId "Users" -RunLevel Limited
+    Register-ScheduledTask -TaskName $TrayTaskName -Action $action -Trigger $trigger `
+        -Settings $settings -Principal $principal `
+        -Description "Backupr tray agent — shows backup status and notifications" `
+        -Force | Out-Null
+    Write-Host "  Tray startup task registered (runs for all users at logon)." -ForegroundColor Green
+}
+
+function Unregister-TrayStartup {
+    if (Get-ScheduledTask -TaskName $TrayTaskName -ErrorAction SilentlyContinue) {
+        Unregister-ScheduledTask -TaskName $TrayTaskName -Confirm:$false
+        Write-Host "  Tray startup task removed." -ForegroundColor Yellow
+    }
+}
+
 function Get-ServiceExists {
     return [bool](Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)
 }
@@ -158,6 +188,7 @@ function Action-Install {
     Ensure-WinSwPresent
     Ensure-AgentPresent
     Ensure-SevenZipPresent
+    Ensure-TrayPresent
     Write-WinSwConfig -StartMode "Manual"
 
     Push-Location $WinSwDir
@@ -168,8 +199,11 @@ function Action-Install {
     }
     if ($LASTEXITCODE -ne 0) { throw "WinSW install failed (exit $LASTEXITCODE)" }
 
+    Register-TrayStartup
+
     Write-Host ""
     Write-Host "  Service installed successfully." -ForegroundColor Green
+    Write-Host "  The tray app (Backupr Agent) will start automatically at each user logon." -ForegroundColor DarkGray
     Write-Host "  Run 'setup' next to configure your agent code, then 'start'." -ForegroundColor Cyan
 }
 
@@ -267,6 +301,7 @@ function Action-Remove {
         Write-Host "  WinSW directory not found; using sc.exe to remove service..." -ForegroundColor Yellow
         sc.exe delete $ServiceName | Out-Null
     }
+    Unregister-TrayStartup
     Write-Host "  Service removed." -ForegroundColor Yellow
     Write-Host "  Files in $InstallDir were left in place. Delete manually if needed." -ForegroundColor DarkGray
 }
@@ -276,9 +311,14 @@ function Action-Status {
 
     Write-Host "  Install dir : $InstallDir"
     Write-Host "  Config file : $(if (Test-Path $ConfigFile) { $ConfigFile } else { '(not found)' })"
-    Write-Host "  Agent binary: $(if (Test-Path $AgentExe) { $AgentExe } else { '(not found)' })"
+    Write-Host "  Service exe : $(if (Test-Path $AgentExe) { $AgentExe } else { '(not found)' })"
+    Write-Host "  Tray exe    : $(if (Test-Path $TrayExe) { $TrayExe } else { '(not found)' })"
     Write-Host "  WinSW       : $(if (Test-Path $WinSwExe) { $WinSwExe } else { '(not found)' })"
     Write-Host "  7-Zip       : $(if (Test-Path $SevenZipExe) { $SevenZipExe } else { '(not found)' })"
+    $trayTask = Get-ScheduledTask -TaskName $TrayTaskName -ErrorAction SilentlyContinue
+    $trayStatus = if ($trayTask) { "registered" } else { "not registered" }
+    $trayColor  = if ($trayTask) { "Green" } else { "DarkGray" }
+    Write-Host "  Tray startup: $trayStatus" -ForegroundColor $trayColor
 
     if (Get-ServiceExists) {
         $svc = Get-Service -Name $ServiceName
@@ -410,7 +450,7 @@ function Action-Update {
     try {
         Write-Host "  Downloading latest backupr-agent.exe..." -ForegroundColor Yellow
         Invoke-WebRequest -Uri $AgentUrl -OutFile $AgentExe -UseBasicParsing
-        Write-Host "  Agent updated at $AgentExe" -ForegroundColor Green
+        Write-Host "  Service binary updated at $AgentExe" -ForegroundColor Green
 
         # Remove backup on success
         if ($backup -and (Test-Path $backup)) {
@@ -425,6 +465,17 @@ function Action-Update {
         }
         if ($wasRunning) { Action-Start }
         return
+    }
+
+    # Tray binary — replace in-place; running instances keep the old copy until next logon.
+    if (Test-Path $TrayExe) {
+        try {
+            Write-Host "  Downloading latest backupr-tray.exe..." -ForegroundColor Yellow
+            Invoke-WebRequest -Uri $TrayUrl -OutFile $TrayExe -UseBasicParsing
+            Write-Host "  Tray binary updated at $TrayExe" -ForegroundColor Green
+        } catch {
+            Write-Warning "Tray download failed (non-fatal): $_"
+        }
     }
 
     if ($wasRunning) {

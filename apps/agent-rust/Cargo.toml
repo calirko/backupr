@@ -1,6 +1,6 @@
 [package]
 name = "backupr-agent"
-version = "2.0.7"
+version = "2.0.8"
 edition = "2024"
 authors = ["calirko"]
 description = "Backupr backup agent service"
@@ -9,6 +9,14 @@ build = "build.rs"
 [[bin]]
 name = "agent"
 path = "src/main.rs"
+
+[[bin]]
+name = "tray"
+path = "src/bin/tray.rs"
+required-features = ["tray"]
+
+[features]
+tray = ["dep:tray-icon", "dep:windows-sys", "dep:image"]
 
 [dependencies]
 tokio = { version = "1.35", features = ["full"] }
@@ -25,6 +33,9 @@ base64 = "0.21"
 hostname = "0.3"
 num_cpus = "1.16"
 regex-lite = "0.1"
+tray-icon = { version = "0.19", optional = true }
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+windows-sys = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"], optional = true }
 
 [build-dependencies]
 winresource = "0.1"

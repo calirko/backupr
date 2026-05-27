@@ -8,12 +8,14 @@ CARGO_TOML="$ROOT/Cargo.toml"
 
 VERSION=$(grep '^version' "$CARGO_TOML" | head -1 | sed 's/.*"\(.*\)"/\1/')
 TAG="v$VERSION"
-TITLE="Backupr Agent v$VERSION"
+TITLE="Backupr v$VERSION"
 
 FILES=(
     "$OUT/backupr-agent-x86_64-windows.exe"
     "$OUT/backupr-agent-i686-windows.exe"
     "$OUT/backupr-agent-x86_64-linux"
+    "$OUT/backupr-tray-x86_64-windows.exe"
+    "$OUT/backupr-tray-i686-windows.exe"
 )
 
 echo "Version : $VERSION"
@@ -39,7 +41,7 @@ fi
 echo "Creating release $TAG..."
 gh release create "$TAG" \
     --title "$TITLE" \
-    --notes "Backupr Agent $TAG" \
+    --notes "Backupr $TAG" \
     "${FILES[@]}"
 
 echo ""

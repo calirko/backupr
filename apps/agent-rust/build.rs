@@ -1,14 +1,34 @@
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        // CARGO_FEATURE_TRAY is set when building with --features tray (the tray binary).
+        // Build each binary separately to get the correct embedded icon per exe.
+        let is_tray = std::env::var("CARGO_FEATURE_TRAY").is_ok();
+
+        let (icon, product_name, description, original_filename) = if is_tray {
+            (
+                "src/assets/icon-agent.ico",
+                "Backupr Agent",
+                "Backupr tray agent",
+                "backupr-tray.exe",
+            )
+        } else {
+            (
+                "src/assets/icon-service.ico",
+                "Backupr Service",
+                "Backupr backup service",
+                "backupr-service.exe",
+            )
+        };
+
         let mut res = winresource::WindowsResource::new();
-        res.set_icon("src/assets/icon.ico");
-        res.set("ProductName", "Backupr Agent");
+        res.set_icon(icon);
+        res.set("ProductName", product_name);
+        res.set("FileDescription", description);
         res.set("CompanyName", "calirko");
-        res.set("FileDescription", "Backupr backup agent service");
-        res.set("ProductVersion", "2.0.7");
-        res.set("FileVersion", "2.0.7");
-        res.set("OriginalFilename", "backupr-agent.exe");
-        res.set("InternalName", "backupr-agent");
+        res.set("ProductVersion", "2.0.8");
+        res.set("FileVersion", "2.0.8");
+        res.set("OriginalFilename", original_filename);
+        res.set("InternalName", original_filename);
         res.set("LegalCopyright", "Created by calirko");
         res.compile().unwrap();
     }

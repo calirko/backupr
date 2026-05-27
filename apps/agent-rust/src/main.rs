@@ -1,12 +1,15 @@
 #![allow(special_module_name)]
 
 mod backup;
+mod ipc;
+mod ipc_server;
 mod lib;
 mod notifications;
 mod setup;
 
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
+use ipc::StatusState;
 use lib::config::{AgentConfig, ConfigManager};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -21,6 +24,17 @@ const RECONNECT_TIMEOUT_MS: u64 = 5000;
 const MAX_RECONNECT_TIMEOUT_MS: u64 = 30000;
 const HEARTBEAT_INTERVAL_MS: u64 = 30000;
 const STATUS_REPORT_INTERVAL_MS: u64 = 15000;
+
+static IPC: std::sync::OnceLock<std::sync::Arc<ipc_server::IpcHandle>> =
+    std::sync::OnceLock::new();
+
+
+fn parse_pct_from_msg(s: &str) -> Option<f32> {
+    s.split_whitespace()
+        .find(|t| t.ends_with('%'))
+        .and_then(|t| t.trim_end_matches('%').parse::<f32>().ok())
+        .map(|p| (p / 100.0).clamp(0.0, 1.0))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -109,6 +123,7 @@ impl BackuprAgent {
         }
 
         let (shutdown, _) = tokio::sync::broadcast::channel(10);
+        let _ = IPC.set(std::sync::Arc::new(ipc_server::IpcHandle::new()));
 
         Ok(Self {
             config,
@@ -144,6 +159,11 @@ impl BackuprAgent {
         }
 
         let mut shutdown_rx = self.shutdown.subscribe();
+
+        if let Some(ipc) = IPC.get() {
+            let ipc = ipc.clone();
+            tokio::spawn(ipc_server::run_ipc_server(ipc));
+        }
 
         loop {
             tokio::select! {
@@ -618,6 +638,10 @@ impl BackuprAgent {
 
         println!("[Agent] Starting backup job {}...", job.id);
         notifications::notify_started();
+        if let Some(ipc) = IPC.get() {
+            ipc.notify_started();
+            ipc.set_status(StatusState::Running { progress: None });
+        }
 
         // Send status update
         Self::send_backup_status(&job.id, "running", None, None, cmd_tx).await;
@@ -633,6 +657,11 @@ impl BackuprAgent {
         let cmd_tx_for_progress = cmd_tx.clone();
         tokio::spawn(async move {
             while let Some(msg) = progress_rx.recv().await {
+                if let Some(ipc) = IPC.get() {
+                    ipc.set_status(StatusState::Running {
+                        progress: parse_pct_from_msg(&msg),
+                    });
+                }
                 {
                     let mut cur = current_job_for_progress.lock().await;
                     if let Some(ref mut j) = *cur {
@@ -664,6 +693,10 @@ impl BackuprAgent {
                             job_clone.id
                         );
                         notifications::notify_finished(size_bytes);
+                        if let Some(ipc) = IPC.get() {
+                            ipc.notify_finished(size_bytes);
+                            ipc.set_status(StatusState::Idle);
+                        }
                         if let Some(ref mut j) = *current {
                             j.status = JobStatus::Completed;
                             j.completed_at = Some(chrono::Utc::now().to_rfc3339());
@@ -680,6 +713,10 @@ impl BackuprAgent {
                     Err(e) => {
                         eprintln!("[Agent] Backup job {} failed: {}", job_clone.id, e);
                         notifications::notify_failed(&e.to_string());
+                        if let Some(ipc) = IPC.get() {
+                            ipc.notify_failed(e.to_string());
+                            ipc.set_status(StatusState::Idle);
+                        }
                         if let Some(ref mut j) = *current {
                             j.status = JobStatus::Failed;
                             j.error = Some(e.to_string());
