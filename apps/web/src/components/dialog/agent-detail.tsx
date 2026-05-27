@@ -22,8 +22,10 @@ import {
 	XSquareIcon,
 	CheckSquareIcon,
 	ArrowsClockwiseIcon,
+	ScrollIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
+import AgentLogsDialog from "./agent-logs";
 import { toast } from "sonner";
 import { Label } from "../ui/label";
 import { useSocket } from "@/hooks/use-socket";
@@ -80,6 +82,7 @@ export default function AgentDetailDialog({
 	const [loading, setLoading] = useState(false);
 	const [revoking, setRevoking] = useState<string | null>(null);
 	const [updatingAgent, setUpdatingAgent] = useState(false);
+	const [logsOpen, setLogsOpen] = useState(false);
 
 	function resolveConnectionStatus(): AgentConnectionStatus {
 		const status = agentStatuses.find((s) => s.agentId === agentId);
@@ -326,6 +329,19 @@ export default function AgentDetailDialog({
 												variant="outline"
 												size="sm"
 												disabled={
+													connectionStatus === "disconnected" ||
+													connectionStatus === "none" ||
+													connectionStatus === "stale"
+												}
+												onClick={() => setLogsOpen(true)}
+											>
+												<ScrollIcon />
+												View Logs
+											</Button>
+											<Button
+												variant="outline"
+												size="sm"
+												disabled={
 													updatingAgent ||
 													connectionStatus === "disconnected" ||
 													connectionStatus === "none" ||
@@ -441,8 +457,14 @@ export default function AgentDetailDialog({
 		</div>
 	);
 
-	if (isMobile) {
-		return (
+	return (
+		<>
+			<AgentLogsDialog
+				open={logsOpen}
+				agentId={agentId}
+				onClose={() => setLogsOpen(false)}
+			/>
+			{isMobile ? (
 			<Drawer open={open} onOpenChange={onClose}>
 				<DrawerContent>
 					<DrawerHeader>
@@ -471,35 +493,34 @@ export default function AgentDetailDialog({
 					</DrawerFooter>
 				</DrawerContent>
 			</Drawer>
-		);
-	}
-
-	return (
-		<Dialog open={open} onOpenChange={onClose}>
-			<DialogContent className="max-w-2xl! max-h-[90vh] overflow-y-auto">
-				<DialogHeader>
-					<DialogTitle className="flex items-center gap-3">
-						Agent Details
-						<ConnectionStatus status={connectionStatus} type="long" />
-					</DialogTitle>
-					<DialogDescription>
-						View agent information, sessions, and pending codes
-					</DialogDescription>
-				</DialogHeader>
-				{loading ? (
-					<p className="text-muted-foreground">Loading...</p>
-				) : (
-					content
-				)}
-				<DialogFooter>
-					<DialogClose asChild>
-						<Button variant="outline">
-							<XSquareIcon />
-							Close
-						</Button>
-					</DialogClose>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+		) : (
+			<Dialog open={open} onOpenChange={onClose}>
+				<DialogContent className="max-w-2xl! max-h-[90vh] overflow-y-auto">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-3">
+							Agent Details
+							<ConnectionStatus status={connectionStatus} type="long" />
+						</DialogTitle>
+						<DialogDescription>
+							View agent information, sessions, and pending codes
+						</DialogDescription>
+					</DialogHeader>
+					{loading ? (
+						<p className="text-muted-foreground">Loading...</p>
+					) : (
+						content
+					)}
+					<DialogFooter>
+						<DialogClose asChild>
+							<Button variant="outline">
+								<XSquareIcon />
+								Close
+							</Button>
+						</DialogClose>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		)}
+		</>
 	);
 }

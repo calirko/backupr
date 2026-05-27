@@ -25,8 +25,8 @@ fn main() {
         res.set("ProductName", product_name);
         res.set("FileDescription", description);
         res.set("CompanyName", "calirko");
-        res.set("ProductVersion", "2.1.0");
-        res.set("FileVersion", "2.1.0");
+        res.set("ProductVersion", "2.0.9");
+        res.set("FileVersion", "2.0.9");
         res.set("OriginalFilename", original_filename);
         res.set("InternalName", original_filename);
         res.set("LegalCopyright", "Created by calirko");

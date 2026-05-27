@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma";
 import { rateLimit } from "../lib/rate-limit";
 import { presignedDownloadUrl, presignedPutUrl } from "../lib/storage";
 import { Token } from "../lib/token";
-import { agentRegistry } from "../ws.agent";
+import { agentRegistry, sendToAgent } from "../ws.agent";
 
 const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
@@ -529,6 +529,19 @@ export default async function agentRoutes(app: Hono) {
 			`[agent/session] Info refreshed for session ${session.id} (agent ${session.agent_id})`,
 		);
 		return c.json({ message: "Session info updated" });
+	});
+
+	// Fetch agent log files
+	app.get("/api/agents/:id/logs", rateLimit, auth, async (c) => {
+		const id = c.req.param("id");
+
+		try {
+			const response = await sendToAgent(id, { type: "get_logs" }, 15000) as { content?: string };
+			return c.json({ content: response.content ?? "" });
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			return c.json({ error: msg }, 503);
+		}
 	});
 
 	// Trigger agent auto-update

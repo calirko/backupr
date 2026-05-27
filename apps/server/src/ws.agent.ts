@@ -369,7 +369,8 @@ export default upgradeWebSocket((c) => {
 					break;
 				}
 
-				case "dry_run_result": {
+				case "dry_run_result":
+				case "logs_data": {
 					const requestId = message.requestId as string;
 					const resolver = pendingRequests.get(requestId);
 					if (resolver) {

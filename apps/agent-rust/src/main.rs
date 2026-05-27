@@ -1,5 +1,12 @@
 #![allow(special_module_name)]
 
+/// Like `println!` but prepends a UTC timestamp to every line.
+macro_rules! raccoon {
+    ($($arg:tt)*) => {
+        println!("[{}] {}", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S"), format_args!($($arg)*))
+    };
+}
+
 mod backup;
 mod ipc;
 mod ipc_server;
@@ -103,6 +110,8 @@ enum ServerMessage {
     Error { message: String },
     #[serde(rename = "update")]
     Update,
+    #[serde(rename = "get_logs")]
+    GetLogs { requestId: String },
 }
 
 struct BackuprAgent {
@@ -141,7 +150,7 @@ impl BackuprAgent {
         let shutdown_tx = self.shutdown.clone();
         tokio::spawn(async move {
             tokio::signal::ctrl_c().await.ok();
-            println!("\n[Agent] Shutting down gracefully...");
+            raccoon!("\n[Agent] Shutting down gracefully...");
             let _ = shutdown_tx.send(());
         });
 
@@ -154,7 +163,7 @@ impl BackuprAgent {
                 let mut sigterm =
                     signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
                 sigterm.recv().await;
-                println!("\n[Agent] Received SIGTERM, shutting down...");
+                raccoon!("\n[Agent] Received SIGTERM, shutting down...");
                 let _ = shutdown_tx2.send(());
             });
         }
@@ -179,7 +188,7 @@ impl BackuprAgent {
                     }
                 }
                 _ = shutdown_rx.recv() => {
-                    println!("[Agent] Received shutdown signal");
+                    raccoon!("[Agent] Received shutdown signal");
                     break;
                 }
             }
@@ -195,7 +204,7 @@ impl BackuprAgent {
             let jitter_ms = rand::random::<u64>() % 1000;
             let delay_ms = backoff_ms + jitter_ms;
 
-            println!(
+            raccoon!(
                 "[Agent] Reconnecting in {}ms (attempt {})...",
                 delay_ms,
                 reconnect_attempts + 1
@@ -205,13 +214,13 @@ impl BackuprAgent {
             tokio::select! {
                 _ = sleep(Duration::from_millis(delay_ms)) => {}
                 _ = shutdown_rx.recv() => {
-                    println!("[Agent] Received shutdown signal during backoff");
+                    raccoon!("[Agent] Received shutdown signal during backoff");
                     break;
                 }
             }
         }
 
-        println!("[Agent] Shutdown complete");
+        raccoon!("[Agent] Shutdown complete");
         std::process::exit(0);
     }
 
@@ -232,10 +241,10 @@ impl BackuprAgent {
             self.config.agent_token.as_ref().unwrap()
         );
 
-        println!("[Agent] Connecting to {}...", ws_url);
+        raccoon!("[Agent] Connecting to {}...", ws_url);
 
         let (ws_stream, _) = connect_async(&ws_url).await?;
-        println!("\x1b[32m[Agent] Connected and authenticated.\x1b[0m");
+        raccoon!("\x1b[32m[Agent] Connected and authenticated.\x1b[0m");
 
         let (mut write, mut read) = ws_stream.split();
 
@@ -340,7 +349,7 @@ impl BackuprAgent {
                                 }
                             }
                             Some(Ok(Message::Close(_))) => {
-                                println!("[Agent] Connection closed by server");
+                                raccoon!("[Agent] Connection closed by server");
                                 break;
                             }
                             Some(Err(e)) => {
@@ -383,7 +392,7 @@ impl BackuprAgent {
         // Signal shutdown to all tasks
         let _ = shutdown_tx.send(());
 
-        println!("[Agent] Connection closed");
+        raccoon!("[Agent] Connection closed");
         Ok(())
     }
 
@@ -403,7 +412,7 @@ impl BackuprAgent {
             }
             ServerMessage::Pong => {}
             ServerMessage::Connected { sessionId } => {
-                println!(
+                raccoon!(
                     "[Agent] Server acknowledged connection (session: {})",
                     sessionId
                 );
@@ -416,7 +425,7 @@ impl BackuprAgent {
                 // The server will also auto-detect stuck IN_PROGRESS records on
                 // reconnect, but this gives it the exact backup_id immediately.
                 if let Some(stale) = backup::read_stale_lockfile() {
-                    println!(
+                    raccoon!(
                         "[Agent] Stale lockfile found – backup {} was interrupted, reporting to server",
                         stale.backup_id
                     );
@@ -438,7 +447,7 @@ impl BackuprAgent {
                 });
             }
             ServerMessage::StartBackup { backupJob } => {
-                println!("[Agent] Received start_backup command: {:?}", backupJob);
+                raccoon!("[Agent] Received start_backup command: {:?}", backupJob);
                 let job_state = BackupJobState {
                     id: backupJob.id,
                     job_id: backupJob.job_id,
@@ -462,7 +471,7 @@ impl BackuprAgent {
                 Self::handle_dry_run(requestId, files, compression_level, cmd_tx).await?;
             }
             ServerMessage::Update => {
-                println!("[Agent] Received update command from server");
+                raccoon!("[Agent] Received update command from server");
                 // Acknowledge receipt immediately so the UI gets feedback before
                 // the potentially long download + restart sequence begins.
                 let ack = serde_json::json!({"type": "update_ack", "status": "acknowledged"});
@@ -472,6 +481,16 @@ impl BackuprAgent {
                         eprintln!("[Update] Update failed: {}", e);
                     }
                 });
+            }
+            ServerMessage::GetLogs { requestId } => {
+                raccoon!("[Agent] Received get_logs request (id: {})", requestId);
+                let content = update::read_agent_logs();
+                let resp = serde_json::json!({
+                    "type": "logs_data",
+                    "requestId": requestId,
+                    "content": content,
+                });
+                let _ = cmd_tx.send(Message::Text(resp.to_string())).await;
             }
             ServerMessage::Error { message } => {
                 if message == "Invalid token" {
@@ -497,7 +516,7 @@ impl BackuprAgent {
     ) -> Result<()> {
         use std::fs;
 
-        println!(
+        raccoon!(
             "[Agent] Received dry_run request ({}) for {} path(s): {:?}",
             request_id,
             paths.len(),
@@ -588,7 +607,7 @@ impl BackuprAgent {
                 result.error = Some("Path does not exist".to_string());
             }
 
-            println!(
+            raccoon!(
                 "[Agent] dry_run path \"{}\": exists={} readable={} type={} size={}B{}",
                 result.path,
                 result.exists,
@@ -624,7 +643,7 @@ impl BackuprAgent {
             "path_results": path_results,
         });
 
-        println!(
+        raccoon!(
             "[Agent] Sending dry_run_result ({}): {}/{} paths reachable, storage_required={}B",
             request_id,
             reachable.len(),
@@ -644,7 +663,7 @@ impl BackuprAgent {
         cmd_tx: &tokio::sync::mpsc::Sender<Message>,
     ) {
         job_queue.lock().await.push_back(job.clone());
-        println!(
+        raccoon!(
             "[Agent] Backup job {} queued. Queue length: {}",
             job.id,
             job_queue.lock().await.len()
@@ -675,7 +694,7 @@ impl BackuprAgent {
         drop(current);
         drop(queue);
 
-        println!("[Agent] Starting backup job {}...", job.id);
+        raccoon!("[Agent] Starting backup job {}...", job.id);
         notifications::notify_started();
         if let Some(ipc) = IPC.get() {
             ipc.notify_started();
@@ -727,7 +746,7 @@ impl BackuprAgent {
                 let mut current = current_job_clone.lock().await;
                 match result {
                     Ok(size_bytes) => {
-                        println!(
+                        raccoon!(
                             "[Agent] Backup job {} completed successfully.",
                             job_clone.id
                         );
@@ -811,7 +830,7 @@ impl BackuprAgent {
         });
 
         let _ = cmd_tx.send(Message::Text(msg.to_string())).await;
-        println!("[Agent] Sent backup status: {} = {}", backup_id, status);
+        raccoon!("[Agent] Sent backup status: {} = {}", backup_id, status);
     }
 
     async fn build_status_report(
@@ -842,7 +861,22 @@ async fn main() -> Result<()> {
         }
         setup::run_setup(&args[2]).await?;
         Ok(())
+    } else if args.len() > 1 && args[1] == "apply-update" {
+        // Invoked by run_update() as a helper process.
+        // Usage: agent apply-update <service> <agent_new_path> [<tray_new_path>]
+        if args.len() < 4 {
+            eprintln!(
+                "[apply-update] Usage: agent apply-update <service> <agent_new_path> [<tray_new_path>]"
+            );
+            std::process::exit(1);
+        }
+        let service = args[2].as_str();
+        let agent_tmp = std::path::Path::new(args[3].as_str());
+        let tray_tmp_buf: Option<std::path::PathBuf> = args.get(4).map(std::path::PathBuf::from);
+        let tray_tmp = tray_tmp_buf.as_deref();
+        update::run_apply_update_helper(service, agent_tmp, tray_tmp)
     } else {
+        update::cleanup_stale_artifacts();
         let agent = BackuprAgent::new().await?;
         agent.start().await
     }

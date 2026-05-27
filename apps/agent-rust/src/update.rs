@@ -1,11 +1,20 @@
 //! Auto-update for the Backupr agent.
 //!
-//! # Update flow (`run_update`)
-//! 1. Fetch latest release metadata from the GitHub releases API.
-//! 2. Compare the `tag_name` against `CARGO_PKG_VERSION`.
-//! 3. If newer: download the matching binary asset(s) into the exe directory.
-//! 4. Atomically swap files on disk (rename old → `<name>.bak`, new → original).
-//! 5. Spawn the new process with the same arguments, then exit.
+//! # Update flow
+//! 1. `run_update()` — called when the server sends an "update" command:
+//!    a. Fetches the latest GitHub release metadata.
+//!    b. Downloads new binaries to `<dir>/<asset>.new` files.
+//!    c. **Windows**: spawns `agent apply-update` as an independent helper
+//!       process and returns (does NOT exit — lets WinSW stop the service).
+//!    d. **Linux**: replaces binaries in-place and restarts the process.
+//!
+//! 2. `run_apply_update_helper()` — entry point for the `apply-update`
+//!    subcommand (a short-lived helper process, Windows only):
+//!    a. Stops the WinSW service (`sc stop`).
+//!    b. Kills all tray processes (for every logged-in user).
+//!    c. Atomically swaps the downloaded `.new` binaries into place.
+//!    d. Starts the WinSW service (`sc start`).
+//!    e. Exits.
 //!
 //! # Session info refresh (`refresh_session_info`)
 //! Called on every WS reconnect so the dashboard always shows current
@@ -13,12 +22,18 @@
 
 use anyhow::{Result, anyhow};
 use serde::Deserialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::lib::config::AgentConfig;
 
+static UPDATE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
 const GITHUB_API_LATEST: &str = "https://api.github.com/repos/calirko/backupr/releases/latest";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Service name as registered by setup.ps1 (`$ServiceName = "backupr-agent"`).
+#[cfg(target_os = "windows")]
+const WINSW_SERVICE_NAME: &str = "backupr-agent";
 
 // ─── GitHub API types ─────────────────────────────────────────────────────────
 
@@ -79,8 +94,14 @@ fn tray_asset_name() -> Option<&'static str> {
 }
 
 /// Local filename of the installed tray binary (sits next to the agent exe).
-fn tray_local_filename() -> String {
-    format!("tray{}", std::env::consts::EXE_SUFFIX)
+///
+/// Must match `$TrayExe` in setup.ps1 (`backupr-tray.exe`).
+pub fn tray_local_filename() -> &'static str {
+    #[cfg(target_os = "windows")]
+    let name = "backupr-tray.exe"; // matches setup.ps1 $TrayExe
+    #[cfg(not(target_os = "windows"))]
+    let name = "tray";
+    name
 }
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
@@ -93,7 +114,7 @@ fn http_client() -> Result<reqwest::Client> {
 }
 
 async fn download_file(client: &reqwest::Client, url: &str, dest: &Path) -> Result<()> {
-    println!("[Update] Downloading {} ...", url);
+    raccoon!("[Update] Downloading {} ...", url);
     let resp = client.get(url).send().await?;
     let status = resp.status();
     if !status.is_success() {
@@ -110,7 +131,7 @@ async fn download_file(client: &reqwest::Client, url: &str, dest: &Path) -> Resu
             .map_err(|e| anyhow!("Cannot chmod {}: {}", dest.display(), e))?;
     }
 
-    println!("[Update] Saved {} bytes → {}", bytes.len(), dest.display());
+    raccoon!("[Update] Saved {} bytes → {}", bytes.len(), dest.display());
     Ok(())
 }
 
@@ -157,19 +178,49 @@ fn replace_binary(target: &Path, replacement: &Path) -> Result<()> {
     Ok(())
 }
 
+// ─── Startup cleanup ──────────────────────────────────────────────────────────
+
+/// Removes leftover `.bak` files from a previous self-update.
+/// Called at agent startup: the old process has already exited by then,
+/// so Windows releases the file handle and deletion succeeds.
+pub fn cleanup_stale_artifacts() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let Some(dir) = exe.parent() else { return };
+    let Some(name) = exe.file_name() else { return };
+
+    // <agent>.bak  (e.g. backupr-agent.exe.bak)
+    let agent_bak = exe.with_file_name(format!("{}.bak", name.to_string_lossy()));
+    if agent_bak.exists() {
+        if std::fs::remove_file(&agent_bak).is_ok() {
+            raccoon!("[Update] Removed stale backup: {}", agent_bak.display());
+        }
+    }
+
+    // <tray>.bak  (e.g. tray.exe.bak)
+    let tray_bak = dir.join(format!("{}.bak", tray_local_filename()));
+    if tray_bak.exists() {
+        if std::fs::remove_file(&tray_bak).is_ok() {
+            raccoon!("[Update] Removed stale backup: {}", tray_bak.display());
+        }
+    }
+}
+
 // ─── Self-restart ─────────────────────────────────────────────────────────────
 
 /// Spawns the binary at `exe_path` (already replaced on disk) with the same
 /// CLI arguments, then calls `std::process::exit(0)`.
 ///
 /// This function never returns on success.
+#[cfg(not(target_os = "windows"))]
 fn restart_self(exe_path: &Path) -> Result<()> {
-    println!("[Update] Spawning updated process: {}", exe_path.display());
+    raccoon!("[Update] Spawning updated process: {}", exe_path.display());
     std::process::Command::new(exe_path)
         .args(std::env::args().skip(1))
         .spawn()
         .map_err(|e| anyhow!("Failed to spawn updated agent: {}", e))?;
-    println!("[Update] Update complete — exiting old process.");
+    raccoon!("[Update] Update complete — exiting old process.");
     std::process::exit(0);
 }
 
@@ -262,6 +313,35 @@ fn build_system_info() -> serde_json::Value {
     })
 }
 
+// ─── Log reading ─────────────────────────────────────────────────────────────
+
+/// Reads all WinSW log files from the agent's directory and returns their
+/// combined content, with a header line identifying each file.
+pub fn read_agent_logs() -> String {
+    let Ok(exe) = std::env::current_exe() else {
+        return "Could not resolve agent directory.".to_string();
+    };
+    let Some(dir) = exe.parent() else {
+        return "Could not resolve agent directory.".to_string();
+    };
+
+    const LOG_FILES: &[&str] = &["winsw.out.log", "winsw.err.log", "winsw.wrapper.log"];
+    let mut out = String::new();
+
+    for name in LOG_FILES {
+        let path = dir.join(name);
+        out.push_str(&format!("=== {} ===\n", name));
+        match std::fs::read_to_string(&path) {
+            Ok(content) if content.is_empty() => out.push_str("(empty)\n"),
+            Ok(content) => out.push_str(&content),
+            Err(e) => out.push_str(&format!("(could not read: {})\n", e)),
+        }
+        out.push('\n');
+    }
+
+    out
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /// POSTs current system info to the server so the dashboard always shows
@@ -292,17 +372,41 @@ pub async fn refresh_session_info(config: &AgentConfig) -> Result<()> {
         anyhow::bail!("Session info refresh returned {}: {}", status, body);
     }
 
-    println!("[Update] Session info refreshed (v{}).", CURRENT_VERSION);
+    raccoon!("[Update] Session info refreshed (v{}).", CURRENT_VERSION);
     Ok(())
 }
 
-/// Checks GitHub for a newer release, downloads the matching binaries,
-/// atomically replaces the current ones on disk, then spawns the new
-/// process and exits.
+/// Checks GitHub for a newer release and downloads the new binaries.
 ///
-/// Returns `Ok(())` **without restarting** when already on the latest version.
+/// **Windows**: spawns an `apply-update` helper process that stops the WinSW
+/// service, swaps the binaries, and restarts the service — then returns so
+/// WinSW can stop this process cleanly.
+///
+/// **Linux**: replaces binaries in-place and restarts the process directly.
+///
+/// Returns `Ok(())` without doing anything if already on the latest version.
 pub async fn run_update() -> Result<()> {
-    println!(
+    if UPDATE_IN_PROGRESS.swap(true, Ordering::SeqCst) {
+        raccoon!("[Update] Update already in progress — ignoring duplicate request.");
+        return Ok(());
+    }
+
+    let result = run_update_inner().await;
+
+    // Release the lock on any outcome that didn't actually kick off an update
+    // (already up to date, network error, download failure, etc.) so that a
+    // future command or retry can proceed.  When an update *is* in flight the
+    // process is about to be stopped/restarted, so we intentionally leave the
+    // lock set.
+    if result.is_err() {
+        UPDATE_IN_PROGRESS.store(false, Ordering::SeqCst);
+    }
+
+    result
+}
+
+async fn run_update_inner() -> Result<()> {
+    raccoon!(
         "[Update] Checking for updates (current: v{}) ...",
         CURRENT_VERSION
     );
@@ -330,12 +434,13 @@ pub async fn run_update() -> Result<()> {
         .ok_or_else(|| anyhow!("Cannot parse release tag '{}'", release.tag_name))?;
 
     if latest <= current {
-        println!("[Update] Already up to date (v{}).", CURRENT_VERSION);
+        raccoon!("[Update] Already up to date (v{}).", CURRENT_VERSION);
+        UPDATE_IN_PROGRESS.store(false, Ordering::SeqCst);
         return Ok(());
     }
 
-    println!(
-        "[Update] New version available: v{} → v{}",
+    raccoon!(
+        "[Update] New version available: v{} \u{2192} v{}",
         CURRENT_VERSION, latest_str
     );
 
@@ -346,33 +451,27 @@ pub async fn run_update() -> Result<()> {
         .parent()
         .ok_or_else(|| anyhow!("Exe has no parent directory: {}", exe_path.display()))?;
 
-    // 4. Update the tray binary (Windows only — skip silently on other platforms
-    //    or when the release doesn't include a tray asset).
-    if let Some(asset_name) = tray_asset_name() {
+    // 4. Download tray asset (Windows only).
+    let tray_tmp: Option<PathBuf> = if let Some(asset_name) = tray_asset_name() {
         match release.assets.iter().find(|a| a.name == asset_name) {
             Some(asset) => {
-                let tray_path = exe_dir.join(tray_local_filename());
-                let tmp_path = exe_dir.join(format!("{}.new", asset_name));
-                download_file(&client, &asset.browser_download_url, &tmp_path).await?;
-                if tray_path.exists() {
-                    replace_binary(&tray_path, &tmp_path)?;
-                } else {
-                    // Running headlessly — place the tray binary for future use.
-                    std::fs::rename(&tmp_path, &tray_path)
-                        .map_err(|e| anyhow!("Cannot place tray binary: {}", e))?;
-                }
-                println!("[Update] Tray binary updated.");
+                let tmp = exe_dir.join(format!("{}.new", asset_name));
+                download_file(&client, &asset.browser_download_url, &tmp).await?;
+                Some(tmp)
             }
             None => {
-                println!(
+                raccoon!(
                     "[Update] Warning: tray asset '{}' not in this release; skipping.",
                     asset_name
                 );
+                None
             }
         }
-    }
+    } else {
+        None
+    };
 
-    // 5. Download and swap the agent binary (do this last since we exit right after).
+    // 5. Download agent asset.
     let asset_name = agent_asset_name();
     let agent_asset = release
         .assets
@@ -385,12 +484,133 @@ pub async fn run_update() -> Result<()> {
                 release.tag_name
             )
         })?;
-
     let agent_tmp = exe_dir.join(format!("{}.new", asset_name));
     download_file(&client, &agent_asset.browser_download_url, &agent_tmp).await?;
-    replace_binary(&exe_path, &agent_tmp)?;
-    println!("[Update] Agent binary updated.");
 
-    // 6. Spawn the updated process and exit — does not return on success.
-    restart_self(&exe_path)
+    // 6. Platform-specific apply step.
+    #[cfg(target_os = "windows")]
+    {
+        // Spawn an independent helper process that will stop the WinSW service,
+        // swap the binaries, then restart the service.  We return here so that
+        // WinSW can receive the stop signal and shut us down gracefully instead
+        // of killing us abruptly with std::process::exit.
+        let mut helper_args = vec![
+            "apply-update".to_string(),
+            WINSW_SERVICE_NAME.to_string(),
+            agent_tmp.to_string_lossy().to_string(),
+        ];
+        if let Some(ref t) = tray_tmp {
+            helper_args.push(t.to_string_lossy().to_string());
+        }
+        // Break the helper out of the WinSW Job Object so it survives when
+        // WinSW terminates the service process tree in response to `sc stop`.
+        // CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+        // CREATE_NEW_PROCESS_GROUP  = 0x00000200
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+        std::process::Command::new(&exe_path)
+            .args(&helper_args)
+            .creation_flags(CREATE_BREAKAWAY_FROM_JOB | CREATE_NEW_PROCESS_GROUP)
+            .spawn()
+            .map_err(|e| anyhow!("Failed to spawn apply-update helper: {}", e))?;
+        raccoon!("[Update] Apply-update helper spawned — service will restart shortly.");
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Linux: replace in-place and restart.
+        if let Some(ref t) = tray_tmp {
+            let tray_path = exe_dir.join(tray_local_filename());
+            replace_binary(&tray_path, t)?;
+        }
+        replace_binary(&exe_path, &agent_tmp)?;
+        restart_self(&exe_path)
+    }
+}
+
+// ─── Apply-update helper (Windows) ───────────────────────────────────────────
+
+/// Entry point for the `apply-update` subcommand.
+///
+/// This runs as a **separate process** (spawned by `run_update`) so that it
+/// can stop the WinSW-managed service, replace the binaries, and start the
+/// service again — without being the process that WinSW is tracking.
+///
+/// `service`   — WinSW service name (e.g. `"backupr-agent"`)
+/// `agent_tmp` — path to the downloaded `.new` agent binary
+/// `tray_tmp`  — path to the downloaded `.new` tray binary (optional)
+pub fn run_apply_update_helper(
+    service: &str,
+    agent_tmp: &Path,
+    tray_tmp: Option<&Path>,
+) -> Result<()> {
+    raccoon!("[apply-update] Helper starting (service: {}).", service);
+
+    // ── 1. Stop the WinSW service ─────────────────────────────────────────
+    // `sc stop` blocks until the service has stopped, so by the time it
+    // returns the agent process has exited and its file handles are released.
+    raccoon!("[apply-update] Stopping service '{}'...", service);
+    let stop_ok = std::process::Command::new("sc")
+        .args(["stop", service])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if stop_ok {
+        raccoon!("[apply-update] Service stopped.");
+    } else {
+        // May already be stopped (e.g. manual run / dev mode) — continue.
+        raccoon!("[apply-update] Service stop returned non-zero (may already be stopped).");
+    }
+
+    // Extra safety margin for handle release.
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    // ── 2. Kill tray processes (all logged-in users) ──────────────────────
+    raccoon!("[apply-update] Killing tray processes...");
+    let _ = std::process::Command::new("taskkill")
+        .args(["/F", "/IM", tray_local_filename(), "/T"])
+        .output();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // ── 3. Replace agent binary ───────────────────────────────────────────
+    // current_exe() is this helper process = the OLD backupr-agent.exe.
+    // Renaming a running EXE is allowed on Windows (OS holds it by handle).
+    let exe_path =
+        std::env::current_exe().map_err(|e| anyhow!("Cannot resolve exe path: {}", e))?;
+    replace_binary(&exe_path, agent_tmp)?;
+    // The helper is still running from the old binary (now .bak).
+    // cleanup_stale_artifacts() on the next agent startup will remove it.
+    raccoon!("[apply-update] Agent binary replaced.");
+
+    // ── 4. Replace tray binary ────────────────────────────────────────────
+    if let Some(tray_tmp_path) = tray_tmp {
+        let exe_dir = exe_path
+            .parent()
+            .ok_or_else(|| anyhow!("Exe has no parent directory"))?;
+        let tray_dest = exe_dir.join(tray_local_filename());
+        replace_binary(&tray_dest, tray_tmp_path)?;
+        // Tray process was killed in step 2, so .bak can be deleted now.
+        let tray_bak = exe_dir.join(format!("{}.bak", tray_local_filename()));
+        let _ = std::fs::remove_file(&tray_bak);
+        raccoon!("[apply-update] Tray binary replaced.");
+    }
+
+    // ── 5. Start the service ──────────────────────────────────────────────
+    raccoon!("[apply-update] Starting service '{}'...", service);
+    let start_out = std::process::Command::new("sc")
+        .args(["start", service])
+        .output()
+        .map_err(|e| anyhow!("Failed to run 'sc start': {}", e))?;
+    if start_out.status.success() {
+        raccoon!("[apply-update] Service started.");
+    } else {
+        let msg = String::from_utf8_lossy(&start_out.stdout);
+        raccoon!("[apply-update] 'sc start' output: {}", msg.trim());
+    }
+
+    raccoon!("[apply-update] Done. Exiting helper.");
+    Ok(())
 }

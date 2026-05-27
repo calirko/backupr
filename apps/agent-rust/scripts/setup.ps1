@@ -29,6 +29,28 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $global:LASTEXITCODE = 0
 
+# --- Console: UTF-8 + TrueColor (ANSI VT processing) -------------------------
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+try { $null = chcp 65001 } catch {}
+
+try {
+    $sig = '
+        [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n);
+        [DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr h, out uint m);
+        [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
+    '
+    $k32 = Add-Type -MemberDefinition $sig -Name 'K32VT' -Namespace '' -PassThru -ErrorAction Stop
+    $h   = $k32::GetStdHandle(-11)
+    $m   = [uint32]0
+    $null = $k32::GetConsoleMode($h, [ref]$m)
+    $null = $k32::SetConsoleMode($h, $m -bor 0x4)   # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+} catch {}
+
+$ESC    = [char]27
+$Brand  = "${ESC}[38;2;17;24;162m"     # #1118A2
+$Subtle = "${ESC}[38;2;100;115;200m"   # lighter tint for dim text
+$Reset  = "${ESC}[0m"
+
 # Force TLS 1.2+ and TLS 1.3 when available
 $protocols = [Net.SecurityProtocolType]::Tls12
 $tls13 = [Net.SecurityProtocolType].GetField('Tls13')
@@ -64,11 +86,23 @@ $SevenZipUrl  = "https://www.7-zip.org/a/7z2409-x64.exe"
 
 # --- Helpers ------------------------------------------------------------------
 
+function Write-Banner {
+    Write-Host ""
+    Write-Host "${Brand}  ██████╗  █████╗  ██████╗██╗  ██╗██╗   ██╗██████╗ ██████╗ ${Reset}"
+    Write-Host "${Brand}  ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝██║   ██║██╔══██╗██╔══██╗${Reset}"
+    Write-Host "${Brand}  ██████╔╝███████║██║     █████╔╝ ██║   ██║██████╔╝██████╔╝${Reset}"
+    Write-Host "${Brand}  ██╔══██╗██╔══██║██║     ██╔═██╗ ██║   ██║██╔═══╝ ██╔══██╗${Reset}"
+    Write-Host "${Brand}  ██████╔╝██║  ██║╚██████╗██║  ██╗╚██████╔╝██║     ██║  ██╗${Reset}"
+    Write-Host "${Brand}  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝  ╚═╝${Reset}"
+    Write-Host "${Subtle}  Agent Installer & Service Manager${Reset}"
+    Write-Host ""
+}
+
 function Write-Header {
     param([string]$Text)
     Write-Host ""
-    Write-Host "  $Text" -ForegroundColor Cyan
-    Write-Host ("  " + "-" * $Text.Length) -ForegroundColor DarkCyan
+    Write-Host "  ${Brand}${Text}${Reset}"
+    Write-Host "  ${Subtle}$('─' * $Text.Length)${Reset}"
 }
 
 function Confirm-Admin {
@@ -506,21 +540,19 @@ function Action-Update {
 function Show-Menu {
     while ($true) {
         Write-Host ""
-        Write-Host "  +------------------------------+" -ForegroundColor Cyan
-        Write-Host "  |   Backupr Agent Manager      |" -ForegroundColor Cyan
-        Write-Host "  +------------------------------+" -ForegroundColor Cyan
-        Write-Host "  |  1) Install service          |"
-        Write-Host "  |  2) Setup agent code         |"
-        Write-Host "  |  3) Start service            |"
-        Write-Host "  |  4) Stop service             |"
-        Write-Host "  |  5) Restart service          |"
-        Write-Host "  |  6) Remove service           |"
-        Write-Host "  |  7) Status                   |"
-        Write-Host "  |  8) View logs                |"
-        Write-Host "  |  9) Update agent             |"
-        Write-Host "  | 10) Toggle VSS               |"
-        Write-Host "  |  Q) Quit                     |"
-        Write-Host "  +------------------------------+" -ForegroundColor Cyan
+        Write-Host "  ${Brand}┌──────────────────────────────┐${Reset}"
+        Write-Host "  ${Brand}│${Reset}  1)  Install service          ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  2)  Setup agent code         ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  3)  Start service            ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  4)  Stop service             ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  5)  Restart service          ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  6)  Remove service           ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  7)  Status                   ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  8)  View logs                ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  9)  Update agent             ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  10) Toggle VSS               ${Brand}│${Reset}"
+        Write-Host "  ${Brand}│${Reset}  Q)  Quit                     ${Brand}│${Reset}"
+        Write-Host "  ${Brand}└──────────────────────────────┘${Reset}"
         Write-Host ""
         $choice = Read-Host "  Choose an option"
 
@@ -544,6 +576,7 @@ function Show-Menu {
 # --- Entry point --------------------------------------------------------------
 
 Confirm-Admin
+Write-Banner
 
 switch ($Action.ToLower()) {
     "install" { Action-Install }

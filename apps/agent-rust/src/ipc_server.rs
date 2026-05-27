@@ -3,7 +3,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
-use crate::ipc::{IpcMessage, NotifyEvent, StatusState, IPC_PORT};
+use crate::ipc::{IPC_PORT, IpcMessage, NotifyEvent, StatusState};
 
 pub struct IpcHandle {
     pub tx: broadcast::Sender<IpcMessage>,
@@ -49,11 +49,40 @@ impl IpcHandle {
 
 pub async fn run_ipc_server(handle: std::sync::Arc<IpcHandle>) {
     let addr = format!("127.0.0.1:{}", IPC_PORT);
-    let listener = match TcpListener::bind(&addr).await {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("[IPC] Failed to bind {}: {}", addr, e);
-            return;
+
+    // Retry binding — during a self-update the old process may still hold
+    // the port for a brief moment after it spawns the new one.
+    let listener = {
+        const MAX_ATTEMPTS: u32 = 20;
+        const RETRY_MS: u64 = 250;
+        let mut last_err: Option<std::io::Error> = None;
+        let mut bound = None;
+        for attempt in 0..MAX_ATTEMPTS {
+            match TcpListener::bind(&addr).await {
+                Ok(l) => {
+                    bound = Some(l);
+                    break;
+                }
+                Err(e) => {
+                    if attempt == 0 {
+                        eprintln!("[IPC] Port {} in use, retrying...", addr);
+                    }
+                    last_err = Some(e);
+                    tokio::time::sleep(tokio::time::Duration::from_millis(RETRY_MS)).await;
+                }
+            }
+        }
+        match bound {
+            Some(l) => l,
+            None => {
+                eprintln!(
+                    "[IPC] Could not bind {} after {} attempts: {}",
+                    addr,
+                    MAX_ATTEMPTS,
+                    last_err.unwrap()
+                );
+                return;
+            }
         }
     };
     println!("[IPC] Tray server listening on {}", addr);
@@ -67,7 +96,8 @@ pub async fn run_ipc_server(handle: std::sync::Arc<IpcHandle>) {
 
                 tokio::spawn(async move {
                     // Send current state immediately so the tray shows the right status on connect.
-                    if let Ok(line) = serde_json::to_string(&IpcMessage::Status { state: initial }) {
+                    if let Ok(line) = serde_json::to_string(&IpcMessage::Status { state: initial })
+                    {
                         if stream.write_all((line + "\n").as_bytes()).await.is_err() {
                             return;
                         }
