@@ -71,7 +71,8 @@ $Arch = if ($env:PROCESSOR_ARCHITECTURE -eq "AMD64" -or
 $AgentUrl     = "https://github.com/calirko/backupr/releases/latest/download/backupr-agent-$Arch-windows.exe"
 $TrayUrl      = "https://github.com/calirko/backupr/releases/latest/download/backupr-tray-$Arch-windows.exe"
 $ServiceName  = "backupr-agent"
-$TrayTaskName = "Backupr Agent"
+$TrayRunKey  = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+$TrayRunName = "BackuprTray"
 $InstallDir   = "C:\ProgramData\backupr"
 $AgentExe     = Join-Path $InstallDir "backupr-agent.exe"
 $TrayExe      = Join-Path $InstallDir "backupr-tray.exe"
@@ -186,16 +187,10 @@ function Ensure-TrayPresent {
 }
 
 function Register-TrayStartup {
-    # Scheduled task that launches the tray app for every user that logs in.
-    $action    = New-ScheduledTaskAction -Execute $TrayExe
-    $trigger   = New-ScheduledTaskTrigger -AtLogon
-    $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -MultipleInstances IgnoreNew
-    $principal = New-ScheduledTaskPrincipal -GroupId "Users" -RunLevel Limited
-    Register-ScheduledTask -TaskName $TrayTaskName -Action $action -Trigger $trigger `
-        -Settings $settings -Principal $principal `
-        -Description "Backupr Tray" `
-        -Force | Out-Null
-    Write-Host "  Tray startup task registered (runs for all users at logon)." -ForegroundColor Green
+    # HKLM\Run fires in every user's interactive desktop session at logon —
+    # more reliable than a scheduled task with GroupId for GUI/tray apps.
+    Set-ItemProperty -Path $TrayRunKey -Name $TrayRunName -Value "`"$TrayExe`"" -Type String
+    Write-Host "  Tray registered in HKLM Run (launches for all users at logon)." -ForegroundColor Green
 }
 
 function Stop-TrayProcess {
@@ -208,10 +203,13 @@ function Stop-TrayProcess {
 }
 
 function Unregister-TrayStartup {
-    if (Get-ScheduledTask -TaskName $TrayTaskName -ErrorAction SilentlyContinue) {
-        Unregister-ScheduledTask -TaskName $TrayTaskName -Confirm:$false
-        Write-Host "  Tray startup task removed." -ForegroundColor Yellow
+    Remove-ItemProperty -Path $TrayRunKey -Name $TrayRunName -ErrorAction SilentlyContinue
+    # Also clean up any legacy scheduled task left by older installs.
+    $legacyTask = "Backupr Agent"
+    if (Get-ScheduledTask -TaskName $legacyTask -ErrorAction SilentlyContinue) {
+        Unregister-ScheduledTask -TaskName $legacyTask -Confirm:$false
     }
+    Write-Host "  Tray removed from startup." -ForegroundColor Yellow
 }
 
 function Get-ServiceExists {
@@ -359,9 +357,9 @@ function Action-Status {
     Write-Host "  Tray exe    : $(if (Test-Path $TrayExe) { $TrayExe } else { '(not found)' })"
     Write-Host "  WinSW       : $(if (Test-Path $WinSwExe) { $WinSwExe } else { '(not found)' })"
     Write-Host "  7-Zip       : $(if (Test-Path $SevenZipExe) { $SevenZipExe } else { '(not found)' })"
-    $trayTask = Get-ScheduledTask -TaskName $TrayTaskName -ErrorAction SilentlyContinue
-    $trayStatus = if ($trayTask) { "registered" } else { "not registered" }
-    $trayColor  = if ($trayTask) { "Green" } else { "DarkGray" }
+    $trayRun    = Get-ItemProperty -Path $TrayRunKey -Name $TrayRunName -ErrorAction SilentlyContinue
+    $trayStatus = if ($trayRun) { "registered (HKLM Run)" } else { "not registered" }
+    $trayColor  = if ($trayRun) { "Green" } else { "DarkGray" }
     Write-Host "  Tray startup: $trayStatus" -ForegroundColor $trayColor
 
     if (Get-ServiceExists) {
