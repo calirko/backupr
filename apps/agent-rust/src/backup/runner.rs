@@ -645,6 +645,42 @@ fn safe_delete_dir(path: &Path) {
     std::fs::remove_dir_all(path).ok();
 }
 
+// ─── Orphan cleanup ─────────────────────────────────────────────────────────────
+// When the agent is killed mid-backup the 7z child process keeps running.
+// Call this whenever a stale lockfile is detected to ensure 7z isn't still
+// chewing through disk/CPU before we report the failure to the server.
+
+pub fn kill_orphan_7z() {
+    #[cfg(target_os = "windows")]
+    {
+        // /F force-kills, /T terminates the whole process tree.
+        match std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "7z.exe", "/T"])
+            .output()
+        {
+            Ok(o) if o.status.success() => {
+                println!("[Backup] Killed orphaned 7z.exe process(es).");
+            }
+            _ => {} // nothing running — fine
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // 7z on Linux can be named 7z, 7za, or 7zz depending on the package.
+        for name in ["7z", "7za", "7zz"] {
+            if let Ok(out) = std::process::Command::new("pkill")
+                .args(["-x", name])
+                .output()
+            {
+                if out.status.success() {
+                    println!("[Backup] Killed orphaned {} process(es).", name);
+                }
+            }
+        }
+    }
+}
+
 // ─── Lockfile ─────────────────────────────────────────────────────────────────
 // Written when a backup job starts; removed when it ends. If the agent is
 // killed mid-job the file remains, and on the next startup the agent reads it

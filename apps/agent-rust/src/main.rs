@@ -251,7 +251,6 @@ impl BackuprAgent {
             loop {
                 tokio::select! {
                     _ = heartbeat_timer.tick() => {
-                        println!("[Agent] Sending heartbeat...");
                         let msg = serde_json::json!({"type": "ping"});
                         if heartbeat_tx
                             .send(Message::Text(msg.to_string()))
@@ -287,7 +286,7 @@ impl BackuprAgent {
                         if status_tx.send(Message::Text(status)).await.is_err() {
                             break;
                         }
-                        println!("[Agent] Sent status report");
+
                     }
                     _ = shutdown_rx_status.recv() => {
                         break;
@@ -402,14 +401,17 @@ impl BackuprAgent {
                 let pong = serde_json::json!({"type": "pong"});
                 cmd_tx.send(Message::Text(pong.to_string())).await?;
             }
-            ServerMessage::Pong => {
-                println!("[Agent] Received pong from server.");
-            }
+            ServerMessage::Pong => {}
             ServerMessage::Connected { sessionId } => {
                 println!(
                     "[Agent] Server acknowledged connection (session: {})",
                     sessionId
                 );
+                // If the agent was killed mid-backup, 7z may still be running.
+                // Kill it before reporting the stale lockfile so it isn't left
+                // chewing CPU/disk while we mark the backup as failed.
+                backup::kill_orphan_7z();
+
                 // Report any stale lockfile left over from an interrupted backup.
                 // The server will also auto-detect stuck IN_PROGRESS records on
                 // reconnect, but this gives it the exact backup_id immediately.

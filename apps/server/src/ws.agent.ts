@@ -1,4 +1,4 @@
-import { upgradeWebSocket } from "hono/bun";
+import { upgradeWebSocket, getConnInfo } from "hono/bun";
 import { handleBackupStatusUpdate } from "./backup";
 import { prisma } from "./lib/prisma";
 import { BackupStatus } from "../prisma/generated/prisma/enums";
@@ -208,8 +208,9 @@ export default upgradeWebSocket((c) => {
 			});
 
 			const clientIp =
-				c.req.header("x-real-ip") ||
-				c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+				c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+				c.req.header("x-real-ip") ??
+				getConnInfo(c).remote.address ??
 				"unknown";
 			const existingInfo = (session.info as Record<string, unknown>) ?? {};
 			await db.agentSession.update({
