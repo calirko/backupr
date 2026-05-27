@@ -528,6 +528,14 @@ function Action-Update {
         Write-Host "  Service was not running; skipping restart." -ForegroundColor DarkGray
     }
 
+    # Migrate from legacy scheduled-task startup to HKLM Run (idempotent).
+    $legacyTask = "Backupr Agent"
+    if (Get-ScheduledTask -TaskName $legacyTask -ErrorAction SilentlyContinue) {
+        Write-Host "  Removing legacy scheduled task '$legacyTask'..." -ForegroundColor Yellow
+        Unregister-ScheduledTask -TaskName $legacyTask -Confirm:$false
+    }
+    Register-TrayStartup
+
     Write-Host ""
     Write-Host "  Update complete. Config files were not modified." -ForegroundColor Green
 }

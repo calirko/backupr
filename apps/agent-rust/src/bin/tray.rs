@@ -58,13 +58,27 @@ fn ipc_loop(tx: mpsc::Sender<TrayEvent>) {
 
 const LABEL_UNAVAILABLE: &str = "Backupr \u{00b7} Service unavailable";
 
+const ICON_PNG: &[u8] = include_bytes!("../assets/icon-agent.png");
+
 fn load_icon() -> tray_icon::Icon {
-    let bytes = include_bytes!("../assets/icon-agent.png");
-    let img = image::load_from_memory(bytes)
+    let img = image::load_from_memory(ICON_PNG)
         .expect("Failed to decode icon-agent.png")
         .into_rgba8();
     let (w, h) = img.dimensions();
     tray_icon::Icon::from_rgba(img.into_raw(), w, h).expect("Failed to create tray icon")
+}
+
+/// Write the embedded PNG next to the exe so toast notifications can reference it by path.
+/// Returns the file:/// URI string, or None if writing fails.
+fn extract_icon_to_disk() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    let path = exe.parent()?.join("icon-agent.png");
+    if !path.exists() {
+        std::fs::write(&path, ICON_PNG).ok()?;
+    }
+    // Convert to forward-slash file URI: file:///C:/ProgramData/backupr/icon-agent.png
+    let s = path.to_string_lossy().replace('\\', "/");
+    Some(format!("file:///{s}"))
 }
 
 fn run_tray(rx: mpsc::Receiver<TrayEvent>) {
@@ -73,6 +87,7 @@ fn run_tray(rx: mpsc::Receiver<TrayEvent>) {
     };
 
     let icon = load_icon();
+    let icon_uri = extract_icon_to_disk();
     let status_item = MenuItem::new(LABEL_UNAVAILABLE, false, None);
     let menu = Menu::new();
     menu.append(&status_item).unwrap();
@@ -112,7 +127,7 @@ fn run_tray(rx: mpsc::Receiver<TrayEvent>) {
                         status_item.set_text(label.as_str());
                     }
                     TrayEvent::Msg(IpcMessage::Notify { event }) => {
-                        fire_notification(&event);
+                        fire_notification(&event, icon_uri.as_deref());
                     }
                     TrayEvent::Disconnected => {
                         let _ = tray.set_tooltip(Some(LABEL_UNAVAILABLE));
@@ -130,7 +145,7 @@ fn run_tray(rx: mpsc::Receiver<TrayEvent>) {
 // Notifications — WinRT toasts via PowerShell (user session, works here)
 // ---------------------------------------------------------------------------
 
-fn fire_notification(event: &NotifyEvent) {
+fn fire_notification(event: &NotifyEvent, icon_uri: Option<&str>) {
     let pt = is_pt();
     let body = match event {
         NotifyEvent::Started => {
@@ -146,21 +161,29 @@ fn fire_notification(event: &NotifyEvent) {
             if pt { format!("Backup falhou: {msg}") } else { format!("Backup failed: {msg}") }
         }
     };
-    toast("Backupr", &body);
+    toast("Backupr", &body, icon_uri);
 }
 
-fn toast(title: &str, body: &str) {
+fn toast(title: &str, body: &str, icon_uri: Option<&str>) {
     let ps_esc = |s: &str| s.replace('\'', "''");
     let xml_esc = |s: &str| {
         s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
     };
     let t = ps_esc(&xml_esc(title));
     let b = ps_esc(&xml_esc(body));
+    
+    let image_xml = if let Some(uri) = icon_uri {
+        format!(r#"<image placement="appLogoOverride" src="{}" />"#, uri)
+    } else {
+        String::new()
+    };
+    
     let script = format!(
         "[Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime]|Out-Null;\
+         [Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom,ContentType=WindowsRuntime]|Out-Null;\
          $a='{{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}}\\WindowsPowerShell\\v1.0\\powershell.exe';\
          $x=New-Object Windows.Data.Xml.Dom.XmlDocument;\
-         $x.LoadXml('<toast><visual><binding template=\"ToastGeneric\"><text>{t}</text><text>{b}</text></binding></visual></toast>');\
+         $x.LoadXml('<toast><visual><binding template=\"ToastGeneric\">{image_xml}<text>{t}</text><text>{b}</text></binding></visual></toast>');\
          $tn=[Windows.UI.Notifications.ToastNotification]::new($x);\
          [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($a).Show($tn)",
     );
