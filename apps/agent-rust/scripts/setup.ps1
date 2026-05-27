@@ -145,6 +145,7 @@ function Ensure-SevenZipPresent {
 }
 
 function Ensure-TrayPresent {
+    Stop-TrayProcess
     $null = New-Item -ItemType Directory -Force -Path $InstallDir
     Write-Host "  Downloading backupr-tray.exe..." -ForegroundColor Yellow
     Invoke-WebRequest -Uri $TrayUrl -OutFile $TrayExe -UseBasicParsing
@@ -162,6 +163,15 @@ function Register-TrayStartup {
         -Description "Backupr Tray" `
         -Force | Out-Null
     Write-Host "  Tray startup task registered (runs for all users at logon)." -ForegroundColor Green
+}
+
+function Stop-TrayProcess {
+    $procs = Get-Process -Name "backupr-tray" -ErrorAction SilentlyContinue
+    if ($procs) {
+        Write-Host "  Stopping running tray process(es)..." -ForegroundColor Yellow
+        $procs | Stop-Process -Force
+        Start-Sleep -Milliseconds 500
+    }
 }
 
 function Unregister-TrayStartup {
@@ -302,6 +312,7 @@ function Action-Remove {
         sc.exe delete $ServiceName | Out-Null
     }
     Unregister-TrayStartup
+    Stop-TrayProcess
     Write-Host "  Service removed." -ForegroundColor Yellow
     Write-Host "  Files in $InstallDir were left in place. Delete manually if needed." -ForegroundColor DarkGray
 }
@@ -467,14 +478,15 @@ function Action-Update {
         return
     }
 
-    # Tray binary — replace in-place; running instances keep the old copy until next logon.
+    # Tray binary — kill any running instance first so the file is not locked.
     if (Test-Path $TrayExe) {
+        Stop-TrayProcess
         try {
             Write-Host "  Downloading latest backupr-tray.exe..." -ForegroundColor Yellow
             Invoke-WebRequest -Uri $TrayUrl -OutFile $TrayExe -UseBasicParsing
             Write-Host "  Tray binary updated at $TrayExe" -ForegroundColor Green
         } catch {
-            Write-Warning "Tray download failed (non-fatal): $_"
+            Write-Warning "Tray download failed: $_"
         }
     }
 
