@@ -23,34 +23,45 @@ export default async function agentRoutes(app: Hono) {
 		});
 		if (!session) return c.json({ error: "Invalid agent token" }, 401);
 
-		let json: { backup_job_id?: string; backup_id?: string; requires_password?: boolean };
+		let json: {
+			backup_job_id?: string;
+			backup_id?: string;
+			requires_password?: boolean;
+		};
 		try {
 			json = await c.req.json();
 		} catch {
 			return c.json({ error: "Invalid JSON" }, 400);
 		}
 
-		const { backup_job_id: backupJobId, backup_id: backupId, requires_password: requiresPassword = false } = json;
+		const {
+			backup_job_id: backupJobId,
+			backup_id: backupId,
+			requires_password: requiresPassword = false,
+		} = json;
 		if (!backupJobId) return c.json({ error: "backup_job_id required" }, 400);
 
 		const job = await db.backupJob.findFirst({
 			where: { id: backupJobId, agent_id: session.agent_id, deleted_at: null },
 		});
-		if (!job) return c.json({ error: "Backup job not found for this agent" }, 404);
+		if (!job)
+			return c.json({ error: "Backup job not found for this agent" }, 404);
 
 		let backupRecord: { id: string };
 		if (backupId) {
 			const existing = await db.backup.findFirst({
 				where: { id: backupId, backup_job_id: backupJobId },
 			});
-			backupRecord = existing ?? (await db.backup.create({
-				data: {
-					backup_job_id: backupJobId,
-					status: "IN_PROGRESS",
-					requires_password: requiresPassword,
-					started_at: new Date(),
-				},
-			}));
+			backupRecord =
+				existing ??
+				(await db.backup.create({
+					data: {
+						backup_job_id: backupJobId,
+						status: "IN_PROGRESS",
+						requires_password: requiresPassword,
+						started_at: new Date(),
+					},
+				}));
 		} else {
 			backupRecord = await db.backup.create({
 				data: {
@@ -65,7 +76,9 @@ export default async function agentRoutes(app: Hono) {
 		const key = `${session.agent_id}/${backupJobId}/${backupRecord.id}`;
 		const upload_url = await presignedPutUrl(key, 3600);
 
-		console.log(`[agent/upload] Prepared backup ${backupRecord.id} for direct upload`);
+		console.log(
+			`[agent/upload] Prepared backup ${backupRecord.id} for direct upload`,
+		);
 
 		return c.json({ backup_id: backupRecord.id, blob_key: key, upload_url });
 	});
@@ -82,25 +95,42 @@ export default async function agentRoutes(app: Hono) {
 		});
 		if (!session) return c.json({ error: "Invalid agent token" }, 401);
 
-		let json: { backup_id?: string; backup_job_id?: string; blob_key?: string; size_bytes?: number };
+		let json: {
+			backup_id?: string;
+			backup_job_id?: string;
+			blob_key?: string;
+			size_bytes?: number;
+		};
 		try {
 			json = await c.req.json();
 		} catch {
 			return c.json({ error: "Invalid JSON" }, 400);
 		}
 
-		const { backup_id: backupId, backup_job_id: backupJobId, blob_key: key, size_bytes: sizeBytes } = json;
+		const {
+			backup_id: backupId,
+			backup_job_id: backupJobId,
+			blob_key: key,
+			size_bytes: sizeBytes,
+		} = json;
 		if (!backupId || !backupJobId || !key) {
-			return c.json({ error: "backup_id, backup_job_id, and blob_key are required" }, 400);
+			return c.json(
+				{ error: "backup_id, backup_job_id, and blob_key are required" },
+				400,
+			);
 		}
 
 		const job = await db.backupJob.findFirst({
 			where: { id: backupJobId, agent_id: session.agent_id, deleted_at: null },
 		});
-		if (!job) return c.json({ error: "Backup job not found for this agent" }, 404);
+		if (!job)
+			return c.json({ error: "Backup job not found for this agent" }, 404);
 
 		const dateStr = new Date().toISOString().slice(0, 16).replace(/:/g, "-");
-		const safeName = job.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+		const safeName = job.name
+			.toLowerCase()
+			.replace(/\s+/g, "_")
+			.replace(/[^a-z0-9_]/g, "");
 		const filename = `${safeName}_${dateStr}.7z`;
 		const url = await presignedDownloadUrl(key, undefined, filename);
 
@@ -115,7 +145,9 @@ export default async function agentRoutes(app: Hono) {
 			},
 		});
 
-		console.log(`[agent/upload] Backup ${backupId} completed (${sizeBytes ?? "??"} bytes)`);
+		console.log(
+			`[agent/upload] Backup ${backupId} completed (${sizeBytes ?? "??"} bytes)`,
+		);
 
 		return c.json({
 			backup_id: backupId,
@@ -462,6 +494,60 @@ export default async function agentRoutes(app: Hono) {
 			return c.json({ message: "Session revoked" });
 		},
 	);
+
+	// Agent refreshes its own session info (version, hostname, RAM, disk, etc.).
+	// Called on every reconnect and after a self-update so the dashboard stays
+	// current without needing a full re-pair.
+	app.patch("/api/agent/session/info", rateLimit, async (c) => {
+		const token =
+			c.req.header("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+		if (!token) return c.json({ error: "Missing Authorization header" }, 401);
+
+		const session = await db.agentSession.findUnique({
+			where: { token },
+			include: { agent: true },
+		});
+		if (!session) return c.json({ error: "Invalid agent token" }, 401);
+
+		let json: { info?: Record<string, unknown> };
+		try {
+			json = await c.req.json();
+		} catch {
+			return c.json({ error: "Invalid JSON" }, 400);
+		}
+		if (!json.info) return c.json({ error: "info is required" }, 400);
+
+		// Merge new fields into the existing info so nothing is lost.
+		const existing = (session.info as Record<string, unknown>) ?? {};
+		const merged = { ...existing, ...json.info };
+		await db.agentSession.update({
+			where: { id: session.id },
+			data: { info: merged as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+		});
+
+		console.log(
+			`[agent/session] Info refreshed for session ${session.id} (agent ${session.agent_id})`,
+		);
+		return c.json({ message: "Session info updated" });
+	});
+
+	// Trigger agent auto-update
+	app.post("/api/agents/:id/update", rateLimit, auth, async (c) => {
+		const id = c.req.param("id");
+
+		const state = agentRegistry.get(id);
+		if (!state || state.status !== "online") {
+			return c.json({ error: "Agent is not online" }, 409);
+		}
+
+		try {
+			state.websocket.send(JSON.stringify({ type: "update" }));
+			console.log(`[agent/update] Sent update command to agent ${id}`);
+			return c.json({ message: "Update command sent" });
+		} catch (err) {
+			return c.json({ error: "Failed to send update command" }, 500);
+		}
+	});
 
 	// Delete Agent
 	app.delete("/api/agents/:id", rateLimit, auth, async (c) => {

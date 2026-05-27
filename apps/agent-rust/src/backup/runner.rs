@@ -1,5 +1,6 @@
 use anyhow::Result;
 use futures_util::StreamExt;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::AsyncReadExt;
@@ -322,7 +323,11 @@ fn shadow_resolve_path(
 
 // ─── Staging ──────────────────────────────────────────────────────────────────
 
-async fn stage_files(files: &[String], stage_dir: &Path, _progress_tx: &tokio::sync::mpsc::Sender<String>) -> Result<Vec<PathBuf>> {
+async fn stage_files(
+    files: &[String],
+    stage_dir: &Path,
+    _progress_tx: &tokio::sync::mpsc::Sender<String>,
+) -> Result<Vec<PathBuf>> {
     tokio::fs::create_dir_all(stage_dir).await?;
     let mut staged = Vec::new();
 
@@ -333,7 +338,8 @@ async fn stage_files(files: &[String], stage_dir: &Path, _progress_tx: &tokio::s
         let mut map: HashMap<String, String> = HashMap::new();
         let mut shadow_devices: Vec<String> = Vec::new();
 
-        let vss_enabled = ConfigManager::load().await
+        let vss_enabled = ConfigManager::load()
+            .await
             .map(|c| c.vss_enabled.unwrap_or(true))
             .unwrap_or(true);
 
@@ -492,7 +498,9 @@ async fn upload_backup_archive(
         return Err(anyhow::anyhow!("Upload prepare failed: {}", text));
     }
 
-    let prepare: serde_json::Value = prepare_resp.json().await
+    let prepare: serde_json::Value = prepare_resp
+        .json()
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to parse prepare response: {}", e))?;
 
     let upload_url = prepare["upload_url"]
@@ -534,8 +542,14 @@ async fn upload_backup_archive(
         let start = std::time::Instant::now();
         let progress_stream = raw_stream.inspect(move |chunk| {
             if let Ok(bytes) = chunk {
-                let done = uploaded_clone.fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed) + bytes.len() as u64;
-                let pct = if total > 0 { ((done * 100) / total).min(99) as i32 } else { 0 };
+                let done = uploaded_clone
+                    .fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed)
+                    + bytes.len() as u64;
+                let pct = if total > 0 {
+                    ((done * 100) / total).min(99) as i32
+                } else {
+                    0
+                };
                 if pct > last_pct_clone.load(std::sync::atomic::Ordering::Relaxed) {
                     last_pct_clone.store(pct, std::sync::atomic::Ordering::Relaxed);
                     let elapsed = start.elapsed().as_secs_f64().max(0.001);
@@ -558,7 +572,10 @@ async fn upload_backup_archive(
                 let status = response.status();
                 if status.is_success() {
                     let _ = progress_tx.try_send("Uploading 100%".to_string());
-                    println!("[Backup] Direct upload successful on attempt {}/3", attempt + 1);
+                    println!(
+                        "[Backup] Direct upload successful on attempt {}/3",
+                        attempt + 1
+                    );
                     upload_err = None;
                     break;
                 } else {
@@ -611,7 +628,10 @@ async fn upload_backup_archive(
         return Err(anyhow::anyhow!("Upload complete failed: {}", text));
     }
 
-    println!("[Backup] Backup {} recorded as completed", confirmed_backup_id);
+    println!(
+        "[Backup] Backup {} recorded as completed",
+        confirmed_backup_id
+    );
     Ok(())
 }
 
@@ -623,6 +643,52 @@ fn safe_delete_file(path: &Path) {
 
 fn safe_delete_dir(path: &Path) {
     std::fs::remove_dir_all(path).ok();
+}
+
+// ─── Lockfile ─────────────────────────────────────────────────────────────────
+// Written when a backup job starts; removed when it ends. If the agent is
+// killed mid-job the file remains, and on the next startup the agent reads it
+// to report the interrupted backup to the server.
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LockfileData {
+    pub backup_id: String,
+    pub job_id: String,
+}
+
+fn lockfile_path() -> PathBuf {
+    // Store next to the executable so it survives reboots, just like backupr.conf.
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("backupr_job.lock")))
+        .unwrap_or_else(|| PathBuf::from("backupr_job.lock"))
+}
+
+fn write_lockfile(backup_id: &str, job_id: &str) {
+    let data = LockfileData {
+        backup_id: backup_id.to_string(),
+        job_id: job_id.to_string(),
+    };
+    if let Ok(json) = serde_json::to_string(&data) {
+        if let Err(e) = std::fs::write(lockfile_path(), json) {
+            eprintln!("[Backup] Warning: could not write lockfile: {}", e);
+        }
+    }
+}
+
+pub fn remove_lockfile() {
+    std::fs::remove_file(lockfile_path()).ok();
+}
+
+/// Returns `Some(data)` if a stale lockfile from a previous interrupted backup
+/// exists, or `None` if the agent exited cleanly last time.
+pub fn read_stale_lockfile() -> Option<LockfileData> {
+    let path = lockfile_path();
+    if !path.exists() {
+        return None;
+    }
+    let raw = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&raw).ok()
 }
 
 // ─── Public Entry Point ───────────────────────────────────────────────────────
@@ -649,6 +715,9 @@ pub async fn run_backup_job(
         p.set_extension("7z");
         p
     };
+
+    write_lockfile(&job.id, &job.job_id);
+    println!("[Backup] Lockfile written for backup {}", job.id);
 
     let result = async {
         println!(
@@ -700,8 +769,7 @@ pub async fn run_backup_job(
 
         let _ = progress_tx.try_send("Uploading 0%".to_string());
         let start_upload = std::time::Instant::now();
-        upload_backup_archive(&archive_path, &job.id, &job.job_id, progress_tx.clone())
-        .await?;
+        upload_backup_archive(&archive_path, &job.id, &job.job_id, progress_tx.clone()).await?;
 
         let upload_sec = start_upload.elapsed().as_secs_f64();
         println!(
@@ -717,6 +785,7 @@ pub async fn run_backup_job(
     // Always clean up
     safe_delete_dir(&stage_dir);
     safe_delete_file(&archive_path);
+    remove_lockfile();
 
     result
 }

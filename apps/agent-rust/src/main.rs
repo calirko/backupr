@@ -6,6 +6,7 @@ mod ipc_server;
 mod lib;
 mod notifications;
 mod setup;
+mod update;
 
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
@@ -25,9 +26,7 @@ const MAX_RECONNECT_TIMEOUT_MS: u64 = 30000;
 const HEARTBEAT_INTERVAL_MS: u64 = 30000;
 const STATUS_REPORT_INTERVAL_MS: u64 = 15000;
 
-static IPC: std::sync::OnceLock<std::sync::Arc<ipc_server::IpcHandle>> =
-    std::sync::OnceLock::new();
-
+static IPC: std::sync::OnceLock<std::sync::Arc<ipc_server::IpcHandle>> = std::sync::OnceLock::new();
 
 fn parse_pct_from_msg(s: &str) -> Option<f32> {
     s.split_whitespace()
@@ -102,6 +101,8 @@ enum ServerMessage {
     },
     #[serde(rename = "error")]
     Error { message: String },
+    #[serde(rename = "update")]
+    Update,
 }
 
 struct BackuprAgent {
@@ -389,7 +390,7 @@ impl BackuprAgent {
 
     async fn handle_message(
         text: &str,
-        _config: &AgentConfig,
+        config: &AgentConfig,
         job_queue: &Arc<Mutex<VecDeque<BackupJobState>>>,
         current_job: &Arc<Mutex<Option<BackupJobState>>>,
         cmd_tx: &tokio::sync::mpsc::Sender<Message>,
@@ -409,6 +410,30 @@ impl BackuprAgent {
                     "[Agent] Server acknowledged connection (session: {})",
                     sessionId
                 );
+                // Report any stale lockfile left over from an interrupted backup.
+                // The server will also auto-detect stuck IN_PROGRESS records on
+                // reconnect, but this gives it the exact backup_id immediately.
+                if let Some(stale) = backup::read_stale_lockfile() {
+                    println!(
+                        "[Agent] Stale lockfile found – backup {} was interrupted, reporting to server",
+                        stale.backup_id
+                    );
+                    let msg = serde_json::json!({
+                        "type": "stale_backup",
+                        "backupId": stale.backup_id,
+                        "jobId": stale.job_id
+                    });
+                    let _ = cmd_tx.send(Message::Text(msg.to_string())).await;
+                    backup::remove_lockfile();
+                }
+                // Refresh session info on the server (version, hostname, RAM, disk …).
+                // Fire-and-forget — a failure here is non-fatal.
+                let cfg = config.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = update::refresh_session_info(&cfg).await {
+                        eprintln!("[Agent] Warning: could not refresh session info: {}", e);
+                    }
+                });
             }
             ServerMessage::StartBackup { backupJob } => {
                 println!("[Agent] Received start_backup command: {:?}", backupJob);
@@ -433,6 +458,18 @@ impl BackuprAgent {
                 compression_level,
             } => {
                 Self::handle_dry_run(requestId, files, compression_level, cmd_tx).await?;
+            }
+            ServerMessage::Update => {
+                println!("[Agent] Received update command from server");
+                // Acknowledge receipt immediately so the UI gets feedback before
+                // the potentially long download + restart sequence begins.
+                let ack = serde_json::json!({"type": "update_ack", "status": "acknowledged"});
+                let _ = cmd_tx.send(Message::Text(ack.to_string())).await;
+                tokio::spawn(async move {
+                    if let Err(e) = update::run_update().await {
+                        eprintln!("[Update] Update failed: {}", e);
+                    }
+                });
             }
             ServerMessage::Error { message } => {
                 if message == "Invalid token" {

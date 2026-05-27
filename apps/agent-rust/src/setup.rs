@@ -115,12 +115,22 @@ pub async fn run_setup(agent_code: &str) -> Result<()> {
         anyhow::bail!("[Setup] Server returned {}: {}", status, error_msg);
     }
 
-    let pair_response: Value = serde_json::from_str(body_text.trim())
-        .map_err(|e| anyhow::anyhow!("[Setup] Failed to parse server response (body: {}): {}", body_text, e))?;
+    let pair_response: Value = serde_json::from_str(body_text.trim()).map_err(|e| {
+        anyhow::anyhow!(
+            "[Setup] Failed to parse server response (body: {}): {}",
+            body_text,
+            e
+        )
+    })?;
 
     let token = pair_response["token"]
         .as_str()
-        .ok_or_else(|| anyhow::anyhow!("[Setup] Server response did not include a token. Response was: {}", body_text))?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "[Setup] Server response did not include a token. Response was: {}",
+                body_text
+            )
+        })?
         .to_string();
 
     // Derive WebSocket URL from server URL
@@ -146,7 +156,7 @@ pub async fn run_setup(agent_code: &str) -> Result<()> {
     Ok(())
 }
 
-fn get_os_release() -> String {
+pub fn get_os_release() -> String {
     // Best-effort: read kernel/OS version
     #[cfg(target_os = "windows")]
     {

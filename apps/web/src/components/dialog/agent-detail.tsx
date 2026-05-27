@@ -18,7 +18,11 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "../ui/drawer";
-import { XSquareIcon, CheckSquareIcon } from "@phosphor-icons/react";
+import {
+	XSquareIcon,
+	CheckSquareIcon,
+	ArrowsClockwiseIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Label } from "../ui/label";
@@ -75,6 +79,7 @@ export default function AgentDetailDialog({
 	const [data, setData] = useState<AgentDetailData | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [revoking, setRevoking] = useState<string | null>(null);
+	const [updatingAgent, setUpdatingAgent] = useState(false);
 
 	function resolveConnectionStatus(): AgentConnectionStatus {
 		const status = agentStatuses.find((s) => s.agentId === agentId);
@@ -166,6 +171,32 @@ export default function AgentDetailDialog({
 		return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 	};
 
+	async function sendUpdateCommand() {
+		setUpdatingAgent(true);
+		try {
+			const res = await fetch(`/api/agents/${agentId}/update`, {
+				method: "POST",
+				headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+			});
+			if (res.ok) {
+				toast.success("Update command sent", {
+					description: "The agent will apply the update and restart.",
+				});
+			} else {
+				const err = await res.json();
+				toast.error("Failed to send update command", {
+					description: err.error,
+				});
+			}
+		} catch (error) {
+			toast.error("Failed to send update command", {
+				description: error instanceof Error ? error.message : String(error),
+			});
+		} finally {
+			setUpdatingAgent(false);
+		}
+	}
+
 	const formatSystemInfo = (info: Record<string, any>) => {
 		return {
 			arch: info.arch || "N/A",
@@ -174,6 +205,7 @@ export default function AgentDetailDialog({
 			hostname: info.hostname || "N/A",
 			release: info.release || "N/A",
 			version: info.agent_version || "N/A",
+			ip: info.ip || "N/A",
 			ram: formatBytes(info.ram),
 			disk_available: formatBytes(info.disk_available),
 		};
@@ -277,21 +309,43 @@ export default function AgentDetailDialog({
 											</p>
 											<p className="font-medium">{sysInfo.version}</p>
 										</div>
+										<div className="col-span-2">
+											<p className="text-muted-foreground text-xs">
+												IP Address
+											</p>
+											<p className="font-medium">{sysInfo.ip}</p>
+										</div>
 									</div>
 									<div className="border-t pt-2 flex justify-between items-center text-xs text-muted-foreground">
 										<div>
 											<p>Connected: {formatDate(session.created_at)}</p>
 											<p>Last Seen: {formatDate(session.last_seen_at)}</p>
 										</div>
-										<Button
-											variant="destructive"
-											size="sm"
-											disabled={revoking === session.id}
-											onClick={() => revokeSession(session.id)}
-										>
-											<XSquareIcon />
-											{revoking === session.id ? "Revoking…" : "Revoke"}
-										</Button>
+										<div className="flex items-center gap-2">
+											<Button
+												variant="outline"
+												size="sm"
+												disabled={
+													updatingAgent ||
+													connectionStatus === "disconnected" ||
+													connectionStatus === "none" ||
+													connectionStatus === "stale"
+												}
+												onClick={sendUpdateCommand}
+											>
+												<ArrowsClockwiseIcon />
+												{updatingAgent ? "Sending…" : "Update"}
+											</Button>
+											<Button
+												variant="destructive"
+												size="sm"
+												disabled={revoking === session.id}
+												onClick={() => revokeSession(session.id)}
+											>
+												<XSquareIcon />
+												{revoking === session.id ? "Revoking…" : "Revoke"}
+											</Button>
+										</div>
 									</div>
 								</div>
 							);
@@ -422,7 +476,7 @@ export default function AgentDetailDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onClose}>
-			<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+			<DialogContent className="max-w-2xl! max-h-[90vh] overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-3">
 						Agent Details

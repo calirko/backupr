@@ -100,7 +100,7 @@ function Write-WinSwConfig {
 <service>
   <id>$ServiceName</id>
   <name>Backupr Service</name>
-  <description>Backupr backup service (headless, no login required)</description>
+  <description>Backupr Service</description>
   <executable>$AgentExe</executable>
   <workingdirectory>$InstallDir</workingdirectory>
   <startmode>$StartMode</startmode>
@@ -159,7 +159,7 @@ function Register-TrayStartup {
     $principal = New-ScheduledTaskPrincipal -GroupId "Users" -RunLevel Limited
     Register-ScheduledTask -TaskName $TrayTaskName -Action $action -Trigger $trigger `
         -Settings $settings -Principal $principal `
-        -Description "Backupr tray agent — shows backup status and notifications" `
+        -Description "Backupr Tray" `
         -Force | Out-Null
     Write-Host "  Tray startup task registered (runs for all users at logon)." -ForegroundColor Green
 }
