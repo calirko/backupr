@@ -21,6 +21,8 @@ interface DashboardData {
 		total_jobs: number;
 		total_backups: number;
 		total_size_bytes: string;
+		free_size_bytes: string | null;
+		total_objects: number;
 		failed_last_7d: number;
 	};
 	last_10_backups: Array<{
@@ -277,9 +279,14 @@ export default function DashboardPage() {
 						<CardContent>
 							<h2 className="text-3xl font-heading">
 								{formatBytes(data?.stats?.total_size_bytes)}
+								{data?.stats?.free_size_bytes && (
+									<span className="text-muted-foreground text-xl font-normal">
+										/{formatBytes(data?.stats?.free_size_bytes)}
+									</span>
+								)}
 							</h2>
 							<p className="text-muted-foreground text-xs mt-0.5">
-								{data?.stats?.total_backups ?? "—"} backups total
+								{data?.stats?.free_size_bytes ? "free available" : `${data?.stats?.total_objects ?? "—"} objects in MinIO`}
 							</p>
 						</CardContent>
 						<CardFooter>

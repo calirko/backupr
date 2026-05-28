@@ -473,9 +473,10 @@ async function enforceRetentionPolicies(): Promise<void> {
 	}
 }
 
-async function _enforceRetentionPolicies(): Promise<void> {
-	const jobs = await db.backupJob.findMany({
+async function _pruneJob(jobId: string, jobName: string): Promise<void> {
+	const jobWithPolicies = await db.backupJob.findFirst({
 		where: {
+			id: jobId,
 			deleted_at: null,
 			backupJobPolicies: { some: { backup_policy: { deleted_at: null } } },
 		},
@@ -487,103 +488,103 @@ async function _enforceRetentionPolicies(): Promise<void> {
 		},
 	});
 
-	for (const job of jobs) {
-		const policies = job.backupJobPolicies.map((bjp) => bjp.backup_policy);
+	if (!jobWithPolicies) return;
 
-		// Derive the strictest constraint across all attached policies
-		const keepLastN = policies
-			.map((p) => p.keep_last_n_backups)
-			.filter((v): v is number => v !== null)
-			.reduce<number | null>(
-				(min, v) => (min === null ? v : Math.min(min, v)),
-				null,
-			);
+	const policies = jobWithPolicies.backupJobPolicies.map((bjp) => bjp.backup_policy);
 
-		const maxAgeDays = policies
-			.map((p) => p.max_backup_age_in_days)
-			.filter((v): v is number => v !== null)
-			.reduce<number | null>(
-				(min, v) => (min === null ? v : Math.min(min, v)),
-				null,
-			);
+	const keepLastN = policies
+		.map((p) => p.keep_last_n_backups)
+		.filter((v): v is number => v !== null)
+		.reduce<number | null>((min, v) => (min === null ? v : Math.min(min, v)), null);
 
-		// Collect IDs to delete (only COMPLETED backups are eligible)
-		const toDelete = new Set<string>();
+	const maxAgeDays = policies
+		.map((p) => p.max_backup_age_in_days)
+		.filter((v): v is number => v !== null)
+		.reduce<number | null>((min, v) => (min === null ? v : Math.min(min, v)), null);
 
-		if (keepLastN !== null) {
-			const backups = await db.backup.findMany({
-				where: { backup_job_id: job.id, status: "COMPLETED" },
-				orderBy: { started_at: "desc" },
-				select: { id: true, blob_key: true },
-			});
+	// Map of id → blob_key for all candidates — avoids a second DB round-trip
+	const toDelete = new Map<string, string | null>();
 
-			for (const b of backups.slice(keepLastN)) {
-				toDelete.add(b.id);
-			}
-		}
-
-		if (maxAgeDays !== null) {
-			const cutoff = new Date();
-			cutoff.setDate(cutoff.getDate() - maxAgeDays);
-
-			// Apply age limit to both COMPLETED and FAILED backups
-			const backups = await db.backup.findMany({
-				where: {
-					backup_job_id: job.id,
-					status: { in: ["COMPLETED", "FAILED"] },
-					started_at: { lt: cutoff },
-				},
-				select: { id: true, blob_key: true },
-			});
-
-			for (const b of backups) {
-				toDelete.add(b.id);
-			}
-		}
-
-		if (toDelete.size === 0) continue;
-
-		// Fetch blob_keys for the IDs we're about to delete
-		const backupsToDelete = await db.backup.findMany({
-			where: { id: { in: [...toDelete] } },
+	if (keepLastN !== null) {
+		const backups = await db.backup.findMany({
+			where: { backup_job_id: jobId, status: "COMPLETED" },
+			orderBy: { started_at: "desc" },
 			select: { id: true, blob_key: true },
 		});
-
-		let deleted = 0;
-		for (const backup of backupsToDelete) {
-			// Delete the DB row first. If the subsequent storage removal fails, the
-			// blob becomes an orphan in storage (detectable via reconciliation) rather
-			// than leaving a DB row that points at a missing blob (broken downloads).
-			try {
-				await db.backup.delete({ where: { id: backup.id } });
-			} catch (err) {
-				console.error(
-					`[Scheduler] Failed to delete DB row for backup ${backup.id}:`,
-					err,
-				);
-				continue;
-			}
-
-			deleted++;
-
-			if (backup.blob_key) {
-				try {
-					await removeObject(backup.blob_key);
-				} catch (err) {
-					console.error(
-						`[Scheduler] Failed to remove storage object ${backup.blob_key} (DB row already deleted — blob is orphaned):`,
-						err,
-					);
-				}
-			}
-		}
-
-		if (deleted > 0) {
-			console.log(
-				`[Scheduler] Pruned ${deleted} backup(s) for job ${job.id} (${job.name}).`,
-			);
+		for (const b of backups.slice(keepLastN)) {
+			toDelete.set(b.id, b.blob_key);
 		}
 	}
+
+	if (maxAgeDays !== null) {
+		const cutoff = new Date();
+		cutoff.setDate(cutoff.getDate() - maxAgeDays);
+		const backups = await db.backup.findMany({
+			where: {
+				backup_job_id: jobId,
+				status: { in: ["COMPLETED", "FAILED"] },
+				started_at: { lt: cutoff },
+			},
+			select: { id: true, blob_key: true },
+		});
+		for (const b of backups) {
+			toDelete.set(b.id, b.blob_key);
+		}
+	}
+
+	if (toDelete.size === 0) return;
+
+	let deleted = 0;
+	for (const [id, blobKey] of toDelete) {
+		try {
+			await db.backup.delete({ where: { id } });
+		} catch (err) {
+			console.error(`[Scheduler] Failed to delete DB row for backup ${id}:`, err);
+			continue;
+		}
+		deleted++;
+		if (blobKey) {
+			try {
+				await removeObject(blobKey);
+			} catch (err) {
+				console.error(
+					`[Scheduler] Failed to remove storage object ${blobKey} (DB row already deleted — blob is orphaned):`,
+					err,
+				);
+			}
+		}
+	}
+
+	if (deleted > 0) {
+		console.log(`[Scheduler] Pruned ${deleted} backup(s) for job ${jobId} (${jobName}).`);
+	}
+}
+
+async function _enforceRetentionPolicies(): Promise<void> {
+	const jobs = await db.backupJob.findMany({
+		where: {
+			deleted_at: null,
+			backupJobPolicies: { some: { backup_policy: { deleted_at: null } } },
+		},
+		select: { id: true, name: true },
+	});
+
+	for (const job of jobs) {
+		await _pruneJob(job.id, job.name);
+	}
+}
+
+/**
+ * Immediately enforces retention for a single job. Safe to call after each
+ * backup completes — runs independently of the hourly full sweep.
+ */
+export async function enforceRetentionForJob(jobId: string): Promise<void> {
+	const job = await db.backupJob.findFirst({
+		where: { id: jobId, deleted_at: null },
+		select: { id: true, name: true },
+	});
+	if (!job) return;
+	await _pruneJob(job.id, job.name);
 }
 
 // ─── Singleton & bootstrap ───────────────────────────────────────────────────

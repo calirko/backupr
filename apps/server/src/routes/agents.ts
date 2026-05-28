@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { rateLimit } from "../lib/rate-limit";
 import { presignedDownloadUrl, presignedPutUrl } from "../lib/storage";
 import { Token } from "../lib/token";
+import { enforceRetentionForJob } from "../scheduler";
 import { agentRegistry, sendToAgent } from "../ws.agent";
 
 const db = prisma;
@@ -147,6 +148,11 @@ export default async function agentRoutes(app: Hono) {
 
 		console.log(
 			`[agent/upload] Backup ${backupId} completed (${sizeBytes ?? "??"} bytes)`,
+		);
+
+		// Fire-and-forget: prune this job immediately rather than waiting for the hourly sweep
+		enforceRetentionForJob(backupJobId).catch((err) =>
+			console.error(`[agent/upload] Retention enforcement failed for job ${backupJobId}:`, err),
 		);
 
 		return c.json({

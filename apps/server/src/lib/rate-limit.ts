@@ -37,12 +37,12 @@ export const rateLimit =
 				},
 			})
 		: async (c: Context, next: Next) => {
-				console.log("[rate-limiter] dev mode — all headers:", {
-					...Object.fromEntries(
-						Object.entries(c.req.header()).map(([k, v]) => [k, v]),
-					),
-					"remote-address": getConnInfo(c).remote.address ?? null,
-				});
+				// console.log("[rate-limiter] dev mode — all headers:", {
+				// 	...Object.fromEntries(
+				// 		Object.entries(c.req.header()).map(([k, v]) => [k, v]),
+				// 	),
+				// 	"remote-address": getConnInfo(c).remote.address ?? null,
+				// });
 				await next();
 			};
 
@@ -61,11 +61,11 @@ export const authRateLimit =
 				},
 			})
 		: async (c: Context, next: Next) => {
-				console.log("[rate-limiter] dev mode — all headers:", {
-					...Object.fromEntries(
-						Object.entries(c.req.header()).map(([k, v]) => [k, v]),
-					),
-					"remote-address": getConnInfo(c).remote.address ?? null,
-				});
+				// console.log("[rate-limiter] dev mode — all headers:", {
+				// 	...Object.fromEntries(
+				// 		Object.entries(c.req.header()).map(([k, v]) => [k, v]),
+				// 	),
+				// 	"remote-address": getConnInfo(c).remote.address ?? null,
+				// });
 				await next();
 			};
