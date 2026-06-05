@@ -40,6 +40,7 @@ interface SocketContextValue {
 	send: (message: Record<string, unknown>) => void;
 	isConnected: boolean;
 	agentStatuses: AgentStatus[];
+	backupUpdateCount: number;
 }
 
 const SocketContext = createContext<SocketContextValue | null>(null);
@@ -62,6 +63,7 @@ export function SocketProvider({
 	const shouldReconnectRef = useRef(true);
 	const [isConnected, setIsConnected] = useState(false);
 	const [agentStatuses, setAgentStatuses] = useState<AgentStatus[]>([]);
+	const [backupUpdateCount, setBackupUpdateCount] = useState(0);
 
 	const connect = useCallback(() => {
 		if (!shouldReconnectRef.current) return;
@@ -133,6 +135,9 @@ export function SocketProvider({
 					case "agent_statuses":
 						setAgentStatuses((message.agents as AgentStatus[]) ?? []);
 						break;
+					case "backup_updated":
+						setBackupUpdateCount((c) => c + 1);
+						break;
 					case "pong":
 					case "connected":
 						break;
@@ -171,7 +176,7 @@ export function SocketProvider({
 	}, []);
 
 	return (
-		<SocketContext.Provider value={{ send, isConnected, agentStatuses }}>
+		<SocketContext.Provider value={{ send, isConnected, agentStatuses, backupUpdateCount }}>
 			{children}
 		</SocketContext.Provider>
 	);

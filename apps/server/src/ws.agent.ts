@@ -2,6 +2,7 @@ import { upgradeWebSocket, getConnInfo } from "hono/bun";
 import { handleBackupStatusUpdate } from "./backup";
 import { prisma } from "./lib/prisma";
 import { BackupStatus } from "../prisma/generated/prisma/enums";
+import { pushBackupUpdate } from "./ws.web";
 
 const db = prisma;
 
@@ -341,6 +342,7 @@ export default upgradeWebSocket((c) => {
 
 					onStatusChange?.();
 					onAgentBackupStatus?.(agentId, statusStr);
+					if (statusStr.toLowerCase() === "failed") pushBackupUpdate();
 					break;
 				}
 

@@ -76,7 +76,10 @@ function getLast7Days(): string[] {
 	return Array.from({ length: 7 }, (_, i) => {
 		const d = new Date();
 		d.setDate(d.getDate() - (6 - i));
-		return d.toISOString().split("T")[0];
+		const year = d.getFullYear();
+		const month = String(d.getMonth() + 1).padStart(2, "0");
+		const day = String(d.getDate()).padStart(2, "0");
+		return `${year}-${month}-${day}`;
 	});
 }
 
@@ -193,7 +196,7 @@ function StorageByJobChart({
 export default function DashboardPage() {
 	const [data, setData] = useState<DashboardData | null>(null);
 	const [wikiOpen, setWikiOpen] = useState(false);
-	const { agentStatuses } = useSocket();
+	const { agentStatuses, backupUpdateCount } = useSocket();
 	const navigate = useNavigate();
 
 	async function fetchData() {
@@ -223,6 +226,10 @@ export default function DashboardPage() {
 			setWikiOpen(true);
 		}
 	}, []);
+
+	useEffect(() => {
+		if (backupUpdateCount > 0) fetchData();
+	}, [backupUpdateCount]);
 
 	const onlineCount = agentStatuses.filter(
 		(s) => s.status === "connected",

@@ -7,6 +7,7 @@ import { presignedDownloadUrl, presignedPutUrl } from "../lib/storage";
 import { Token } from "../lib/token";
 import { enforceRetentionForJob } from "../scheduler";
 import { agentRegistry, sendToAgent } from "../ws.agent";
+import { pushBackupUpdate } from "../ws.web";
 
 const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
@@ -149,6 +150,8 @@ export default async function agentRoutes(app: Hono) {
 		console.log(
 			`[agent/upload] Backup ${backupId} completed (${sizeBytes ?? "??"} bytes)`,
 		);
+
+		pushBackupUpdate();
 
 		// Fire-and-forget: prune this job immediately rather than waiting for the hourly sweep
 		enforceRetentionForJob(backupJobId).catch((err) =>
@@ -441,6 +444,17 @@ export default async function agentRoutes(app: Hono) {
 			where: { agent_id: id, date: { gte: since } },
 			orderBy: { date: "asc" },
 		});
+
+		// If there's no record at the very start of the window (agent was in a stable
+		// state that predates the window), fetch the last known record before the
+		// window so the UI can render the correct baseline instead of showing a gap.
+		if (records.length === 0 || records[0]!.date > since) {
+			const baseline = await db.agentStatus.findFirst({
+				where: { agent_id: id, date: { lt: since } },
+				orderBy: { date: "desc" },
+			});
+			if (baseline) records.unshift(baseline);
+		}
 
 		return c.json({ agent, records });
 	});

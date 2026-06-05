@@ -72,6 +72,18 @@ export async function pushAgentStatuses() {
 	}
 }
 
+export function pushBackupUpdate() {
+	if (webRegistry.size === 0) return;
+	const payload = JSON.stringify({ type: "backup_updated" });
+	for (const client of webRegistry.values()) {
+		try {
+			client.websocket.send(payload);
+		} catch {
+			// ignore closed clients
+		}
+	}
+}
+
 export default upgradeWebSocket((c) => {
 	const token = c.req.query("token");
 	let clientId: string | null = null;
