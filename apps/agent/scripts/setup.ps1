@@ -114,7 +114,7 @@ function Confirm-Admin {
         Write-Host "Relaunching as Administrator..." -ForegroundColor Yellow
         if ($PSCommandPath) {
             # Running from a saved .ps1 file - relaunch that file directly.
-            $args_ = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+            $args_ = "-NoExit -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
             if ($Action) { $args_ += " -Action `"$Action`"" }
         } else {
             # Running via `iex (New-Object Net.WebClient).DownloadString(...)` - there is no
@@ -122,7 +122,7 @@ function Confirm-Admin {
             # $Action must be baked into the command text itself since -EncodedCommand doesn't
             # accept extra trailing CLI arguments the way -File does.
             $cmd = "`$Action = '$Action'; iex (New-Object Net.WebClient).DownloadString('$BootstrapUrl')"
-            $args_ = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
+            $args_ = "-NoExit -NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
                 [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
         }
         Start-Process powershell -Verb RunAs -ArgumentList $args_
@@ -606,6 +606,8 @@ function Show-Menu {
 
 # --- Entry point --------------------------------------------------------------
 
+try {
+
 Confirm-Admin
 Write-Banner
 
@@ -621,4 +623,12 @@ switch ($Action.ToLower()) {
     "update"  { Action-Update }
     "vss"     { Action-Vss    }
     ""        { Show-Menu     }
+}
+
+} catch {
+    Write-Host ""
+    Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  $($_.InvocationInfo.PositionMessage)" -ForegroundColor DarkGray
+    Read-Host "  Press Enter to close"
+    exit 1
 }

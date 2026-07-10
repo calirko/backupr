@@ -288,9 +288,11 @@ export default upgradeWebSocket((c) => {
 						state.currentJob = state.lastStatusReport.currentJob;
 						state.jobQueue = state.lastStatusReport.jobQueue;
 					}
-					console.log(
-						`[ws agent] Status from ${agentId}: job=${state?.currentJob?.id ?? "none"}, queued=${state?.jobQueue?.length ?? 0}`,
-					);
+					if (state?.currentJob || state?.jobQueue?.length) {
+						console.log(
+							`[ws agent] Status from ${agentId}: job=${state?.currentJob?.id ?? "none"}, queued=${state?.jobQueue?.length ?? 0}`,
+						);
+					}
 					onStatusChange?.();
 					break;
 				}

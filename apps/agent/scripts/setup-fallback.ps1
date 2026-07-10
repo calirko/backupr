@@ -91,14 +91,14 @@ function Confirm-Admin {
         Write-Host "Relaunching as Administrator..." -ForegroundColor Yellow
         if ($ScriptPath) {
             # Running from a saved .ps1 file - relaunch that file directly.
-            $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
+            $argList = "-NoExit -NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
             if ($Action) { $argList += " -Action `"$Action`"" }
         } else {
             # Running via `iex $wc.DownloadString(...)` - there is no on-disk script to point
             # -File at ($ScriptPath is $null), so re-run the same bootstrap download instead.
             $cmd = "`$Action = '$Action'; `$wc2 = New-Object System.Net.WebClient; " +
                 "iex `$wc2.DownloadString('$BootstrapUrl')"
-            $argList = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
+            $argList = "-NoExit -NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
                 [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
         }
         Start-Process powershell -Verb RunAs -ArgumentList $argList
@@ -541,6 +541,8 @@ function Show-Menu {
 
 # --- Entry point --------------------------------------------------------------
 
+try {
+
 Confirm-Admin
 
 $actionLower = $Action.ToLower()
@@ -557,4 +559,12 @@ elseif ($actionLower -eq "vss")     { Action-Vss     }
 elseif ($actionLower -eq "")        { Show-Menu      }
 else {
     Write-Warning "Unknown action: '$Action'. Valid: install, setup, start, stop, restart, remove, status, logs, update, vss"
+}
+
+} catch {
+    Write-Host ""
+    Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  $($_.InvocationInfo.PositionMessage)" -ForegroundColor DarkGray
+    Read-Host "  Press Enter to close"
+    exit 1
 }
