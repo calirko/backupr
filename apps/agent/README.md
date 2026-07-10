@@ -8,13 +8,15 @@ a TLS enum member (missing on pre-.NET-4.5), and it auto-selects the right insta
 PowerShell version:
 
 ```powershell
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-try { [Net.ServicePointManager]::SecurityProtocol = 3072 } catch { try { [Net.ServicePointManager]::SecurityProtocol = 3840 } catch {} }
-$base = "https://cdn.jsdelivr.net/gh/calirko/backupr@main/apps/agent/scripts"
-$wc = New-Object Net.WebClient
-$script = if ($PSVersionTable -and $PSVersionTable.PSVersion.Major -ge 5) { "$base/setup.ps1" } else { "$base/setup-fallback.ps1" }
-iex $wc.DownloadString($script)
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned; try { [Net.ServicePointManager]::SecurityProtocol = 3072 } catch { try { [Net.ServicePointManager]::SecurityProtocol = 3840 } catch {} }; $base = "https://cdn.jsdelivr.net/gh/calirko/backupr@main/apps/agent/scripts"; $wc = New-Object Net.WebClient; $wc.Encoding = [Text.Encoding]::UTF8; $script = if ($PSVersionTable -and $PSVersionTable.PSVersion.Major -ge 5) { "$base/setup.ps1" } else { "$base/setup-fallback.ps1" }; iex $wc.DownloadString($script)
 ```
+
+The whole thing is one line (statements joined with `;`) on purpose: pasting a multi-line
+snippet into `powershell.exe`'s legacy console host — especially over RDP — can execute the
+lines out of order or interleaved, since paste is simulated as keystrokes rather than delivered
+atomically. That leaves `$wc` still `$null` when `$wc.DownloadString(...)` runs, producing
+"Não é possível chamar um método em uma expressão de valor nula" / "Cannot call a method on a
+null-valued expression." Keeping it a single statement makes the paste order irrelevant.
 
 Why not `raw.githubusercontent.com`? It only accepts TLS 1.2+, so on old Windows the *initial*
 fetch fails before any TLS-fixing code inside the downloaded script gets a chance to run — the
@@ -25,6 +27,8 @@ on Windows 7 with an unpatched .NET stack. `System.Net.WebClient` is used instea
 `Invoke-WebRequest`/`irm` because those cmdlets don't exist before PowerShell 3.0, and setting
 `SecurityProtocol` via the integer literals `3072`/`3840` (Tls12 / Tls12|Tls11) avoids referencing
 enum members that don't exist on older .NET — same trick used inside `setup-fallback.ps1`.
+`$wc.Encoding` is forced to UTF-8 because `WebClient` otherwise assumes the legacy ANSI code page,
+which mangles the em dashes and box-drawing characters in the scripts and breaks parsing.
 
 The script picks `setup.ps1` (PowerShell 5.1+) or `setup-fallback.ps1` (PowerShell 2.0–4.x,
 typically Windows 7) automatically based on `$PSVersionTable`.

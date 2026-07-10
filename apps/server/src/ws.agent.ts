@@ -387,7 +387,7 @@ export default upgradeWebSocket((c) => {
 			}
 		},
 
-		onClose: async (_event, _ws) => {
+		onClose: async (_event, ws) => {
 			if (pingIntervalId) {
 				clearInterval(pingIntervalId);
 				pingIntervalId = null;
@@ -395,10 +395,24 @@ export default upgradeWebSocket((c) => {
 			clearPingTimeout();
 
 			if (agentId) {
-				agentRegistry.delete(agentId);
-				console.log(`[ws agent] Agent disconnected: ${agentId}`);
-				onStatusChange?.();
-				onAgentDisconnect?.(agentId);
+				// A newer connection for the same agentId may have already replaced
+				// this entry (brief reconnect race, or the same agent token in use
+				// from two places at once). Only remove it if it's still ours —
+				// otherwise we'd delete the live connection out from under it and
+				// make it invisible to command dispatch (sendToAgent) while it
+				// keeps happily heartbeating.
+				const state = agentRegistry.get(agentId);
+				const isCurrent = state?.websocket === (ws as unknown as WebSocket);
+				if (isCurrent) {
+					agentRegistry.delete(agentId);
+					console.log(`[ws agent] Agent disconnected: ${agentId}`);
+					onStatusChange?.();
+					onAgentDisconnect?.(agentId);
+				} else {
+					console.log(
+						`[ws agent] Stale connection closed for ${agentId} (already superseded by a newer connection) — registry untouched`,
+					);
+				}
 			}
 		},
 	};

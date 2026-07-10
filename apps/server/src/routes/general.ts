@@ -5,7 +5,7 @@ import { auth } from "../lib/auth";
 import { Password } from "../lib/password";
 import { prisma } from "../lib/prisma";
 import { authRateLimit, rateLimit } from "../lib/rate-limit";
-import { getTotalStorageUsage } from "../lib/storage";
+import { getMinIOFreeBytes } from "../lib/storage";
 import { Token, type TokenPayload } from "../lib/token";
 
 const db = prisma;
@@ -173,7 +173,8 @@ export default async function generalRoutes(app: Hono) {
 			storageByJob,
 			totalUsers,
 			totalPolicies,
-			minioStorage,
+			completedBackups,
+			freeBytes,
 		] = await Promise.all([
 			db.agent.count({ where: { deleted_at: null } }),
 			db.agent.count({ where: { is_active: true, deleted_at: null } }),
@@ -244,7 +245,8 @@ export default async function generalRoutes(app: Hono) {
 
 			db.user.count({ where: { deleted_at: null } }),
 			db.backupPolicy.count({ where: { deleted_at: null } }),
-			getTotalStorageUsage(),
+			db.backup.count({ where: { status: "COMPLETED" } }),
+			getMinIOFreeBytes(),
 		]);
 
 		return c.json({
@@ -253,9 +255,9 @@ export default async function generalRoutes(app: Hono) {
 				active_agents: activeAgents,
 				total_jobs: totalJobs,
 				total_backups: totalBackups,
-				total_size_bytes: minioStorage.totalBytes.toString(),
-				free_size_bytes: minioStorage.freeBytes?.toString() ?? null,
-				total_objects: minioStorage.objectCount,
+				total_size_bytes: (backupStats._sum.size_bytes ?? 0n).toString(),
+				free_size_bytes: freeBytes?.toString() ?? null,
+				total_objects: completedBackups,
 				failed_last_7d: failedBackups,
 			},
 			last_10_backups: last10Backups.map((b) => ({

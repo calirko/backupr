@@ -202,6 +202,16 @@ function Stop-TrayProcess {
     }
 }
 
+function Start-TrayProcess {
+    # HKLM\Run only fires at the next logon — it never launches anything in the
+    # session that's already running this script, so start it here too or the
+    # tray icon won't appear until the machine is restarted / user signs out.
+    if (-not (Test-Path $TrayExe)) { return }
+    if (Get-Process -Name "backupr-tray" -ErrorAction SilentlyContinue) { return }
+    Write-Host "  Starting tray app..." -ForegroundColor Yellow
+    Start-Process -FilePath $TrayExe
+}
+
 function Unregister-TrayStartup {
     Remove-ItemProperty -Path $TrayRunKey -Name $TrayRunName -ErrorAction SilentlyContinue
     # Also clean up any legacy scheduled task left by older installs.
@@ -241,10 +251,11 @@ function Action-Install {
     if ($LASTEXITCODE -ne 0) { throw "WinSW install failed (exit $LASTEXITCODE)" }
 
     Register-TrayStartup
+    Start-TrayProcess
 
     Write-Host ""
     Write-Host "  Service installed successfully." -ForegroundColor Green
-    Write-Host "  The tray app (Backupr Agent) will start automatically at each user logon." -ForegroundColor DarkGray
+    Write-Host "  The tray app (Backupr Agent) is running now and will start automatically at each user logon." -ForegroundColor DarkGray
     Write-Host "  Run 'setup' next to configure your agent code, then 'start'." -ForegroundColor Cyan
 }
 
@@ -302,6 +313,8 @@ function Action-Start {
     $svc = Get-Service -Name $ServiceName
     $color = if ($svc.Status -eq "Running") { "Green" } else { "Yellow" }
     Write-Host "  Service status: $($svc.Status)" -ForegroundColor $color
+
+    Start-TrayProcess
 }
 
 function Action-Stop {
@@ -535,6 +548,7 @@ function Action-Update {
         Unregister-ScheduledTask -TaskName $legacyTask -Confirm:$false
     }
     Register-TrayStartup
+    Start-TrayProcess
 
     Write-Host ""
     Write-Host "  Update complete. Config files were not modified." -ForegroundColor Green

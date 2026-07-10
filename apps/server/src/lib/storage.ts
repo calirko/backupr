@@ -64,7 +64,7 @@ export async function removeObject(key: string): Promise<void> {
 	await storage.removeObject(BUCKET, key);
 }
 
-async function getMinIOFreeBytes(): Promise<bigint | null> {
+export async function getMinIOFreeBytes(): Promise<bigint | null> {
 	try {
 		const protocol = USE_SSL ? "https" : "http";
 		const standardPort = USE_SSL ? 443 : 80;
@@ -141,25 +141,4 @@ async function getMinIOFreeBytes(): Promise<bigint | null> {
 		console.log(e);
 		return null;
 	}
-}
-
-export async function getTotalStorageUsage(): Promise<{
-	totalBytes: bigint;
-	objectCount: number;
-	freeBytes: bigint | null;
-}> {
-	let totalBytes = 0n;
-	let objectCount = 0;
-
-	const objectsList = storage.listObjects(BUCKET, "", true);
-
-	for await (const obj of objectsList) {
-		if (!obj.name?.endsWith("/")) {
-			totalBytes += BigInt(obj.size);
-			objectCount++;
-		}
-	}
-
-	const freeBytes = await getMinIOFreeBytes();
-	return { totalBytes, objectCount, freeBytes };
 }
