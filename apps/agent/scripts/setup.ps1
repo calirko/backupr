@@ -68,6 +68,7 @@ $Arch = if ($env:PROCESSOR_ARCHITECTURE -eq "AMD64" -or
 
 # --- Constants ----------------------------------------------------------------
 
+$BootstrapUrl = "https://cdn.jsdelivr.net/gh/calirko/backupr@main/apps/agent/scripts/setup.ps1"
 $AgentUrl     = "https://github.com/calirko/backupr/releases/latest/download/backupr-agent-$Arch-windows.exe"
 $TrayUrl      = "https://github.com/calirko/backupr/releases/latest/download/backupr-tray-$Arch-windows.exe"
 $ServiceName  = "backupr-agent"
@@ -111,8 +112,19 @@ function Confirm-Admin {
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         Write-Warning "This script requires Administrator privileges."
         Write-Host "Relaunching as Administrator..." -ForegroundColor Yellow
-        $args_ = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-        if ($Action) { $args_ += " -Action `"$Action`"" }
+        if ($PSCommandPath) {
+            # Running from a saved .ps1 file - relaunch that file directly.
+            $args_ = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+            if ($Action) { $args_ += " -Action `"$Action`"" }
+        } else {
+            # Running via `iex (New-Object Net.WebClient).DownloadString(...)` - there is no
+            # on-disk script to point -File at, so re-run the same bootstrap download instead.
+            # $Action must be baked into the command text itself since -EncodedCommand doesn't
+            # accept extra trailing CLI arguments the way -File does.
+            $cmd = "`$Action = '$Action'; iex (New-Object Net.WebClient).DownloadString('$BootstrapUrl')"
+            $args_ = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
+                [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
+        }
         Start-Process powershell -Verb RunAs -ArgumentList $args_
         exit
     }

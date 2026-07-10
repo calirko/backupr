@@ -43,6 +43,7 @@ try {
 
 # Script path - $PSCommandPath is PS3+; use MyInvocation at the top level
 $ScriptPath = $MyInvocation.MyCommand.Path
+$BootstrapUrl = "https://cdn.jsdelivr.net/gh/calirko/backupr@main/apps/agent/scripts/setup-fallback.ps1"
 
 # Arch detection: also check PROCESSOR_ARCHITEW6432 which is set when a 32-bit
 # PowerShell process runs on a 64-bit OS (WOW64 - common default on older Windows)
@@ -88,8 +89,18 @@ function Confirm-Admin {
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         Write-Warning "This script requires Administrator privileges."
         Write-Host "Relaunching as Administrator..." -ForegroundColor Yellow
-        $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
-        if ($Action) { $argList += " -Action `"$Action`"" }
+        if ($ScriptPath) {
+            # Running from a saved .ps1 file - relaunch that file directly.
+            $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
+            if ($Action) { $argList += " -Action `"$Action`"" }
+        } else {
+            # Running via `iex $wc.DownloadString(...)` - there is no on-disk script to point
+            # -File at ($ScriptPath is $null), so re-run the same bootstrap download instead.
+            $cmd = "`$Action = '$Action'; `$wc2 = New-Object System.Net.WebClient; " +
+                "iex `$wc2.DownloadString('$BootstrapUrl')"
+            $argList = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
+                [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
+        }
         Start-Process powershell -Verb RunAs -ArgumentList $argList
         exit
     }
