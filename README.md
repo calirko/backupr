@@ -21,7 +21,7 @@ Browser
 
 - **`apps/web`** — React 19 SPA dashboard (Vite)
 - **`apps/server`** — REST API + WebSocket server (Hono + Bun)
-- **`apps/agent`** — CLI daemon that runs on client machines (compiled Bun binary)
+- **`apps/agent`** — daemon that runs on client machines (Rust, compiled native binary for Linux/Windows)
 - **`apps/proxy`** — Nginx reverse proxy
 
 ---
@@ -95,7 +95,9 @@ Spins up `server`, `web`, and `proxy`. Expects a running PostgreSQL and MinIO in
 
 ## Agent setup
 
-Download or build the agent binary for your platform, then run setup once:
+Windows: see `apps/agent/README.md` for the install one-liner (installs as a service via WinSW).
+
+Linux, or if you already have the binary: download or build it for your platform, then run setup once:
 
 ```bash
 # Linux
@@ -111,9 +113,10 @@ Generate the pairing code from the dashboard under **Agents → Add Agent**. Aft
 
 ```bash
 cd apps/agent
-bun run build:linux    # outputs linux-x64 binary
-bun run build:windows  # outputs windows-x64 binary
+./scripts/build-all.sh   # cross-compiles Linux + Windows binaries into apps/agent/out/
 ```
+
+See `apps/agent/README.md` for building individual targets manually with `cargo build`.
 
 ---
 
@@ -124,6 +127,6 @@ bun run build:windows  # outputs windows-x64 binary
 | Frontend | React 19, React Router 7, Vite, Tailwind CSS 4 |
 | Backend | Hono 4, Bun, Prisma 7, PostgreSQL |
 | Storage | MinIO (S3-compatible) |
-| Agent | Bun (compiled binary, Linux + Windows) |
+| Agent | Rust (compiled native binary, Linux + Windows) |
 | Proxy | Nginx |
 | Monorepo | Yarn workspaces + Bun runtime |
