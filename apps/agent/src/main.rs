@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::env;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::{interval, sleep};
@@ -193,11 +194,6 @@ impl BackuprAgent {
                 }
             }
 
-            // Check if we should exit
-            if shutdown_rx.is_closed() {
-                break;
-            }
-
             // Exponential backoff with jitter
             let backoff_ms = (RECONNECT_TIMEOUT_MS as f64 * 1.5_f64.powi(reconnect_attempts as i32))
                 .min(MAX_RECONNECT_TIMEOUT_MS as f64) as u64;
@@ -241,7 +237,10 @@ impl BackuprAgent {
             self.config.agent_token.as_ref().unwrap()
         );
 
-        raccoon!("[Agent] Connecting to {}...", ws_url);
+        // Log without the query string — it carries the long-lived agent token,
+        // and agent logs are fetchable over the socket via get_logs.
+        let log_url = ws_url.split('?').next().unwrap_or(&ws_url);
+        raccoon!("[Agent] Connecting to {}...", log_url);
 
         let (ws_stream, _) = connect_async(&ws_url).await?;
         raccoon!("\x1b[32m[Agent] Connected and authenticated.\x1b[0m");
@@ -250,6 +249,13 @@ impl BackuprAgent {
 
         // Create a shutdown channel for spawned tasks
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel::<()>(10);
+
+        // Liveness tracking: every inbound frame (pong, text, ping, close, …)
+        // stamps this with the current time. A watchdog task tears the
+        // connection down if the server goes silent, so a half-open TCP
+        // connection can't leave us "connected" for the OS timeout while
+        // dispatched backups are silently lost.
+        let last_inbound = Arc::new(AtomicI64::new(chrono::Utc::now().timestamp_millis()));
 
         // Heartbeat task
         let mut heartbeat_timer = interval(Duration::from_millis(HEARTBEAT_INTERVAL_MS));
@@ -329,11 +335,17 @@ impl BackuprAgent {
         let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::channel::<Message>(10);
         let cmd_tx_for_select = cmd_tx.clone();
         let mut shutdown_rx_msg = shutdown_tx.subscribe();
+        let last_inbound_read = last_inbound.clone();
 
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     msg = read.next() => {
+                        // Any inbound frame proves the server is still alive.
+                        if matches!(msg, Some(Ok(_))) {
+                            last_inbound_read
+                                .store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+                        }
                         match msg {
                             Some(Ok(Message::Text(text))) => {
                                 if let Err(e) = Self::handle_message(
@@ -367,25 +379,57 @@ impl BackuprAgent {
             }
         });
 
-        // Multiplex outgoing messages
+        // Liveness watchdog: if the server stops sending anything (pongs,
+        // status acks, …) for longer than the tolerance, the connection is
+        // dead or half-open. Signal shutdown so the outgoing loop breaks and
+        // start() reconnects with backoff.
+        let last_inbound_wd = last_inbound.clone();
+        let watchdog_shutdown_tx = shutdown_tx.clone();
+        let mut shutdown_rx_wd = shutdown_tx.subscribe();
+        tokio::spawn(async move {
+            const TOLERANCE_MS: i64 = (2 * HEARTBEAT_INTERVAL_MS) as i64;
+            let mut check_timer = interval(Duration::from_millis(5000));
+            loop {
+                tokio::select! {
+                    _ = check_timer.tick() => {
+                        let now = chrono::Utc::now().timestamp_millis();
+                        let last = last_inbound_wd.load(Ordering::Relaxed);
+                        if now - last > TOLERANCE_MS {
+                            eprintln!(
+                                "[Agent] No server traffic for {}ms (>{}ms) — connection appears dead, reconnecting.",
+                                now - last,
+                                TOLERANCE_MS
+                            );
+                            let _ = watchdog_shutdown_tx.send(());
+                            break;
+                        }
+                    }
+                    _ = shutdown_rx_wd.recv() => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Multiplex outgoing messages. On a write error we break rather than
+        // propagate with `?`, so the shutdown signal below always fires and the
+        // spawned tasks are torn down deterministically before we reconnect.
         loop {
-            tokio::select! {
-                Some(msg) = heartbeat_rx.recv() => {
-                    write.send(msg).await?;
-                }
-                Some(msg) = status_rx.recv() => {
-                    write.send(msg).await?;
-                }
-                Some(msg) = cmd_rx.recv() => {
-                    write.send(msg).await?;
-                }
+            let write_result = tokio::select! {
+                Some(msg) = heartbeat_rx.recv() => write.send(msg).await,
+                Some(msg) = status_rx.recv() => write.send(msg).await,
+                Some(msg) = cmd_rx.recv() => write.send(msg).await,
                 Some(_) = job_rx.recv() => {
                     Self::process_next_job(&self.job_queue, &self.current_job, &cmd_tx_for_select).await;
+                    Ok(())
                 }
-                _ = shutdown_rx.recv() => {
-                    break;
-                }
+                _ = shutdown_rx.recv() => break,
                 else => break,
+            };
+
+            if let Err(e) = write_result {
+                eprintln!("[Agent] WebSocket write error: {}", e);
+                break;
             }
         }
 
@@ -472,13 +516,39 @@ impl BackuprAgent {
             }
             ServerMessage::Update => {
                 raccoon!("[Agent] Received update command from server");
+
+                // Never interrupt an in-progress or queued backup — the update
+                // restarts the process, which would fail the running job. Decline
+                // and report so the operator can retry once backups finish.
+                let busy = current_job.lock().await.is_some() || !job_queue.lock().await.is_empty();
+                if busy {
+                    raccoon!("[Agent] Update declined: a backup is running or queued.");
+                    let msg = serde_json::json!({
+                        "type": "update_failed",
+                        "reason": "A backup is running or queued; retry once it finishes.",
+                    });
+                    let _ = cmd_tx.send(Message::Text(msg.to_string())).await;
+                    return Ok(());
+                }
+
                 // Acknowledge receipt immediately so the UI gets feedback before
                 // the potentially long download + restart sequence begins.
                 let ack = serde_json::json!({"type": "update_ack", "status": "acknowledged"});
                 let _ = cmd_tx.send(Message::Text(ack.to_string())).await;
+
+                // Report failures back to the server so a botched update is
+                // visible instead of dying silently in the agent's local log.
+                // On a successful update the process exits/restarts before this
+                // task returns, so no message is sent on the happy path.
+                let cmd_tx_update = cmd_tx.clone();
                 tokio::spawn(async move {
                     if let Err(e) = update::run_update().await {
                         eprintln!("[Update] Update failed: {}", e);
+                        let msg = serde_json::json!({
+                            "type": "update_failed",
+                            "reason": e.to_string(),
+                        });
+                        let _ = cmd_tx_update.send(Message::Text(msg.to_string())).await;
                     }
                 });
             }

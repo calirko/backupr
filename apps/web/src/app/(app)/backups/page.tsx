@@ -1,8 +1,12 @@
 import {
 	ArrowRightIcon,
+	ClipboardIcon,
+	DownloadSimpleIcon,
 	MagnifyingGlassIcon,
 	RowsIcon,
 	SquaresFourIcon,
+	StackIcon,
+	WarningIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
@@ -32,6 +36,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { BackupErrorDialog } from "@/components/dialog/backup-versions";
+import {
+	BACKUP_STATUS_LABEL,
+	BACKUP_STATUS_STYLE,
+	type BackupStatus,
+} from "@/lib/backup-status";
 
 interface Agent {
 	id: string;
@@ -42,8 +52,27 @@ interface Agent {
 	created_by: { name: string } | null;
 }
 
+interface BackupRecord {
+	id: string;
+	status: BackupStatus;
+	size_bytes: string | null;
+	started_at: string | null;
+	completed_at: string | null;
+	url: string | null;
+	error: string | null;
+	requires_password: boolean;
+	backup_job: {
+		id: string;
+		name: string;
+		cron: string;
+		agent: { id: string; name: string };
+	};
+}
+
 type SortOption = "name" | "date" | "status" | "last-backup";
-type ViewMode = "grid" | "list";
+type ViewMode = "grid" | "list" | "all";
+
+const BACKUPS_PAGE_SIZE = 50;
 
 const SERVER_SORT_ORDER_BY: Partial<Record<SortOption, object>> = {
 	name: { name: "asc" },
@@ -89,6 +118,15 @@ function formatBytes(bytes: number): string {
 		unit++;
 	}
 	return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+function formatBytesStr(bytes: string | null | undefined): string {
+	if (!bytes) return "—";
+	const n = Number(bytes);
+	if (!Number.isFinite(n) || n === 0) return "0 B";
+	const units = ["B", "KB", "MB", "GB", "TB"];
+	const i = Math.floor(Math.log(n) / Math.log(1024));
+	return `${(n / 1024 ** i).toFixed(1)} ${units[i]}`;
 }
 
 interface AgentCardProps {
@@ -208,6 +246,87 @@ function AgentRow({ agent, status, onNavigate }: AgentRowProps) {
 	);
 }
 
+interface BackupRowProps {
+	backup: BackupRecord;
+	onError: (message: string) => void;
+}
+
+function BackupRow({ backup, onError }: BackupRowProps) {
+	const { backup_job: job } = backup;
+	return (
+		<div className="flex items-center gap-4 px-3 py-2.5 border bg-card dynround">
+			<div className="flex-1 min-w-0">
+				<div className="flex items-center gap-2 min-w-0">
+					<span className="font-medium text-sm truncate">
+						{job.agent.name}
+					</span>
+					<span className="text-muted-foreground text-sm shrink-0">·</span>
+					<span className="text-sm text-muted-foreground truncate">
+						{job.name}
+					</span>
+				</div>
+				<span className="font-mono text-xs text-muted-foreground">
+					{job.cron}
+				</span>
+			</div>
+			<span className="text-xs text-muted-foreground shrink-0 w-36 text-right">
+				{backup.started_at
+					? new Date(backup.started_at).toLocaleString()
+					: "—"}
+			</span>
+			<span
+				className="text-xs shrink-0 w-20 text-right"
+				style={BACKUP_STATUS_STYLE[backup.status] ?? {}}
+			>
+				{BACKUP_STATUS_LABEL[backup.status] ?? backup.status}
+			</span>
+			<span className="text-xs font-mono shrink-0 w-20 text-right text-muted-foreground">
+				{formatBytesStr(backup.size_bytes)}
+			</span>
+			<div className="flex items-center gap-1.5 shrink-0">
+				{backup.status === "FAILED" ? (
+					<Button
+						variant="destructive"
+						size="sm"
+						onClick={() =>
+							onError(backup.error ?? "No error details available.")
+						}
+					>
+						<WarningIcon />
+						Error
+					</Button>
+				) : (
+					<>
+						{backup.url ? (
+							<Button variant="outline" size="sm" asChild>
+								<a href={backup.url} target="_blank" rel="noreferrer" download>
+									<DownloadSimpleIcon />
+								</a>
+							</Button>
+						) : (
+							<Button variant="outline" size="sm" disabled>
+								<DownloadSimpleIcon />
+							</Button>
+						)}
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={!backup.url}
+							onClick={() => {
+								if (!backup.url) return;
+								navigator.clipboard.writeText(backup.url);
+								toast.success("Link copied");
+							}}
+						>
+							<ClipboardIcon />
+						</Button>
+					</>
+				)}
+			</div>
+		</div>
+	);
+}
+
 export default function BackupsPage() {
 	const [agents, setAgents] = useState<Agent[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -218,6 +337,11 @@ export default function BackupsPage() {
 	const { agentStatuses } = useSocket();
 	const navigate = useNavigate();
 	const [absoluteTotal, setAbsoluteTotal] = useState(0);
+
+	const [backups, setBackups] = useState<BackupRecord[]>([]);
+	const [backupsTotal, setBackupsTotal] = useState(0);
+	const [backupsLoading, setBackupsLoading] = useState(false);
+	const [errorDialog, setErrorDialog] = useState<string | null>(null);
 
 	async function fetchAgents(sort: SortOption = sortBy) {
 		setLoading(true);
@@ -247,13 +371,49 @@ export default function BackupsPage() {
 		}
 	}
 
+	async function fetchBackups(reset: boolean) {
+		setBackupsLoading(true);
+		try {
+			const skip = reset ? 0 : backups.length;
+			const params = new URLSearchParams({
+				orderBy: encodeURIComponent(JSON.stringify({ started_at: "desc" })),
+				skip: String(skip),
+				take: String(BACKUPS_PAGE_SIZE),
+			});
+			const response = await fetch(`/api/backups?${params}`, {
+				headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+			});
+			if (response.ok) {
+				const result = await response.json();
+				setBackups((prev) =>
+					reset ? result.data : [...prev, ...result.data],
+				);
+				setBackupsTotal(result.absoluteTotal);
+			} else {
+				const err = await response.json();
+				toast.error("Failed to load backups", { description: err.error });
+			}
+		} catch (error) {
+			toast.error("Failed to load backups", {
+				description: error instanceof Error ? error.message : String(error),
+			});
+		} finally {
+			setBackupsLoading(false);
+		}
+	}
+
 	useEffect(() => {
 		fetchAgents();
 	}, []);
 
 	useEffect(() => {
+		if (viewMode === "all") return;
 		fetchAgents(sortBy);
 	}, [sortBy]);
+
+	useEffect(() => {
+		if (viewMode === "all") fetchBackups(true);
+	}, [viewMode]);
 
 	const filteredAgents = appliedSearch
 		? agents.filter((a) => a.name.toLowerCase().includes(appliedSearch.toLowerCase()))
@@ -288,20 +448,22 @@ export default function BackupsPage() {
 
 			<div className="w-full flex justify-between">
 				<div className="flex gap-2">
-					<Select
-						value={sortBy}
-						onValueChange={(v) => setSortBy(v as SortOption)}
-					>
-						<SelectTrigger>
-							<SelectValue placeholder="Sort by" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="name">Name</SelectItem>
-							<SelectItem value="date">Date Created</SelectItem>
-							<SelectItem value="status">Status</SelectItem>
-							<SelectItem value="last-backup">Last Backup</SelectItem>
-						</SelectContent>
-					</Select>
+					{viewMode !== "all" && (
+						<Select
+							value={sortBy}
+							onValueChange={(v) => setSortBy(v as SortOption)}
+						>
+							<SelectTrigger>
+								<SelectValue placeholder="Sort by" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="name">Name</SelectItem>
+								<SelectItem value="date">Date Created</SelectItem>
+								<SelectItem value="status">Status</SelectItem>
+								<SelectItem value="last-backup">Last Backup</SelectItem>
+							</SelectContent>
+						</Select>
+					)}
 					<div className="dark:bg-input/30 dark:hover:bg-input/50 flex gap-0.5 items-center justify-between px-0.5 border-input border dynround h-8">
 						<Button
 							size={"icon-xs"}
@@ -317,69 +479,125 @@ export default function BackupsPage() {
 						>
 							<RowsIcon />
 						</Button>
-					</div>
-				</div>
-				<div className="flex gap-2">
-					<div className="flex items-center gap-2">
-						<Input
-							placeholder="Agent name"
-							value={search}
-							onChange={(e) => setSearch(e.target.value)}
-							onKeyDown={(e) => e.key === "Enter" && applySearch()}
-							className="w-56"
-						/>
 						<Button
-							className="p-1! aspect-square min-w-9"
-							onClick={applySearch}
+							size={"icon-xs"}
+							variant={viewMode === "all" ? "default" : "ghost"}
+							onClick={() => setViewMode("all")}
 						>
-							<MagnifyingGlassIcon />
+							<StackIcon />
 						</Button>
 					</div>
-					<Button
-						variant="outline"
-						className="p-1! aspect-square"
-						onClick={clearSearch}
-					>
-						<XSquareIcon />
-					</Button>
 				</div>
+				{viewMode !== "all" && (
+					<div className="flex gap-2">
+						<div className="flex items-center gap-2">
+							<Input
+								placeholder="Agent name"
+								value={search}
+								onChange={(e) => setSearch(e.target.value)}
+								onKeyDown={(e) => e.key === "Enter" && applySearch()}
+								className="w-56"
+							/>
+							<Button
+								className="p-1! aspect-square min-w-9"
+								onClick={applySearch}
+							>
+								<MagnifyingGlassIcon />
+							</Button>
+						</div>
+						<Button
+							variant="outline"
+							className="p-1! aspect-square"
+							onClick={clearSearch}
+						>
+							<XSquareIcon />
+						</Button>
+					</div>
+				)}
 			</div>
 
-			{loading && <Spinner className="self-center" />}
-			{!loading && visibleAgents.length === 0 && (
-				<p className="text-sm text-muted-foreground">No agents found.</p>
-			)}
-
-			{viewMode === "grid" ? (
-				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-					{visibleAgents.map((agent) => (
-						<AgentCard
-							key={agent.id}
-							agent={agent}
-							status={getAgentStatus(agentStatuses, agent.id)}
-							onNavigate={(id) => navigate(`/backups/${id}/jobs`)}
+			{viewMode === "all" ? (
+				<>
+					{backupsLoading && backups.length === 0 && (
+						<Spinner className="self-center" />
+					)}
+					{!backupsLoading && backups.length === 0 && (
+						<p className="text-sm text-muted-foreground">No backups found.</p>
+					)}
+					<div className="flex flex-col gap-2">
+						{backups.map((backup) => (
+							<BackupRow
+								key={backup.id}
+								backup={backup}
+								onError={(message) => setErrorDialog(message)}
+							/>
+						))}
+					</div>
+					{backups.length < backupsTotal && (
+						<div className="flex justify-center">
+							<Button
+								variant="outline"
+								onClick={() => fetchBackups(false)}
+								disabled={backupsLoading}
+							>
+								{backupsLoading ? <Spinner /> : "Load more"}
+							</Button>
+						</div>
+					)}
+					{backups.length > 0 && (
+						<div className="h-4 w-full flex items-center justify-center">
+							<p className="text-xs text-muted-foreground">
+								Showing {backups.length} of {backupsTotal} backups
+							</p>
+						</div>
+					)}
+					{errorDialog !== null && (
+						<BackupErrorDialog
+							error={errorDialog}
+							open
+							onClose={() => setErrorDialog(null)}
 						/>
-					))}
-				</div>
+					)}
+				</>
 			) : (
-				<div className="flex flex-col gap-2">
-					{visibleAgents.map((agent) => (
-						<AgentRow
-							key={agent.id}
-							agent={agent}
-							status={getAgentStatus(agentStatuses, agent.id)}
-							onNavigate={(id) => navigate(`/backups/${id}/jobs`)}
-						/>
-					))}
-				</div>
-			)}
+				<>
+					{loading && <Spinner className="self-center" />}
+					{!loading && visibleAgents.length === 0 && (
+						<p className="text-sm text-muted-foreground">No agents found.</p>
+					)}
 
-			{appliedSearch && (
-				<div className="h-4 w-full flex items-center justify-center">
-					<p className="text-xs text-muted-foreground">
-						Showing {visibleAgents.length} of {absoluteTotal} agents
-					</p>
-				</div>
+					{viewMode === "grid" ? (
+						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+							{visibleAgents.map((agent) => (
+								<AgentCard
+									key={agent.id}
+									agent={agent}
+									status={getAgentStatus(agentStatuses, agent.id)}
+									onNavigate={(id) => navigate(`/backups/${id}/jobs`)}
+								/>
+							))}
+						</div>
+					) : (
+						<div className="flex flex-col gap-2">
+							{visibleAgents.map((agent) => (
+								<AgentRow
+									key={agent.id}
+									agent={agent}
+									status={getAgentStatus(agentStatuses, agent.id)}
+									onNavigate={(id) => navigate(`/backups/${id}/jobs`)}
+								/>
+							))}
+						</div>
+					)}
+
+					{appliedSearch && (
+						<div className="h-4 w-full flex items-center justify-center">
+							<p className="text-xs text-muted-foreground">
+								Showing {visibleAgents.length} of {absoluteTotal} agents
+							</p>
+						</div>
+					)}
+				</>
 			)}
 		</div>
 	);

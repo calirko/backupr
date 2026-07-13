@@ -13,7 +13,7 @@ static LAST_START: Mutex<Option<Instant>> = Mutex::new(None);
 pub fn notify_started() {
     {
         let mut g = LAST_START.lock().unwrap();
-        if g.map_or(false, |t| t.elapsed() < START_THROTTLE) {
+        if g.is_some_and(|t| t.elapsed() < START_THROTTLE) {
             return;
         }
         *g = Some(Instant::now());
@@ -69,11 +69,10 @@ fn fire(title: &str, body: &str, kind: Kind) {
 fn is_pt() -> bool {
     // Standard POSIX locale env vars — work on Linux and are sometimes set on Windows too.
     for var in ["LANG", "LANGUAGE", "LC_ALL", "LC_MESSAGES"] {
-        if let Ok(v) = std::env::var(var) {
-            if v.to_ascii_lowercase().starts_with("pt") {
+        if let Ok(v) = std::env::var(var)
+            && v.to_ascii_lowercase().starts_with("pt") {
                 return true;
             }
-        }
     }
     #[cfg(windows)]
     return win_locale_is_pt();

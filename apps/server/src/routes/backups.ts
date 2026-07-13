@@ -22,7 +22,7 @@ export default async function backupRoutes(app: Hono) {
 		const s = skip ? parseInt(skip) : undefined;
 		const t = take ? parseInt(take) : undefined;
 
-		const [rawData, total] = await Promise.all([
+		const [rawData, total, absoluteTotal] = await Promise.all([
 			db.backup.findMany({
 				where: parsedFilters,
 				orderBy: Object.keys(parsedOrderBy).length
@@ -30,8 +30,19 @@ export default async function backupRoutes(app: Hono) {
 					: { started_at: "desc" },
 				skip: s,
 				take: t,
+				include: {
+					backup_job: {
+						select: {
+							id: true,
+							name: true,
+							cron: true,
+							agent: { select: { id: true, name: true } },
+						},
+					},
+				},
 			}),
 			db.backup.count({ where: parsedFilters }),
+			db.backup.count({}),
 		]);
 
 		const data = rawData.map((b) => ({
@@ -39,7 +50,7 @@ export default async function backupRoutes(app: Hono) {
 			size_bytes: b.size_bytes !== null ? b.size_bytes.toString() : null,
 		}));
 
-		return c.json({ data, total, skip: s, take: t });
+		return c.json({ data, total, absoluteTotal, skip: s, take: t });
 	});
 
 	// Download redirect — generates a fresh presigned URL and redirects

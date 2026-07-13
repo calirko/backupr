@@ -67,7 +67,7 @@ function StatusBadge({ status }: { status: BackupStatus }) {
 	);
 }
 
-function BackupErrorDialog({
+export function BackupErrorDialog({
 	error,
 	open,
 	onClose,

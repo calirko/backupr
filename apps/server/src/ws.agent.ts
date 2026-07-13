@@ -126,8 +126,37 @@ export function setOnAgentBackupStatus(cb: AgentBackupStatusCallback) {
 	onAgentBackupStatus = cb;
 }
 
+/**
+ * Safely convert an untrusted `size_bytes` value from an agent frame into a
+ * non-negative BigInt. Returns undefined for anything that isn't a clean
+ * integer (NaN, floats, garbage strings) instead of throwing.
+ */
+function toBigIntOrUndefined(value: unknown): bigint | undefined {
+	if (value === undefined || value === null) return undefined;
+	if (typeof value === "number") {
+		if (!Number.isInteger(value) || value < 0) return undefined;
+		return BigInt(value);
+	}
+	if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+		try {
+			return BigInt(value.trim());
+		} catch {
+			return undefined;
+		}
+	}
+	return undefined;
+}
+
 function send(ws: WebSocket, message: Record<string, unknown>) {
-	ws.send(JSON.stringify(message));
+	// The socket can be mid-close when a timer-driven send (e.g. the ping
+	// interval) fires. Guard against writing to a non-open socket and swallow
+	// any race where it closes between the check and the send.
+	if (ws.readyState !== WebSocket.OPEN) return;
+	try {
+		ws.send(JSON.stringify(message));
+	} catch (err) {
+		console.error("[ws agent] Failed to send message:", err);
+	}
 }
 
 export default upgradeWebSocket((c) => {
@@ -200,6 +229,26 @@ export default upgradeWebSocket((c) => {
 			agentId = session.agent_id;
 			sessionId = session.id;
 
+			// If this agent already has a live connection, close the old socket
+			// before replacing its registry entry. Otherwise the stale socket
+			// keeps heartbeating and can still mutate DB state via late
+			// agent_status/backup_status frames. The onClose race guard below
+			// ensures the superseded socket won't clobber the new registry entry.
+			const previous = agentRegistry.get(agentId);
+			if (previous && previous.websocket !== (ws as unknown as WebSocket)) {
+				console.log(
+					`[ws agent] Agent ${agentId} reconnected; closing previous socket`,
+				);
+				try {
+					previous.websocket.close();
+				} catch (err) {
+					console.error(
+						`[ws agent] Failed to close previous socket for ${agentId}:`,
+						err,
+					);
+				}
+			}
+
 			agentRegistry.set(agentId, {
 				agentId,
 				sessionId,
@@ -255,137 +304,160 @@ export default upgradeWebSocket((c) => {
 				return;
 			}
 
-			switch (message.type) {
-				case "ping": {
-					send(_ws as unknown as WebSocket, { type: "pong" });
-					break;
-				}
-
-				case "pong": {
-					clearPingTimeout();
-					const now = new Date();
-					const state = agentRegistry.get(agentId);
-					if (state) {
-						state.lastSeen = now;
+			// A single malformed frame (bad BigInt, transient DB error, …) must
+			// never take down the process via an unhandled rejection. Log it and
+			// keep the connection alive.
+			try {
+				switch (message.type) {
+					case "ping": {
+						send(_ws as unknown as WebSocket, { type: "pong" });
+						break;
 					}
-					await db.agentSession.update({
-						where: { id: sessionId },
-						data: { last_seen_at: now },
-					});
-					break;
-				}
 
-				case "agent_status": {
-					const state = agentRegistry.get(agentId);
-					if (state) {
-						state.lastSeen = new Date();
-						state.lastStatusReport = {
-							currentJob: (message.currentJob as BackupJob | null) ?? null,
-							jobQueue: (message.jobQueue as BackupJob[]) ?? [],
-							timestamp:
-								(message.timestamp as string) ?? new Date().toISOString(),
-						};
-						state.currentJob = state.lastStatusReport.currentJob;
-						state.jobQueue = state.lastStatusReport.jobQueue;
+					case "pong": {
+						clearPingTimeout();
+						const now = new Date();
+						const state = agentRegistry.get(agentId);
+						if (state) {
+							state.lastSeen = now;
+						}
+						await db.agentSession.update({
+							where: { id: sessionId },
+							data: { last_seen_at: now },
+						});
+						break;
 					}
-					if (state?.currentJob || state?.jobQueue?.length) {
+
+					case "agent_status": {
+						const state = agentRegistry.get(agentId);
+						if (state) {
+							state.lastSeen = new Date();
+							state.lastStatusReport = {
+								currentJob: (message.currentJob as BackupJob | null) ?? null,
+								jobQueue: (message.jobQueue as BackupJob[]) ?? [],
+								timestamp:
+									(message.timestamp as string) ?? new Date().toISOString(),
+							};
+							state.currentJob = state.lastStatusReport.currentJob;
+							state.jobQueue = state.lastStatusReport.jobQueue;
+						}
+						if (state?.currentJob || state?.jobQueue?.length) {
+							console.log(
+								`[ws agent] Status from ${agentId}: job=${state?.currentJob?.id ?? "none"}, queued=${state?.jobQueue?.length ?? 0}`,
+							);
+						}
+						onStatusChange?.();
+						break;
+					}
+
+					case "backup_status": {
+						const backupId = message.backupId as string;
+						const statusStr = message.status as string;
+						const metadata = message.metadata as Record<string, unknown>;
+
+						if (!backupId || !statusStr) {
+							console.warn(
+								"[ws agent] backup_status message missing backupId or status",
+							);
+							break;
+						}
+
+						// Map agent status strings to BackupStatus enum values
+						let status: string | undefined;
+						switch (statusStr.toLowerCase()) {
+							case "running":
+								status = "IN_PROGRESS";
+								break;
+							case "completed":
+								status = "COMPLETED";
+								break;
+							case "failed":
+								status = "FAILED";
+								break;
+							default:
+								console.warn(`[ws agent] Unknown backup status: ${statusStr}`);
+								break;
+						}
+
+						if (!status) {
+							console.warn(
+								`[ws agent] Failed to map status ${statusStr} to BackupStatus`,
+							);
+							break;
+						}
+
+						await handleBackupStatusUpdate(backupId, status as any, {
+							size_bytes: toBigIntOrUndefined(metadata?.size_bytes),
+							error: metadata?.error as string | undefined,
+							blob_key: metadata?.blob_key as string | undefined,
+							url: metadata?.url as string | undefined,
+						});
+
+						onStatusChange?.();
+						onAgentBackupStatus?.(agentId, statusStr);
+						if (statusStr.toLowerCase() === "failed") pushBackupUpdate();
+						break;
+					}
+
+					case "stale_backup": {
+						// Agent explicitly reports a backup that was running when it was killed.
+						// recoverStuckBackups already handles it via the DB scan, but this
+						// path catches any timing edge-cases and is logged separately.
+						const staleId = message.backupId as string;
+						if (!staleId) break;
 						console.log(
-							`[ws agent] Status from ${agentId}: job=${state?.currentJob?.id ?? "none"}, queued=${state?.jobQueue?.length ?? 0}`,
+							`[ws agent] Agent ${agentId} reported stale backup ${staleId}`,
 						);
+						await db.backup.updateMany({
+							where: {
+								id: staleId,
+								status: { in: [BackupStatus.PENDING, BackupStatus.IN_PROGRESS] },
+							},
+							data: {
+								status: BackupStatus.FAILED,
+								error:
+									"Agent restarted: backup was interrupted (reported by agent)",
+								completed_at: new Date(),
+							},
+						});
+						onStatusChange?.();
+						break;
 					}
-					onStatusChange?.();
-					break;
-				}
 
-				case "backup_status": {
-					const backupId = message.backupId as string;
-					const statusStr = message.status as string;
-					const metadata = message.metadata as Record<string, unknown>;
+					case "dry_run_result":
+					case "logs_data": {
+						const requestId = message.requestId as string;
+						const resolver = pendingRequests.get(requestId);
+						if (resolver) {
+							pendingRequests.delete(requestId);
+							resolver(message);
+						}
+						break;
+					}
 
-					if (!backupId || !statusStr) {
-						console.warn(
-							"[ws agent] backup_status message missing backupId or status",
+					case "update_ack": {
+						console.log(
+							`[ws agent] Agent ${agentId} acknowledged update command`,
 						);
 						break;
 					}
 
-					// Map agent status strings to BackupStatus enum values
-					let status: string | undefined;
-					switch (statusStr.toLowerCase()) {
-						case "running":
-							status = "IN_PROGRESS";
-							break;
-						case "completed":
-							status = "COMPLETED";
-							break;
-						case "failed":
-							status = "FAILED";
-							break;
-						default:
-							console.warn(`[ws agent] Unknown backup status: ${statusStr}`);
-							break;
-					}
-
-					if (!status) {
+					case "update_failed": {
+						const reason = (message.reason as string) ?? "unknown";
 						console.warn(
-							`[ws agent] Failed to map status ${statusStr} to BackupStatus`,
+							`[ws agent] Agent ${agentId} update failed/declined: ${reason}`,
 						);
 						break;
 					}
 
-					await handleBackupStatusUpdate(backupId, status as any, {
-						size_bytes: metadata?.size_bytes
-							? BigInt(metadata.size_bytes as string | number)
-							: undefined,
-						error: metadata?.error as string | undefined,
-						blob_key: metadata?.blob_key as string | undefined,
-						url: metadata?.url as string | undefined,
-					});
-
-					onStatusChange?.();
-					onAgentBackupStatus?.(agentId, statusStr);
-					if (statusStr.toLowerCase() === "failed") pushBackupUpdate();
-					break;
+					default:
+						console.warn(`[ws agent] Unknown message type: ${message.type}`);
 				}
-
-				case "stale_backup": {
-					// Agent explicitly reports a backup that was running when it was killed.
-					// recoverStuckBackups already handles it via the DB scan, but this
-					// path catches any timing edge-cases and is logged separately.
-					const staleId = message.backupId as string;
-					if (!staleId) break;
-					console.log(
-						`[ws agent] Agent ${agentId} reported stale backup ${staleId}`,
-					);
-					await db.backup.updateMany({
-						where: {
-							id: staleId,
-							status: { in: [BackupStatus.PENDING, BackupStatus.IN_PROGRESS] },
-						},
-						data: {
-							status: BackupStatus.FAILED,
-							error:
-								"Agent restarted: backup was interrupted (reported by agent)",
-							completed_at: new Date(),
-						},
-					});
-					onStatusChange?.();
-					break;
-				}
-
-				case "dry_run_result":
-				case "logs_data": {
-					const requestId = message.requestId as string;
-					const resolver = pendingRequests.get(requestId);
-					if (resolver) {
-						pendingRequests.delete(requestId);
-						resolver(message);
-					}
-					break;
-				}
-
-				default:
-					console.warn(`[ws agent] Unknown message type: ${message.type}`);
+			} catch (err) {
+				console.error(
+					`[ws agent] Error handling ${String(message.type)} from ${agentId}:`,
+					err,
+				);
 			}
 		},
 

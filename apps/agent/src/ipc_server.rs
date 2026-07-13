@@ -97,19 +97,16 @@ pub async fn run_ipc_server(handle: std::sync::Arc<IpcHandle>) {
                 tokio::spawn(async move {
                     // Send current state immediately so the tray shows the right status on connect.
                     if let Ok(line) = serde_json::to_string(&IpcMessage::Status { state: initial })
-                    {
-                        if stream.write_all((line + "\n").as_bytes()).await.is_err() {
+                        && stream.write_all((line + "\n").as_bytes()).await.is_err() {
                             return;
                         }
-                    }
 
                     let mut rx = tx.subscribe();
                     while let Ok(msg) = rx.recv().await {
-                        if let Ok(line) = serde_json::to_string(&msg) {
-                            if stream.write_all((line + "\n").as_bytes()).await.is_err() {
+                        if let Ok(line) = serde_json::to_string(&msg)
+                            && stream.write_all((line + "\n").as_bytes()).await.is_err() {
                                 break;
                             }
-                        }
                     }
                     println!("[IPC] Tray disconnected");
                 });

@@ -133,12 +133,11 @@ where
                         }
                     }
 
-                    if let Some(pct) = found_pct {
-                        if pct as i16 > last_pct {
+                    if let Some(pct) = found_pct
+                        && pct as i16 > last_pct {
                             last_pct = pct as i16;
                             on_pct(pct.min(99));
                         }
-                    }
 
                     // Keep last 20 chars as tail for split-chunk handling
                     let new_tail = text
@@ -218,12 +217,11 @@ fn build_7z_args(
 
     args.extend(files.iter().cloned());
 
-    if use_password {
-        if let Some(pwd) = password {
+    if use_password
+        && let Some(pwd) = password {
             args.push(format!("-p{}", pwd));
             args.push("-mhe=on".to_string()); // encrypt headers
         }
-    }
 
     args
 }
@@ -545,11 +543,7 @@ async fn upload_backup_archive(
                 let done = uploaded_clone
                     .fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed)
                     + bytes.len() as u64;
-                let pct = if total > 0 {
-                    ((done * 100) / total).min(99) as i32
-                } else {
-                    0
-                };
+                let pct = (done * 100).checked_div(total).unwrap_or(0).min(99) as i32;
                 if pct > last_pct_clone.load(std::sync::atomic::Ordering::Relaxed) {
                     last_pct_clone.store(pct, std::sync::atomic::Ordering::Relaxed);
                     let elapsed = start.elapsed().as_secs_f64().max(0.001);
@@ -672,11 +666,9 @@ pub fn kill_orphan_7z() {
             if let Ok(out) = std::process::Command::new("pkill")
                 .args(["-x", name])
                 .output()
-            {
-                if out.status.success() {
+                && out.status.success() {
                     println!("[Backup] Killed orphaned {} process(es).", name);
                 }
-            }
         }
     }
 }
@@ -705,11 +697,10 @@ fn write_lockfile(backup_id: &str, job_id: &str) {
         backup_id: backup_id.to_string(),
         job_id: job_id.to_string(),
     };
-    if let Ok(json) = serde_json::to_string(&data) {
-        if let Err(e) = std::fs::write(lockfile_path(), json) {
+    if let Ok(json) = serde_json::to_string(&data)
+        && let Err(e) = std::fs::write(lockfile_path(), json) {
             eprintln!("[Backup] Warning: could not write lockfile: {}", e);
         }
-    }
 }
 
 pub fn remove_lockfile() {

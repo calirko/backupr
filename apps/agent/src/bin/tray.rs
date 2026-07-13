@@ -28,25 +28,23 @@ fn main() {
 
 fn ipc_loop(tx: mpsc::Sender<TrayEvent>) {
     loop {
-        match TcpStream::connect(("127.0.0.1", IPC_PORT)) {
-            Ok(stream) => {
-                let reader = BufReader::new(stream);
-                for line in reader.lines() {
-                    match line {
-                        Ok(text) if !text.is_empty() => {
-                            if let Ok(msg) = serde_json::from_str::<IpcMessage>(&text) {
-                                if tx.send(TrayEvent::Msg(msg)).is_err() {
-                                    return; // main thread exited
-                                }
-                            }
+        // Err = service not running yet; fall through to the retry sleep below.
+        if let Ok(stream) = TcpStream::connect(("127.0.0.1", IPC_PORT)) {
+            let reader = BufReader::new(stream);
+            for line in reader.lines() {
+                match line {
+                    Ok(text) if !text.is_empty() => {
+                        if let Ok(msg) = serde_json::from_str::<IpcMessage>(&text)
+                            && tx.send(TrayEvent::Msg(msg)).is_err()
+                        {
+                            return; // main thread exited
                         }
-                        Ok(_) => {}
-                        Err(_) => break,
                     }
+                    Ok(_) => {}
+                    Err(_) => break,
                 }
-                let _ = tx.send(TrayEvent::Disconnected);
             }
-            Err(_) => {} // service not running yet, retry below
+            let _ = tx.send(TrayEvent::Disconnected);
         }
         std::thread::sleep(Duration::from_secs(3));
     }
@@ -199,11 +197,10 @@ fn toast(title: &str, body: &str, icon_uri: Option<&str>) {
 
 fn is_pt() -> bool {
     for var in ["LANG", "LANGUAGE", "LC_ALL", "LC_MESSAGES"] {
-        if let Ok(v) = std::env::var(var) {
-            if v.to_ascii_lowercase().starts_with("pt") {
+        if let Ok(v) = std::env::var(var)
+            && v.to_ascii_lowercase().starts_with("pt") {
                 return true;
             }
-        }
     }
     unsafe extern "system" {
         fn GetUserDefaultLocaleName(lp_locale_name: *mut u16, cch_locale_name: i32) -> i32;

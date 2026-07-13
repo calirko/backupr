@@ -4,8 +4,7 @@
 //! 1. `run_update()` — called when the server sends an "update" command:
 //!    a. Fetches the latest GitHub release metadata.
 //!    b. Downloads new binaries to `<dir>/<asset>.new` files.
-//!    c. **Windows**: spawns `agent apply-update` as an independent helper
-//!       process and returns (does NOT exit — lets WinSW stop the service).
+//!    c. **Windows**: spawns `agent apply-update` as an independent helper process and returns (does NOT exit — lets WinSW stop the service).
 //!    d. **Linux**: replaces binaries in-place and restarts the process.
 //!
 //! 2. `run_apply_update_helper()` — entry point for the `apply-update`
@@ -192,17 +191,28 @@ pub fn cleanup_stale_artifacts() {
 
     // <agent>.bak  (e.g. backupr-agent.exe.bak)
     let agent_bak = exe.with_file_name(format!("{}.bak", name.to_string_lossy()));
-    if agent_bak.exists() {
-        if std::fs::remove_file(&agent_bak).is_ok() {
+    if agent_bak.exists()
+        && std::fs::remove_file(&agent_bak).is_ok() {
             raccoon!("[Update] Removed stale backup: {}", agent_bak.display());
         }
-    }
 
     // <tray>.bak  (e.g. tray.exe.bak)
     let tray_bak = dir.join(format!("{}.bak", tray_local_filename()));
-    if tray_bak.exists() {
-        if std::fs::remove_file(&tray_bak).is_ok() {
+    if tray_bak.exists()
+        && std::fs::remove_file(&tray_bak).is_ok() {
             raccoon!("[Update] Removed stale backup: {}", tray_bak.display());
+        }
+
+    // Leftover *.new downloads from an interrupted or failed update. A
+    // successful update renames these into place, so anything remaining is a
+    // partial/aborted download that should not linger.
+    for asset in [Some(agent_asset_name()), tray_asset_name()]
+        .into_iter()
+        .flatten()
+    {
+        let new_file = dir.join(format!("{}.new", asset));
+        if new_file.exists() && std::fs::remove_file(&new_file).is_ok() {
+            raccoon!("[Update] Removed stale download: {}", new_file.display());
         }
     }
 }
