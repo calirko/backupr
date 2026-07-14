@@ -6,7 +6,7 @@ COPY package.json bun.lock ./
 COPY apps/web/package.json ./apps/web/package.json
 COPY apps/server/package.json ./apps/server/package.json
 
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --filter web
 
 COPY apps/web ./apps/web
 
