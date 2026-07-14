@@ -1,7 +1,9 @@
 import { ArrowRightIcon } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import { toast } from "sonner";
+import WikiDialog from "@/components/dialog/wiki/wiki";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -11,7 +13,12 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import WikiDialog from "@/components/dialog/wiki/wiki";
+import {
+	type ChartConfig,
+	ChartContainer,
+	ChartTooltip,
+	ChartTooltipContent,
+} from "@/components/ui/chart";
 import { useSocket } from "@/hooks/use-socket";
 
 interface DashboardData {
@@ -101,46 +108,72 @@ function StatusDot({ status }: { status: string }) {
 	);
 }
 
-function BackupDayChart({ data }: { data: { day: string; count: number }[] }) {
-	const maxCount = Math.max(...data.map((d) => d.count), 1);
+const backupDayChartConfig = {
+	count: {
+		label: "Backups",
+		color: "var(--primary)",
+	},
+} satisfies ChartConfig;
 
+function BackupDayChart({ data }: { data: { day: string; count: number }[] }) {
 	return (
-		<div className="w-full flex flex-col gap-1 h-full justify-end">
-			<div className="flex gap-1.5">
-				{data.map((d) => (
-					<div
-						key={d.day}
-						className="flex-1 text-center text-xs text-muted-foreground"
-					>
-						{d.count > 0 ? d.count : ""}
-					</div>
-				))}
-			</div>
-			<div className="flex items-end gap-1.5 h-42">
-				{data.map((d) => (
-					<div
-						key={d.day}
-						className="flex-1 bg-primary transition-all dynround"
-						style={{
-							height: d.count > 0 ? `${(d.count / maxCount) * 100}%` : "2px",
-							opacity: d.count > 0 ? 1 : 0.2,
-						}}
-					/>
-				))}
-			</div>
-			<div className="flex gap-1.5">
-				{data.map((d) => (
-					<div
-						key={d.day}
-						className="flex-1 text-center text-xs text-muted-foreground"
-					>
-						{new Date(`${d.day}T12:00:00`).toLocaleDateString("en", {
+		<ChartContainer
+			config={backupDayChartConfig}
+			className="h-full w-full min-h-[200px]"
+		>
+			<AreaChart accessibilityLayer data={data}>
+				<defs>
+					<linearGradient id="fillCount" x1="0" y1="0" x2="0" y2="1">
+						<stop
+							offset="5%"
+							stopColor="var(--color-count)"
+							stopOpacity={0.4}
+						/>
+						<stop
+							offset="95%"
+							stopColor="var(--color-count)"
+							stopOpacity={0.05}
+						/>
+					</linearGradient>
+				</defs>
+				<CartesianGrid vertical={false} />
+				<XAxis
+					dataKey="day"
+					tickLine={false}
+					axisLine={false}
+					tickMargin={10}
+					tickFormatter={(value) =>
+						new Date(`${value}T12:00:00`).toLocaleDateString("en", {
 							weekday: "short",
-						})}
-					</div>
-				))}
-			</div>
-		</div>
+						})
+					}
+				/>
+				<ChartTooltip
+					cursor={false}
+					content={
+						<ChartTooltipContent
+							indicator="dot"
+							labelFormatter={(_, payload) =>
+								new Date(
+									`${payload[0]?.payload.day}T12:00:00`,
+								).toLocaleDateString("en", {
+									weekday: "long",
+									month: "short",
+									day: "numeric",
+								})
+							}
+						/>
+					}
+				/>
+				<Area
+					dataKey="count"
+					type="natural"
+					fill="url(#fillCount)"
+					stroke="var(--color-count)"
+					strokeWidth={2}
+				/>
+			</AreaChart>
+		</ChartContainer>
 	);
 }
 
@@ -293,7 +326,9 @@ export default function DashboardPage() {
 								)}
 							</h2>
 							<p className="text-muted-foreground text-xs mt-0.5">
-								{data?.stats?.free_size_bytes ? "free available" : `${data?.stats?.total_objects ?? "—"} objects in MinIO`}
+								{data?.stats?.free_size_bytes
+									? "free available"
+									: `${data?.stats?.total_objects ?? "—"} objects in MinIO`}
 							</p>
 						</CardContent>
 						<CardFooter>
@@ -381,7 +416,7 @@ export default function DashboardPage() {
 										<div key={b.id} className="flex items-center gap-2 text-xs">
 											<StatusDot status={b.status} />
 											<span className="font-medium flex-1 truncate">
-												{b.job_name} ─ {b.agent_name}
+												{b.job_name} - {b.agent_name}
 											</span>
 											<span className="text-muted-foreground shrink-0">
 												{formatBytes(b.size_bytes)}

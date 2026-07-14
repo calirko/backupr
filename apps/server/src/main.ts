@@ -4,7 +4,7 @@ import { ensureBucket } from "./lib/storage";
 import { scheduler } from "./scheduler";
 import { initAgentStatusTracking } from "./agent-status";
 import upgradeAgentWebSocket from "./ws.agent";
-import upgradeWebWebSocket from "./ws.web";
+import upgradeWebWebSocket, { initAgentStatusListener } from "./ws.web";
 import userRoutes from "./routes/users";
 import agentRoutes from "./routes/agents";
 import backupPolicyRoutes from "./routes/backup-policies";
@@ -22,6 +22,8 @@ generalRoutes(app);
 
 app.get("/api/agent/ws", upgradeAgentWebSocket);
 app.get("/api/web/ws", upgradeWebWebSocket);
+
+initAgentStatusListener();
 
 ensureBucket().catch((err) =>
 	console.error("[storage] Failed to ensure bucket:", err),

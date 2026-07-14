@@ -56,6 +56,10 @@ fn ipc_loop(tx: mpsc::Sender<TrayEvent>) {
 
 const LABEL_UNAVAILABLE: &str = "Backupr \u{00b7} Service unavailable";
 
+/// Compiled-in tray version (from Cargo.toml). Shown in the tray menu and, as a
+/// side effect, embedded in the binary so release tooling can verify the build.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 const ICON_PNG: &[u8] = include_bytes!("../assets/icon-agent.png");
 
 fn load_icon() -> tray_icon::Icon {
@@ -87,8 +91,10 @@ fn run_tray(rx: mpsc::Receiver<TrayEvent>) {
     let icon = load_icon();
     let icon_uri = extract_icon_to_disk();
     let status_item = MenuItem::new(LABEL_UNAVAILABLE, false, None);
+    let version_item = MenuItem::new(format!("Version {VERSION}"), false, None);
     let menu = Menu::new();
     menu.append(&status_item).unwrap();
+    menu.append(&version_item).unwrap();
 
     let tray = match TrayIconBuilder::new()
         .with_icon(icon)

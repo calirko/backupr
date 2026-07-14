@@ -12,6 +12,32 @@ import { pushBackupUpdate } from "../ws.web";
 const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
 
+// Fraction of the [since, now) window the agent spent in a non-OFFLINE status.
+// `records` must be sorted by date ascending and may start before `since`
+// (a baseline record) to avoid treating the window's start as downtime.
+function computeUptimePct(
+	records: { status: string; date: Date }[],
+	since: Date,
+): number {
+	const now = Date.now();
+	const sinceMs = since.getTime();
+	const totalMs = now - sinceMs;
+	if (totalMs <= 0) return 0;
+
+	let onlineMs = 0;
+	for (let i = 0; i < records.length; i++) {
+		const r = records[i]!;
+		if (r.status === "OFFLINE") continue;
+
+		const start = Math.max(new Date(r.date).getTime(), sinceMs);
+		const next = records[i + 1];
+		const end = next ? new Date(next.date).getTime() : now;
+		if (end > start) onlineMs += end - start;
+	}
+
+	return (onlineMs / totalMs) * 100;
+}
+
 export default async function agentRoutes(app: Hono) {
 	// Step 1: agent calls this to get a presigned PUT URL + backup record ID
 	app.post("/api/agent/upload/prepare", async (c) => {
@@ -315,6 +341,9 @@ export default async function agentRoutes(app: Hono) {
 
 		const baseWhere = { deleted_at: null, ...parsedFilters };
 
+		const since = new Date();
+		since.setDate(since.getDate() - 7);
+
 		const [rawData, total, absoluteTotal] = await Promise.all([
 			db.agent.findMany({
 				where: baseWhere,
@@ -334,13 +363,29 @@ export default async function agentRoutes(app: Hono) {
 							},
 						},
 					},
+					agentStatuses: {
+						where: { date: { gte: since } },
+						orderBy: { date: "asc" },
+						select: { status: true, date: true },
+					},
 				},
 			}),
 			db.agent.count({ where: baseWhere }),
 			db.agent.count({ where: { deleted_at: null } }),
 		]);
 
-		const data = rawData.map(({ backupJobs, ...agent }) => {
+		const agentIds = rawData.map((agent) => agent.id);
+		const baselines = agentIds.length
+			? await db.agentStatus.findMany({
+					where: { agent_id: { in: agentIds }, date: { lt: since } },
+					orderBy: [{ agent_id: "asc" }, { date: "desc" }],
+					distinct: ["agent_id"],
+					select: { agent_id: true, status: true, date: true },
+				})
+			: [];
+		const baselineByAgentId = new Map(baselines.map((b) => [b.agent_id, b]));
+
+		const data = rawData.map(({ backupJobs, agentStatuses, ...agent }) => {
 			let lastBackupAt: Date | null = null;
 			let totalSizeBytes = 0;
 			for (const job of backupJobs) {
@@ -351,10 +396,18 @@ export default async function agentRoutes(app: Hono) {
 					}
 				}
 			}
+
+			const baseline = baselineByAgentId.get(agent.id);
+			const statusRecords = baseline
+				? [baseline, ...agentStatuses]
+				: agentStatuses;
+			const uptimePct = computeUptimePct(statusRecords, since);
+
 			return {
 				...agent,
 				total_size_bytes: totalSizeBytes,
 				last_backup_at: lastBackupAt,
+				uptime_pct: uptimePct,
 			};
 		});
 

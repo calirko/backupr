@@ -113,6 +113,28 @@ export default function AgentsPage() {
 			),
 		},
 		{
+			key: "uptime_pct",
+			label: "Uptime (7d)",
+			orderable: false,
+			format: (value) =>
+				value == null ? (
+					"—"
+				) : (
+					<span
+						className={value < 90 ? "text-destructive" : undefined}
+						style={
+							value >= 90 && value < 99
+								? { color: "var(--yellowish)" }
+								: value >= 99
+									? { color: "var(--greenish)" }
+									: undefined
+						}
+					>
+						{value.toFixed(1)}%
+					</span>
+				),
+		},
+		{
 			key: "created_by",
 			label: "Created By",
 			orderable: true,

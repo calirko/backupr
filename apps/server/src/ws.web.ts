@@ -3,7 +3,9 @@ import { prisma } from "./lib/prisma";
 import { getSchedulerQueuedJobIds } from "./scheduler";
 import { agentRegistry, setOnAgentStatusChange } from "./ws.agent";
 
-setOnAgentStatusChange(() => pushAgentStatuses());
+export function initAgentStatusListener() {
+	setOnAgentStatusChange(() => pushAgentStatuses());
+}
 
 const db = prisma;
 
