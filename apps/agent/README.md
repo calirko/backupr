@@ -33,10 +33,22 @@ which mangles the em dashes and box-drawing characters in the scripts and breaks
 The script picks `setup.ps1` (PowerShell 5.1+) or `setup-fallback.ps1` (PowerShell 2.0–4.x,
 typically Windows 7) automatically based on `$PSVersionTable`.
 
+#### No-tray install
+
+`setup-no-tray.ps1` is the same installer/service manager as `setup.ps1`, minus everything that
+downloads, registers, or runs `backupr-tray.exe` — only the headless service gets installed. Use
+it on machines where you don't want the per-user tray icon/notifications:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned; try { [Net.ServicePointManager]::SecurityProtocol = 3072 } catch { try { [Net.ServicePointManager]::SecurityProtocol = 3840 } catch {} }; $base = "https://cdn.jsdelivr.net/gh/calirko/backupr@main/apps/agent/scripts"; $wc = New-Object Net.WebClient; $wc.Encoding = [Text.Encoding]::UTF8; iex $wc.DownloadString("$base/setup-no-tray.ps1")
+```
+
+It has no PowerShell-2.0-fallback equivalent — use it on PowerShell 5.1+ only.
+
 > jsDelivr caches files for a while after a push. If you've just pushed a fix to a script under
 > `apps/agent/scripts/` and need it live immediately, purge it with:
 > `curl https://purge.jsdelivr.net/gh/calirko/backupr@main/apps/agent/scripts/setup.ps1` (and
-> again for `setup-fallback.ps1`).
+> again for `setup-fallback.ps1` / `setup-no-tray.ps1`).
 
 ## Building
 

@@ -62,12 +62,14 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const ICON_PNG: &[u8] = include_bytes!("../assets/icon-agent.png");
 
+// Pixels decoded from icon-agent.png at build time (see build.rs) so this
+// binary never links a PNG/zlib decoder — see build.rs for why.
+const ICON_RGBA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_agent.rgba"));
+include!(concat!(env!("OUT_DIR"), "/icon_agent_dims.rs"));
+
 fn load_icon() -> tray_icon::Icon {
-    let img = image::load_from_memory(ICON_PNG)
-        .expect("Failed to decode icon-agent.png")
-        .into_rgba8();
-    let (w, h) = img.dimensions();
-    tray_icon::Icon::from_rgba(img.into_raw(), w, h).expect("Failed to create tray icon")
+    tray_icon::Icon::from_rgba(ICON_RGBA.to_vec(), ICON_AGENT_WIDTH, ICON_AGENT_HEIGHT)
+        .expect("Failed to create tray icon")
 }
 
 /// Write the embedded PNG next to the exe so toast notifications can reference it by path.
