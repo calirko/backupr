@@ -1,5 +1,5 @@
 # Build stage: install deps, generate prisma client, bundle
-FROM oven/bun:1.3.11 AS builder
+FROM oven/bun:1.3.11-slim AS builder
 
 WORKDIR /app
 

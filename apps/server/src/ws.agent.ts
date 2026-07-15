@@ -8,6 +8,8 @@ const db = prisma;
 
 const PING_INTERVAL_MS = 30000;
 const PING_TIMEOUT_MS = 10000;
+const STALE_TIMEOUT_MS = 5 * 60 * 1000;
+const STALE_SWEEP_INTERVAL_MS = 60000;
 
 interface BackupJob {
 	id: string;
@@ -125,6 +127,33 @@ export function setOnAgentDisconnect(cb: AgentDisconnectCallback) {
 export function setOnAgentBackupStatus(cb: AgentBackupStatusCallback) {
 	onAgentBackupStatus = cb;
 }
+
+/**
+ * Periodic safety net: the ping/pong cycle closes sockets that stop
+ * responding, but a socket that dies without a clean TCP close (network
+ * drop, sleeping laptop, …) doesn't always fire onClose. Without this sweep
+ * a dead entry can sit in agentRegistry forever, showing as "connected" to
+ * the frontend indefinitely.
+ */
+function reapStaleAgents() {
+	const now = Date.now();
+	for (const [id, state] of agentRegistry) {
+		if (now - state.lastSeen.getTime() <= STALE_TIMEOUT_MS) continue;
+		console.warn(
+			`[ws agent] Reaping stale agent ${id}: no activity since ${state.lastSeen.toISOString()}`,
+		);
+		try {
+			state.websocket.close();
+		} catch (err) {
+			console.error(`[ws agent] Failed to close stale socket for ${id}:`, err);
+		}
+		agentRegistry.delete(id);
+		onStatusChange?.();
+		onAgentDisconnect?.(id);
+	}
+}
+
+setInterval(reapStaleAgents, STALE_SWEEP_INTERVAL_MS);
 
 /**
  * Safely convert an untrusted `size_bytes` value from an agent frame into a
