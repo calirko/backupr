@@ -20,6 +20,7 @@
 //! version, hostname, RAM, disk, and CPU info.
 
 use anyhow::{Result, anyhow};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,6 +31,42 @@ static UPDATE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
 const GITHUB_API_LATEST: &str = "https://api.github.com/repos/calirko/backupr/releases/latest";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Public half of the Ed25519 keypair used to sign release binaries
+/// (generated with `scripts/keygen.sh`; private key never leaves the
+/// release machine). Every downloaded update must carry a valid `.sig`
+/// asset verifying against this key before it's swapped into place — this
+/// is what stops a compromised/spoofed GitHub release (or a MITM on the
+/// download) from getting the agent to self-replace with an arbitrary
+/// binary, which is also the exact "process rewrites its own exe and
+/// restarts as a service" pattern that trips AV/EDR behavioral heuristics.
+const UPDATE_PUBLIC_KEY_HEX: &str =
+    "a23ed9730d4c0eb81523eebdd534e0126b400fee9fd4fa9fdbc1c90315d5588a";
+
+fn update_public_key() -> VerifyingKey {
+    let bytes = decode_hex(UPDATE_PUBLIC_KEY_HEX)
+        .try_into()
+        .expect("UPDATE_PUBLIC_KEY_HEX must decode to exactly 32 bytes");
+    VerifyingKey::from_bytes(&bytes).expect("UPDATE_PUBLIC_KEY_HEX is not a valid Ed25519 key")
+}
+
+fn decode_hex(s: &str) -> Vec<u8> {
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).expect("UPDATE_PUBLIC_KEY_HEX is not hex"))
+        .collect()
+}
+
+/// Verifies `data` against `sig_bytes` (a raw 64-byte Ed25519 signature, as
+/// produced by `openssl pkeyutl -sign -rawin`) using the embedded release
+/// public key. Callers must refuse to apply an update on any error here.
+fn verify_update_signature(data: &[u8], sig_bytes: &[u8]) -> Result<()> {
+    let sig = Signature::from_slice(sig_bytes)
+        .map_err(|e| anyhow!("Malformed update signature: {}", e))?;
+    update_public_key()
+        .verify(data, &sig)
+        .map_err(|_| anyhow!("Update signature does not verify against the embedded public key"))
+}
 /// Service name as registered by setup.ps1 (`$ServiceName = "backupr-agent"`).
 #[cfg(target_os = "windows")]
 const WINSW_SERVICE_NAME: &str = "backupr-agent";
@@ -112,14 +149,29 @@ fn http_client() -> Result<reqwest::Client> {
         .map_err(|e| anyhow!("Failed to build HTTP client: {}", e))
 }
 
-async fn download_file(client: &reqwest::Client, url: &str, dest: &Path) -> Result<()> {
-    raccoon!("[Update] Downloading {} ...", url);
+async fn fetch_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
     let resp = client.get(url).send().await?;
     let status = resp.status();
     if !status.is_success() {
         anyhow::bail!("HTTP {} fetching {}", status, url);
     }
-    let bytes = resp.bytes().await?;
+    Ok(resp.bytes().await?.to_vec())
+}
+
+/// Downloads `url`, verifies it against the signature at `sig_url`, and only
+/// then writes it to `dest`. Refuses to write anything on a verification
+/// failure — an update that doesn't verify must never be applied.
+async fn download_file(client: &reqwest::Client, url: &str, sig_url: &str, dest: &Path) -> Result<()> {
+    raccoon!("[Update] Downloading {} ...", url);
+    let bytes = fetch_bytes(client, url).await?;
+
+    raccoon!("[Update] Downloading signature {} ...", sig_url);
+    let sig_bytes = fetch_bytes(client, sig_url).await?;
+
+    verify_update_signature(&bytes, &sig_bytes)
+        .map_err(|e| anyhow!("Refusing to apply {}: {}", url, e))?;
+    raccoon!("[Update] Signature OK for {}", url);
+
     std::fs::write(dest, &bytes).map_err(|e| anyhow!("Cannot write {}: {}", dest.display(), e))?;
 
     // Ensure executables are runnable on Unix.
@@ -461,12 +513,25 @@ async fn run_update_inner() -> Result<()> {
         .parent()
         .ok_or_else(|| anyhow!("Exe has no parent directory: {}", exe_path.display()))?;
 
+    // Every binary asset must ship with a `<name>.sig` asset in the same
+    // release — an asset with no signature is treated as missing, not as
+    // "unsigned, apply anyway".
+    let find_asset = |name: &str| -> Option<&ReleaseAsset> {
+        release.assets.iter().find(|a| a.name == name)
+    };
+    let sig_url_for = |name: &str| -> Result<String> {
+        find_asset(&format!("{}.sig", name))
+            .map(|a| a.browser_download_url.clone())
+            .ok_or_else(|| anyhow!("Signature asset '{}.sig' not found in release", name))
+    };
+
     // 4. Download tray asset (Windows only).
     let tray_tmp: Option<PathBuf> = if let Some(asset_name) = tray_asset_name() {
-        match release.assets.iter().find(|a| a.name == asset_name) {
+        match find_asset(asset_name) {
             Some(asset) => {
+                let sig_url = sig_url_for(asset_name)?;
                 let tmp = exe_dir.join(format!("{}.new", asset_name));
-                download_file(&client, &asset.browser_download_url, &tmp).await?;
+                download_file(&client, &asset.browser_download_url, &sig_url, &tmp).await?;
                 Some(tmp)
             }
             None => {
@@ -483,19 +548,16 @@ async fn run_update_inner() -> Result<()> {
 
     // 5. Download agent asset.
     let asset_name = agent_asset_name();
-    let agent_asset = release
-        .assets
-        .iter()
-        .find(|a| a.name == asset_name)
-        .ok_or_else(|| {
-            anyhow!(
-                "Agent asset '{}' not found in release '{}'",
-                asset_name,
-                release.tag_name
-            )
-        })?;
+    let agent_asset = find_asset(asset_name).ok_or_else(|| {
+        anyhow!(
+            "Agent asset '{}' not found in release '{}'",
+            asset_name,
+            release.tag_name
+        )
+    })?;
+    let agent_sig_url = sig_url_for(asset_name)?;
     let agent_tmp = exe_dir.join(format!("{}.new", asset_name));
-    download_file(&client, &agent_asset.browser_download_url, &agent_tmp).await?;
+    download_file(&client, &agent_asset.browser_download_url, &agent_sig_url, &agent_tmp).await?;
 
     // 6. Platform-specific apply step.
     #[cfg(target_os = "windows")]
@@ -623,4 +685,36 @@ pub fn run_apply_update_helper(
 
     raccoon!("[apply-update] Done. Exiting helper.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real-world regression check: this signature was produced by
+    // `openssl pkeyutl -sign -rawin` against the actual release signing key,
+    // over the message below — confirms release.sh's OpenSSL output and
+    // ed25519-dalek's verification actually interoperate, not just that the
+    // math is self-consistent within Rust.
+    const MSG: &[u8] = b"hello world test payload";
+    const SIG_HEX: &str = "1228b44424af10d9963a61d52c076bcf3839b8b186828188ddabdb7a566a7bf2ef9bdaddf7d542d3f05e534dbda888b9f76b39530a1e825ce61ada015bb0a80c";
+
+    #[test]
+    fn verifies_openssl_produced_signature() {
+        let sig = decode_hex(SIG_HEX);
+        verify_update_signature(MSG, &sig).expect("openssl-produced signature must verify");
+    }
+
+    #[test]
+    fn rejects_tampered_payload() {
+        let sig = decode_hex(SIG_HEX);
+        let mut tampered = MSG.to_vec();
+        tampered[0] ^= 0xff;
+        assert!(verify_update_signature(&tampered, &sig).is_err());
+    }
+
+    #[test]
+    fn rejects_garbage_signature() {
+        assert!(verify_update_signature(MSG, &[0u8; 64]).is_err());
+    }
 }

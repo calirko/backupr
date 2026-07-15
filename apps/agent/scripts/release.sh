@@ -89,8 +89,30 @@ if gh release view "$TAG" &>/dev/null; then
     exit 1
 fi
 
+# ── Sign ──────────────────────────────────────────────────────────────────────
+# The agent refuses to apply a self-update whose binary doesn't carry a valid
+# signature over the embedded public key (see UPDATE_PUBLIC_KEY_HEX in
+# src/update.rs) — so every binary asset needs a matching "<file>.sig" asset,
+# or installed agents will treat the release as unusable and skip it.
+SIGNING_KEY="${BACKUPR_SIGNING_KEY:-$HOME/.backupr-signing-key.pem}"
+if [[ ! -f "$SIGNING_KEY" ]]; then
+    echo "No signing key at $SIGNING_KEY."
+    echo "Run scripts/keygen.sh once to create one (and embed the printed"
+    echo "public key in src/update.rs), or set \$BACKUPR_SIGNING_KEY."
+    exit 1
+fi
+
+echo "Signing binaries with $SIGNING_KEY..."
+SIG_FILES=()
+for f in "${FILES[@]}"; do
+    sig="$f.sig"
+    openssl pkeyutl -sign -inkey "$SIGNING_KEY" -rawin -in "$f" -out "$sig"
+    SIG_FILES+=("$sig")
+done
+echo ""
+
 # ── Confirm ───────────────────────────────────────────────────────────────────
-read -r -p "Publish release $TAG with the binaries above? [y/N] " reply
+read -r -p "Publish release $TAG with the binaries above (signed)? [y/N] " reply
 case "$reply" in
     y|Y|yes|YES) ;;
     *) echo "Aborted."; exit 1 ;;
@@ -101,7 +123,7 @@ echo "Creating release $TAG..."
 gh release create "$TAG" \
     --title "$TITLE" \
     --notes "Backupr $TAG" \
-    "${FILES[@]}"
+    "${FILES[@]}" "${SIG_FILES[@]}"
 
 echo ""
 echo "Released: $TAG"

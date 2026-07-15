@@ -114,17 +114,18 @@ function Confirm-Admin {
         Write-Host "Relaunching as Administrator..." -ForegroundColor Yellow
         if ($PSCommandPath) {
             # Running from a saved .ps1 file - relaunch that file directly.
-            $args_ = "-NoExit -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-            if ($Action) { $args_ += " -Action `"$Action`"" }
+            $scriptPath = $PSCommandPath
         } else {
             # Running via `iex (New-Object Net.WebClient).DownloadString(...)` - there is no
-            # on-disk script to point -File at, so re-run the same bootstrap download instead.
-            # $Action must be baked into the command text itself since -EncodedCommand doesn't
-            # accept extra trailing CLI arguments the way -File does.
-            $cmd = "`$Action = '$Action'; iex (New-Object Net.WebClient).DownloadString('$BootstrapUrl')"
-            $args_ = "-NoExit -NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
-                [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
+            # on-disk script to point -File at, so save the bootstrap content to a temp file
+            # and relaunch that instead. (Avoids -EncodedCommand: a base64-blob relaunch is
+            # one of the most heavily fingerprinted patterns in PowerShell AV/EDR heuristics,
+            # and -File with a real script on disk carries none of that baggage.)
+            $scriptPath = Join-Path $env:TEMP "backupr-setup-$([guid]::NewGuid().ToString('N')).ps1"
+            (New-Object Net.WebClient).DownloadString($BootstrapUrl) | Set-Content -Path $scriptPath -Encoding UTF8
         }
+        $args_ = "-NoExit -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+        if ($Action) { $args_ += " -Action `"$Action`"" }
         Start-Process powershell -Verb RunAs -ArgumentList $args_
         exit
     }

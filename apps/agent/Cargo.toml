@@ -1,6 +1,6 @@
 [package]
 name = "backupr-agent"
-version = "2.1.4"
+version = "2.1.5"
 edition = "2024"
 authors = ["calirko"]
 description = "Backupr backup agent service"
@@ -33,6 +33,7 @@ base64 = "0.21"
 hostname = "0.3"
 num_cpus = "1.16"
 regex-lite = "0.1"
+ed25519-dalek = { version = "3.0.0", default-features = false }
 tray-icon = { version = "0.19", optional = true }
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 windows-sys = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"], optional = true }
@@ -43,6 +44,6 @@ winresource = "0.1"
 [profile.release]
 lto = true
 codegen-units = 1
-strip = true
-opt-level = "z"
+strip = "debuginfo"
+opt-level = "s"
 panic = "abort"
