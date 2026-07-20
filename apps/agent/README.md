@@ -40,10 +40,16 @@ downloads, registers, or runs `backupr-tray.exe` - only the headless service get
 it on machines where you don't want the per-user tray icon/notifications:
 
 ```powershell
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned; try { [Net.ServicePointManager]::SecurityProtocol = 3072 } catch { try { [Net.ServicePointManager]::SecurityProtocol = 3840 } catch {} }; $base = "https://cdn.jsdelivr.net/gh/calirko/backupr@main/apps/agent/scripts"; $wc = New-Object Net.WebClient; $wc.Encoding = [Text.Encoding]::UTF8; iex $wc.DownloadString("$base/setup-no-tray.ps1")
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned; try { [Net.ServicePointManager]::SecurityProtocol = 3072 } catch { try { [Net.ServicePointManager]::SecurityProtocol = 3840 } catch {} }; $base = "https://cdn.jsdelivr.net/gh/calirko/backupr@main/apps/agent/scripts"; $wc = New-Object Net.WebClient; $wc.Encoding = [Text.Encoding]::UTF8; $script = if ($PSVersionTable -and $PSVersionTable.PSVersion.Major -ge 5) { "$base/setup-no-tray.ps1" } else { "$base/setup-fallback.ps1" }; iex $wc.DownloadString($script)
 ```
 
-It has no PowerShell-2.0-fallback equivalent - use it on PowerShell 5.1+ only.
+On PowerShell 2.0-4.x (typically Windows 7/8/Server 2008 R2/2012) this falls back to
+`setup-fallback.ps1` - it's already headless/no-tray and plain-ASCII by construction, so it
+doubles as the no-tray installer for old PowerShell without any styling to strip. Old conhost
+versions on these systems don't support ANSI/VT escapes or reliably render Unicode box-drawing
+characters under `chcp 65001`, and can throw `Win32Exception 0x1F` ("A device attached to the
+system is not functioning") when `setup.ps1`/`setup-no-tray.ps1` try to use either - that's why
+those two scripts are PowerShell 5.1+ only and `setup-fallback.ps1` avoids both entirely.
 
 > jsDelivr caches files for a while after a push. If you've just pushed a fix to a script under
 > `apps/agent/scripts/` and need it live immediately, purge it with:
