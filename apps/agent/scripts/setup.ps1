@@ -125,7 +125,7 @@ function Write-Header {
     param([string]$Text)
     Write-Host ""
     Write-Host "  ${Brand}${Text}${Reset}"
-    Write-Host "  ${Gray}$('─' * $Text.Length)${Reset}"
+    Write-Host "  ${Gray}$('-' * $Text.Length)${Reset}"
 }
 
 function Confirm-Admin {
@@ -594,19 +594,19 @@ function Action-Update {
 function Show-Menu {
     while ($true) {
         Write-Host ""
-        Write-Host "  ${Gray}┌───────────────────────────────┐${Reset}"
-        Write-Host "  ${Gray}│${Reset}  1)  Install service          ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  2)  Setup agent code         ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  3)  Start service            ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  4)  Stop service             ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  5)  Restart service          ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  6)  Remove service           ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  7)  Status                   ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  8)  View logs                ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  9)  Update agent             ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  10) Toggle VSS               ${Gray}│${Reset}"
-        Write-Host "  ${Gray}│${Reset}  Q)  Quit                     ${Gray}│${Reset}"
-        Write-Host "  ${Gray}└───────────────────────────────┘${Reset}"
+        Write-Host "  ${Gray}+-------------------------------+${Reset}"
+        Write-Host "  ${Gray}|${Reset}  1)  Install service          ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  2)  Setup agent code         ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  3)  Start service            ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  4)  Stop service             ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  5)  Restart service          ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  6)  Remove service           ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  7)  Status                   ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  8)  View logs                ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  9)  Update agent             ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  10) Toggle VSS               ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  Q)  Quit                     ${Gray}|${Reset}"
+        Write-Host "  ${Gray}+-------------------------------+${Reset}"
         Write-Host ""
         $choice = Read-Host "  Choose an option"
 
