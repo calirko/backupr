@@ -9,14 +9,14 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import Data, { type Column } from "@/components/data/data";
-import DataHeader, { type SearchField } from "@/components/data/dataHeader";
-import { Button } from "@/components/ui/button";
-import { useData } from "@/hooks/use-data";
 import type { TableAction } from "@/components/data/dataActions";
-import { useDialog } from "@/hooks/use-dialog";
+import DataHeader, { type SearchField } from "@/components/data/dataHeader";
 import BackupPolicyDialog from "@/components/dialog/backup-policy";
 import ConfirmDialog from "@/components/dialog/confirm";
 import ErrorDialog from "@/components/dialog/error";
+import { Button } from "@/components/ui/button";
+import { useData } from "@/hooks/use-data";
+import { useDialog } from "@/hooks/use-dialog";
 
 export default function BackupPoliciesPage() {
 	const { filters, orderBy } = useData("backup-policies");
@@ -73,7 +73,7 @@ export default function BackupPoliciesPage() {
 			label: "Created By",
 			orderable: true,
 			orderByKey: "created_by.name",
-			format: (value) => value?.name ?? "—",
+			format: (value) => value?.name ?? "-",
 		},
 		{
 			key: "created_at",

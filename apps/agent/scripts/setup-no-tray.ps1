@@ -4,7 +4,7 @@
     Backupr Agent installer / service manager (no tray)
 
 .DESCRIPTION
-    Same as setup.ps1, but never downloads or registers the tray app — only
+    Same as setup.ps1, but never downloads or registers the tray app - only
     the headless backupr-agent.exe service is installed. Use this on
     machines where you don't want the per-user tray icon/notifications.
 
@@ -54,6 +54,28 @@ $ESC   = [char]27
 $Brand = "${ESC}[1m${ESC}[38;2;17;24;162m"   # bold + #1118A2
 $Gray  = "${ESC}[38;2;160;160;160m"           # light gray
 $Reset = "${ESC}[0m"
+
+# Old conhost.exe (Windows 7/8/Server 2012) can throw "A device attached to
+# the system is not functioning" from WriteConsole when a color is applied
+# alongside codepage 65001 - shadow Write-Host to retry in plain text instead
+# of crashing (and to avoid masking whatever error we were trying to report).
+$OrigWriteHost = Get-Command Write-Host -CommandType Cmdlet
+function Write-Host {
+    param(
+        [Parameter(Position = 0, ValueFromPipeline = $true)] $Object,
+        [switch]$NoNewline,
+        $Separator,
+        $ForegroundColor,
+        $BackgroundColor
+    )
+    try {
+        & $OrigWriteHost @PSBoundParameters
+    } catch {
+        $PSBoundParameters.Remove('ForegroundColor') | Out-Null
+        $PSBoundParameters.Remove('BackgroundColor') | Out-Null
+        & $OrigWriteHost @PSBoundParameters
+    }
+}
 
 # Force TLS 1.2+ and TLS 1.3 when available
 $protocols = [Net.SecurityProtocolType]::Tls12
@@ -399,8 +421,8 @@ function Action-Vss {
     $label   = if ($current) { "enabled" } else { "disabled" }
     Write-Host "  VSS is currently: $label" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  1) Enable VSS  (default — consistent snapshots)"
-    Write-Host "  2) Disable VSS (live file copy — use if AV/EDR kills the service during backup)"
+    Write-Host "  1) Enable VSS  (default - consistent snapshots)"
+    Write-Host "  2) Disable VSS (live file copy - use if AV/EDR kills the service during backup)"
     Write-Host ""
     $choice = Read-Host "  Choose (1/2, Enter to cancel)"
 
@@ -422,7 +444,7 @@ function Action-Vss {
     $json | ConvertTo-Json -Depth 10 | Set-Content -Path $ConfigFile -Encoding UTF8
 
     $newLabel = if ($newValue) { "enabled" } else { "disabled" }
-    Write-Host "  VSS $newLabel — config saved." -ForegroundColor Green
+    Write-Host "  VSS $newLabel - config saved." -ForegroundColor Green
 
     if (Get-ServiceExists) {
         $svc = Get-Service -Name $ServiceName

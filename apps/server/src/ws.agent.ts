@@ -1,7 +1,7 @@
 import { upgradeWebSocket, getConnInfo } from "hono/bun";
+import { BackupStatus } from "../prisma/generated/prisma/enums";
 import { handleBackupStatusUpdate } from "./backup";
 import { prisma } from "./lib/prisma";
-import { BackupStatus } from "../prisma/generated/prisma/enums";
 import { pushBackupUpdate } from "./ws.web";
 
 const db = prisma;
@@ -440,7 +440,9 @@ export default upgradeWebSocket((c) => {
 						await db.backup.updateMany({
 							where: {
 								id: staleId,
-								status: { in: [BackupStatus.PENDING, BackupStatus.IN_PROGRESS] },
+								status: {
+									in: [BackupStatus.PENDING, BackupStatus.IN_PROGRESS],
+								},
 							},
 							data: {
 								status: BackupStatus.FAILED,
@@ -500,7 +502,7 @@ export default upgradeWebSocket((c) => {
 			if (agentId) {
 				// A newer connection for the same agentId may have already replaced
 				// this entry (brief reconnect race, or the same agent token in use
-				// from two places at once). Only remove it if it's still ours —
+				// from two places at once). Only remove it if it's still ours -
 				// otherwise we'd delete the live connection out from under it and
 				// make it invisible to command dispatch (sendToAgent) while it
 				// keeps happily heartbeating.
@@ -513,7 +515,7 @@ export default upgradeWebSocket((c) => {
 					onAgentDisconnect?.(agentId);
 				} else {
 					console.log(
-						`[ws agent] Stale connection closed for ${agentId} (already superseded by a newer connection) — registry untouched`,
+						`[ws agent] Stale connection closed for ${agentId} (already superseded by a newer connection) - registry untouched`,
 					);
 				}
 			}

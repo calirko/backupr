@@ -1,6 +1,5 @@
 "use client";
 
-import { Cron } from "croner";
 import {
 	CopyIcon,
 	EyeIcon,
@@ -9,17 +8,18 @@ import {
 	TestTubeIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
+import { Cron } from "croner";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import Data, { type Column } from "@/components/data/data";
-import DataHeader, { type SearchField } from "@/components/data/dataHeader";
-import { Button } from "@/components/ui/button";
-import { useData } from "@/hooks/use-data";
 import type { TableAction } from "@/components/data/dataActions";
-import { useDialog } from "@/hooks/use-dialog";
+import DataHeader, { type SearchField } from "@/components/data/dataHeader";
 import BackupJobDialog from "@/components/dialog/backup-job";
 import ConfirmDialog from "@/components/dialog/confirm";
 import TestJobDialog from "@/components/dialog/test-job";
+import { Button } from "@/components/ui/button";
+import { useData } from "@/hooks/use-data";
+import { useDialog } from "@/hooks/use-dialog";
 
 export default function BackupJobsPage() {
 	const { filters, orderBy } = useData("backup-jobs");
@@ -74,14 +74,14 @@ export default function BackupJobsPage() {
 				value ? (
 					new Date(value).toLocaleString()
 				) : (
-					<span className="text-muted-foreground">—</span>
+					<span className="text-muted-foreground">-</span>
 				),
 		},
 		{
 			key: "policy",
 			label: "Policy",
 			orderable: false,
-			format: (value) => value ?? "—",
+			format: (value) => value ?? "-",
 		},
 		{
 			key: "use_password",

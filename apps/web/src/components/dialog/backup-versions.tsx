@@ -51,7 +51,7 @@ interface BackupVersion {
 }
 
 function formatBytes(bytes: string | null | undefined): string {
-	if (!bytes) return "—";
+	if (!bytes) return "-";
 	const n = Number(bytes);
 	if (n === 0) return "0 B";
 	const units = ["B", "KB", "MB", "GB", "TB"];
@@ -210,12 +210,12 @@ function BackupVersionsTable({ backupJobId }: { backupJobId: string }) {
 						return (
 							<TableRow key={b.id}>
 								<TableCell className="text-xs">
-									{b.started_at ? new Date(b.started_at).toLocaleString() : "—"}
+									{b.started_at ? new Date(b.started_at).toLocaleString() : "-"}
 								</TableCell>
 								<TableCell className="text-xs">
 									{b.completed_at
 										? new Date(b.completed_at).toLocaleString()
-										: "—"}
+										: "-"}
 								</TableCell>
 								<TableCell>
 									<div className="flex flex-col gap-0.5">

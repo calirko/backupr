@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time setup: generates the Ed25519 keypair used to sign release binaries.
 #
-# The private key never goes in the repo — it stays on this machine (or
+# The private key never goes in the repo - it stays on this machine (or
 # wherever you run releases from) and release.sh reads it via
 # $BACKUPR_SIGNING_KEY (defaulting to ~/.backupr-signing-key.pem).
 #
@@ -12,7 +12,7 @@ set -euo pipefail
 OUT="${1:-$HOME/.backupr-signing-key.pem}"
 
 if [[ -f "$OUT" ]]; then
-    echo "A key already exists at $OUT — refusing to overwrite."
+    echo "A key already exists at $OUT - refusing to overwrite."
     echo "(Rotating keys means old installed agents can no longer verify updates"
     echo "signed with the new key until you ship a build with the new embedded"
     echo "public key, so do this deliberately, not by accident.)"

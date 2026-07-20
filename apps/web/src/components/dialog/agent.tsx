@@ -1,4 +1,7 @@
+import { FloppyDiskIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import {
@@ -10,7 +13,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "../ui/dialog";
-import { useIsMobile } from "@/hooks/use-mobile";
 import {
 	Drawer,
 	DrawerClose,
@@ -20,10 +22,13 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "../ui/drawer";
-import { FloppyDiskIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
-import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { toast } from "sonner";
+import { Label } from "../ui/label";
+
+interface AgentResult {
+	id: string;
+	name: string;
+}
 
 export default function AgentDialog({
 	open,
@@ -39,12 +44,16 @@ export default function AgentDialog({
 	};
 	agentId?: string;
 	onClose: (result: boolean) => void;
-	onConfirm: () => void;
+	onConfirm: (agent?: AgentResult) => void;
 }): React.JSX.Element {
 	const isMobile = useIsMobile();
 	const [isActive, setIsActive] = useState(defaultData?.is_active ?? true);
 
-	async function updateAgent({ name }: { name: string }) {
+	async function updateAgent({
+		name,
+	}: {
+		name: string;
+	}): Promise<AgentResult | undefined> {
 		try {
 			const response = await fetch(`/api/agents/${agentId}`, {
 				method: "PATCH",
@@ -58,21 +67,27 @@ export default function AgentDialog({
 				const error = await response.json();
 				console.error(error);
 				toast.error("Failed to update agent", { description: error.error });
-			} else {
-				toast.success("Agent updated successfully", {
-					description: "The agent has been updated successfully.",
-				});
-				onClose(true);
+				return undefined;
 			}
+			toast.success("Agent updated successfully", {
+				description: "The agent has been updated successfully.",
+			});
+			onClose(true);
+			return { id: agentId as string, name };
 		} catch (error) {
 			console.error(error);
 			toast.error("Failed to update agent", {
 				description: error instanceof Error ? error.message : String(error),
 			});
+			return undefined;
 		}
 	}
 
-	async function createAgent({ name }: { name: string }) {
+	async function createAgent({
+		name,
+	}: {
+		name: string;
+	}): Promise<AgentResult | undefined> {
 		try {
 			const response = await fetch(`/api/agents`, {
 				method: "POST",
@@ -86,17 +101,20 @@ export default function AgentDialog({
 				const error = await response.json();
 				console.error(error);
 				toast.error("Failed to create agent", { description: error.error });
-			} else {
-				toast.success("Agent created successfully", {
-					description: "The agent has been created successfully.",
-				});
-				onClose(true);
+				return undefined;
 			}
+			const created = await response.json();
+			toast.success("Agent created successfully", {
+				description: "The agent has been created successfully.",
+			});
+			onClose(true);
+			return { id: created.id, name };
 		} catch (error) {
 			console.error(error);
 			toast.error("Failed to create agent", {
 				description: error instanceof Error ? error.message : String(error),
 			});
+			return undefined;
 		}
 	}
 
@@ -112,12 +130,10 @@ export default function AgentDialog({
 			return;
 		}
 
-		if (agentId) {
-			await updateAgent({ name });
-		} else {
-			await createAgent({ name });
-		}
-		onConfirm();
+		const result = agentId
+			? await updateAgent({ name })
+			: await createAgent({ name });
+		onConfirm(result);
 	}
 
 	const content = (

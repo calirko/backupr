@@ -51,6 +51,28 @@ $Brand = "${ESC}[1m${ESC}[38;2;17;24;162m"   # bold + #1118A2
 $Gray  = "${ESC}[38;2;160;160;160m"           # light gray
 $Reset = "${ESC}[0m"
 
+# Old conhost.exe (Windows 7/8/Server 2012) can throw "A device attached to
+# the system is not functioning" from WriteConsole when a color is applied
+# alongside codepage 65001 - shadow Write-Host to retry in plain text instead
+# of crashing (and to avoid masking whatever error we were trying to report).
+$OrigWriteHost = Get-Command Write-Host -CommandType Cmdlet
+function Write-Host {
+    param(
+        [Parameter(Position = 0, ValueFromPipeline = $true)] $Object,
+        [switch]$NoNewline,
+        $Separator,
+        $ForegroundColor,
+        $BackgroundColor
+    )
+    try {
+        & $OrigWriteHost @PSBoundParameters
+    } catch {
+        $PSBoundParameters.Remove('ForegroundColor') | Out-Null
+        $PSBoundParameters.Remove('BackgroundColor') | Out-Null
+        & $OrigWriteHost @PSBoundParameters
+    }
+}
+
 # Force TLS 1.2+ and TLS 1.3 when available
 $protocols = [Net.SecurityProtocolType]::Tls12
 $tls13 = [Net.SecurityProtocolType].GetField('Tls13')
@@ -200,7 +222,7 @@ function Ensure-TrayPresent {
 }
 
 function Register-TrayStartup {
-    # HKLM\Run fires in every user's interactive desktop session at logon —
+    # HKLM\Run fires in every user's interactive desktop session at logon -
     # more reliable than a scheduled task with GroupId for GUI/tray apps.
     Set-ItemProperty -Path $TrayRunKey -Name $TrayRunName -Value "`"$TrayExe`"" -Type String
     Write-Host "  Tray registered in HKLM Run (launches for all users at logon)." -ForegroundColor Green
@@ -216,7 +238,7 @@ function Stop-TrayProcess {
 }
 
 function Start-TrayProcess {
-    # HKLM\Run only fires at the next logon — it never launches anything in the
+    # HKLM\Run only fires at the next logon - it never launches anything in the
     # session that's already running this script, so start it here too or the
     # tray icon won't appear until the machine is restarted / user signs out.
     if (-not (Test-Path $TrayExe)) { return }
@@ -457,8 +479,8 @@ function Action-Vss {
     $label   = if ($current) { "enabled" } else { "disabled" }
     Write-Host "  VSS is currently: $label" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  1) Enable VSS  (default — consistent snapshots)"
-    Write-Host "  2) Disable VSS (live file copy — use if AV/EDR kills the service during backup)"
+    Write-Host "  1) Enable VSS  (default - consistent snapshots)"
+    Write-Host "  2) Disable VSS (live file copy - use if AV/EDR kills the service during backup)"
     Write-Host ""
     $choice = Read-Host "  Choose (1/2, Enter to cancel)"
 
@@ -480,7 +502,7 @@ function Action-Vss {
     $json | ConvertTo-Json -Depth 10 | Set-Content -Path $ConfigFile -Encoding UTF8
 
     $newLabel = if ($newValue) { "enabled" } else { "disabled" }
-    Write-Host "  VSS $newLabel — config saved." -ForegroundColor Green
+    Write-Host "  VSS $newLabel - config saved." -ForegroundColor Green
 
     if (Get-ServiceExists) {
         $svc = Get-Service -Name $ServiceName
@@ -535,7 +557,7 @@ function Action-Update {
         return
     }
 
-    # Tray binary — kill any running instance first so the file is not locked.
+    # Tray binary - kill any running instance first so the file is not locked.
     if (Test-Path $TrayExe) {
         Stop-TrayProcess
         try {

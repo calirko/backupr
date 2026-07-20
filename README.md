@@ -19,10 +19,10 @@ Browser
         └── /*      →  Web (React SPA, port 5173)
 ```
 
-- **`apps/web`** — React 19 SPA dashboard (Vite)
-- **`apps/server`** — REST API + WebSocket server (Hono + Bun)
-- **`apps/agent`** — daemon that runs on client machines (Rust, compiled native binary for Linux/Windows)
-- **`apps/proxy`** — Nginx reverse proxy
+- **`apps/web`** - React 19 SPA dashboard (Vite)
+- **`apps/server`** - REST API + WebSocket server (Hono + Bun)
+- **`apps/agent`** - daemon that runs on client machines (Rust, compiled native binary for Linux/Windows)
+- **`apps/proxy`** - Nginx reverse proxy
 
 ---
 
@@ -71,10 +71,10 @@ cd ../..
 ### 4. Start services
 
 ```bash
-# Terminal 1 — API + WebSocket server
+# Terminal 1 - API + WebSocket server
 cd apps/server && bun run dev
 
-# Terminal 2 — Web dashboard
+# Terminal 2 - Web dashboard
 cd apps/web && bun run dev
 ```
 

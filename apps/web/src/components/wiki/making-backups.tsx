@@ -1,10 +1,10 @@
-import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import {
 	ClockCounterClockwise,
 	DownloadSimple,
 	Lightning,
 	TestTube,
 } from "@phosphor-icons/react";
+import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import { PageNav } from "./page-nav";
 
 interface Props {
@@ -19,7 +19,7 @@ const content = {
 		subtitle: "How to trigger backups manually and monitor their progress.",
 		scheduledTitle: "Scheduled backups",
 		scheduledDesc:
-			"Every backup job has a cron expression that controls when it runs automatically. The server dispatches the job to the agent at the scheduled time via the open WebSocket connection. No user action is needed — as long as the agent is connected and the job is active, backups run on schedule.",
+			"Every backup job has a cron expression that controls when it runs automatically. The server dispatches the job to the agent at the scheduled time via the open WebSocket connection. No user action is needed - as long as the agent is connected and the job is active, backups run on schedule.",
 		manualTitle: "Triggering manually",
 		manualDesc:
 			"There are two ways to trigger a backup outside of its schedule:",
@@ -35,7 +35,7 @@ const content = {
 		],
 		lightningTitle: "The lightning button",
 		lightningDesc:
-			"The lightning button appears on each job card on the Backups page. It sends a trigger command directly through the WebSocket — no page reload required. The button is disabled in two cases:",
+			"The lightning button appears on each job card on the Backups page. It sends a trigger command directly through the WebSocket - no page reload required. The button is disabled in two cases:",
 		lightningDisabled: [
 			{
 				condition: "Agent is busy or offline",
@@ -50,7 +50,7 @@ const content = {
 			"Hover over a disabled button to see the exact reason in the tooltip.",
 		progressTitle: "Monitoring progress",
 		progressDesc:
-			"While a job is running, the agent sends live status messages back to the server over WebSocket. The job card shows a Progress row in blue monospace text that updates in real time — including the current file being compressed or uploaded.",
+			"While a job is running, the agent sends live status messages back to the server over WebSocket. The job card shows a Progress row in blue monospace text that updates in real time - including the current file being compressed or uploaded.",
 		statusTitle: "Backup statuses",
 		statuses: [
 			{
@@ -72,7 +72,7 @@ const content = {
 		],
 		downloadTitle: "Downloading backups",
 		downloadLatestDesc:
-			'Click "Latest" on any job card to immediately download the most recent completed backup. The server generates a short-lived presigned URL and opens it in a new tab — the file is served directly from storage.',
+			'Click "Latest" on any job card to immediately download the most recent completed backup. The server generates a short-lived presigned URL and opens it in a new tab - the file is served directly from storage.',
 		downloadVersionsDesc:
 			'Click "Versions" to open the backup history for a job. Each version is listed with its date and status. You can download any individual backup from this list.',
 		downloadNote:
@@ -83,7 +83,7 @@ const content = {
 		subtitle: "Como acionar backups manualmente e monitorar seu progresso.",
 		scheduledTitle: "Backups agendados",
 		scheduledDesc:
-			"Todo job de backup tem uma expressão cron que controla quando ele é executado automaticamente. O servidor despacha o job ao agente no horário agendado via a conexão WebSocket aberta. Nenhuma ação do usuário é necessária — enquanto o agente estiver conectado e o job ativo, os backups rodam conforme o agendamento.",
+			"Todo job de backup tem uma expressão cron que controla quando ele é executado automaticamente. O servidor despacha o job ao agente no horário agendado via a conexão WebSocket aberta. Nenhuma ação do usuário é necessária - enquanto o agente estiver conectado e o job ativo, os backups rodam conforme o agendamento.",
 		manualTitle: "Acionamento manual",
 		manualDesc: "Há duas formas de acionar um backup fora do seu agendamento:",
 		manualMethods: [
@@ -98,7 +98,7 @@ const content = {
 		],
 		lightningTitle: "O botão raio",
 		lightningDesc:
-			"O botão raio aparece em cada card de job na página de Backups. Ele envia um comando de acionamento diretamente pelo WebSocket — sem recarregamento de página. O botão é desativado em dois casos:",
+			"O botão raio aparece em cada card de job na página de Backups. Ele envia um comando de acionamento diretamente pelo WebSocket - sem recarregamento de página. O botão é desativado em dois casos:",
 		lightningDisabled: [
 			{
 				condition: "Agente ocupado ou offline",
@@ -113,7 +113,7 @@ const content = {
 			"Passe o mouse sobre um botão desativado para ver o motivo exato na dica.",
 		progressTitle: "Monitorando o progresso",
 		progressDesc:
-			"Enquanto um job está rodando, o agente envia mensagens de status em tempo real ao servidor pelo WebSocket. O card do job exibe uma linha de Progresso em texto monoespaçado azul que atualiza em tempo real — incluindo o arquivo atual sendo comprimido ou enviado.",
+			"Enquanto um job está rodando, o agente envia mensagens de status em tempo real ao servidor pelo WebSocket. O card do job exibe uma linha de Progresso em texto monoespaçado azul que atualiza em tempo real - incluindo o arquivo atual sendo comprimido ou enviado.",
 		statusTitle: "Status dos backups",
 		statuses: [
 			{
@@ -135,7 +135,7 @@ const content = {
 		],
 		downloadTitle: "Baixando backups",
 		downloadLatestDesc:
-			'Clique em "Último" em qualquer card de job para baixar imediatamente o backup mais recente concluído. O servidor gera uma URL pré-assinada de curta duração e a abre em uma nova aba — o arquivo é servido diretamente do armazenamento.',
+			'Clique em "Último" em qualquer card de job para baixar imediatamente o backup mais recente concluído. O servidor gera uma URL pré-assinada de curta duração e a abre em uma nova aba - o arquivo é servido diretamente do armazenamento.',
 		downloadVersionsDesc:
 			'Clique em "Versões" para abrir o histórico de backups de um job. Cada versão é listada com sua data e status. Você pode baixar qualquer backup individual desta lista.',
 		downloadNote:
@@ -174,7 +174,7 @@ export function MakingBackupsPage({ nextPage, onNext, lang }: Props) {
 					{c.manualMethods.map((m) => (
 						<p key={m.name} className="text-sm">
 							<strong>{m.name}</strong>{" "}
-							<span className="text-muted-foreground">— {m.desc}</span>
+							<span className="text-muted-foreground">- {m.desc}</span>
 						</p>
 					))}
 				</div>
@@ -275,7 +275,7 @@ export function MakingBackupsPage({ nextPage, onNext, lang }: Props) {
 					{c.lightningDisabled.map((d) => (
 						<p key={d.condition} className="text-sm">
 							<strong>{d.condition}</strong>{" "}
-							<span className="text-muted-foreground">— {d.desc}</span>
+							<span className="text-muted-foreground">- {d.desc}</span>
 						</p>
 					))}
 				</div>
@@ -347,7 +347,7 @@ export function MakingBackupsPage({ nextPage, onNext, lang }: Props) {
 				{c.statuses.map((s) => (
 					<p key={s.label} className="text-sm">
 						<strong>{s.label}</strong>{" "}
-						<span className="text-muted-foreground">— {s.desc}</span>
+						<span className="text-muted-foreground">- {s.desc}</span>
 					</p>
 				))}
 			</div>

@@ -200,7 +200,7 @@ export default async function generalRoutes(app: Hono) {
 				},
 			}),
 
-			// last 7 days grouped — raw query since Prisma doesn't group by date natively
+			// last 7 days grouped - raw query since Prisma doesn't group by date natively
 			db.$queryRaw<{ day: string; count: bigint; size: bigint }[]>`
          SELECT
            DATE_TRUNC('day', started_at)::date::text AS day,

@@ -134,10 +134,11 @@ where
                     }
 
                     if let Some(pct) = found_pct
-                        && pct as i16 > last_pct {
-                            last_pct = pct as i16;
-                            on_pct(pct.min(99));
-                        }
+                        && pct as i16 > last_pct
+                    {
+                        last_pct = pct as i16;
+                        on_pct(pct.min(99));
+                    }
 
                     // Keep last 20 chars as tail for split-chunk handling
                     let new_tail = text
@@ -217,11 +218,10 @@ fn build_7z_args(
 
     args.extend(files.iter().cloned());
 
-    if use_password
-        && let Some(pwd) = password {
-            args.push(format!("-p{}", pwd));
-            args.push("-mhe=on".to_string()); // encrypt headers
-        }
+    if use_password && let Some(pwd) = password {
+        args.push(format!("-p{}", pwd));
+        args.push("-mhe=on".to_string()); // encrypt headers
+    }
 
     args
 }
@@ -342,7 +342,7 @@ async fn stage_files(
             .unwrap_or(true);
 
         if !vss_enabled {
-            println!("[Backup] VSS disabled by config — copying live files");
+            println!("[Backup] VSS disabled by config - copying live files");
         } else {
             let volumes: std::collections::HashSet<String> = files
                 .iter()
@@ -363,7 +363,7 @@ async fn stage_files(
                     shadow_devices.push(device);
                 } else {
                     eprintln!(
-                        "[Backup] VSS unavailable for {} — copying live files (consistency not guaranteed)",
+                        "[Backup] VSS unavailable for {} - copying live files (consistency not guaranteed)",
                         vol
                     );
                 }
@@ -655,7 +655,7 @@ pub fn kill_orphan_7z() {
             Ok(o) if o.status.success() => {
                 println!("[Backup] Killed orphaned 7z.exe process(es).");
             }
-            _ => {} // nothing running — fine
+            _ => {} // nothing running - fine
         }
     }
 
@@ -666,9 +666,10 @@ pub fn kill_orphan_7z() {
             if let Ok(out) = std::process::Command::new("pkill")
                 .args(["-x", name])
                 .output()
-                && out.status.success() {
-                    println!("[Backup] Killed orphaned {} process(es).", name);
-                }
+                && out.status.success()
+            {
+                println!("[Backup] Killed orphaned {} process(es).", name);
+            }
         }
     }
 }
@@ -698,9 +699,10 @@ fn write_lockfile(backup_id: &str, job_id: &str) {
         job_id: job_id.to_string(),
     };
     if let Ok(json) = serde_json::to_string(&data)
-        && let Err(e) = std::fs::write(lockfile_path(), json) {
-            eprintln!("[Backup] Warning: could not write lockfile: {}", e);
-        }
+        && let Err(e) = std::fs::write(lockfile_path(), json)
+    {
+        eprintln!("[Backup] Warning: could not write lockfile: {}", e);
+    }
 }
 
 pub fn remove_lockfile() {

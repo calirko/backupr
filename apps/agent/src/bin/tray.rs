@@ -7,9 +7,9 @@ use std::time::Duration;
 
 #[path = "../ipc.rs"]
 mod ipc;
-use ipc::{IpcMessage, IPC_PORT, NotifyEvent};
-use tray_icon::menu::{Menu, MenuItem};
+use ipc::{IPC_PORT, IpcMessage, NotifyEvent};
 use tray_icon::TrayIconBuilder;
+use tray_icon::menu::{Menu, MenuItem};
 
 // ---------------------------------------------------------------------------
 // IPC thread → tray thread
@@ -63,7 +63,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const ICON_PNG: &[u8] = include_bytes!("../assets/icon-agent.png");
 
 // Pixels decoded from icon-agent.png at build time (see build.rs) so this
-// binary never links a PNG/zlib decoder — see build.rs for why.
+// binary never links a PNG/zlib decoder - see build.rs for why.
 const ICON_RGBA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_agent.rgba"));
 include!(concat!(env!("OUT_DIR"), "/icon_agent_dims.rs"));
 
@@ -87,7 +87,7 @@ fn extract_icon_to_disk() -> Option<String> {
 
 fn run_tray(rx: mpsc::Receiver<TrayEvent>) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE, WM_QUIT,
+        DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage, WM_QUIT,
     };
 
     let icon = load_icon();
@@ -111,7 +111,7 @@ fn run_tray(rx: mpsc::Receiver<TrayEvent>) {
         }
     };
 
-    // Win32 message loop — required for Shell_NotifyIcon to dispatch events.
+    // Win32 message loop - required for Shell_NotifyIcon to dispatch events.
     unsafe {
         let mut msg: MSG = std::mem::zeroed();
         loop {
@@ -148,23 +148,38 @@ fn run_tray(rx: mpsc::Receiver<TrayEvent>) {
 }
 
 // ---------------------------------------------------------------------------
-// Notifications — WinRT toasts via PowerShell (user session, works here)
+// Notifications - WinRT toasts via PowerShell (user session, works here)
 // ---------------------------------------------------------------------------
 
 fn fire_notification(event: &NotifyEvent, icon_uri: Option<&str>) {
     let pt = is_pt();
     let body = match event {
         NotifyEvent::Started => {
-            if pt { "Backup iniciado".to_string() } else { "Backup started".to_string() }
+            if pt {
+                "Backup iniciado".to_string()
+            } else {
+                "Backup started".to_string()
+            }
         }
         NotifyEvent::Finished { size_bytes } => {
             let size = fmt_bytes(*size_bytes);
-            if pt { format!("Backup conclu\u{00ed}do \u{00b7} {size}") }
-            else   { format!("Backup complete \u{00b7} {size}") }
+            if pt {
+                format!("Backup conclu\u{00ed}do \u{00b7} {size}")
+            } else {
+                format!("Backup complete \u{00b7} {size}")
+            }
         }
         NotifyEvent::Failed { error } => {
-            let msg = if error.len() > 120 { &error[..120] } else { error.as_str() };
-            if pt { format!("Backup falhou: {msg}") } else { format!("Backup failed: {msg}") }
+            let msg = if error.len() > 120 {
+                &error[..120]
+            } else {
+                error.as_str()
+            };
+            if pt {
+                format!("Backup falhou: {msg}")
+            } else {
+                format!("Backup failed: {msg}")
+            }
         }
     };
     toast("Backupr", &body, icon_uri);
@@ -173,17 +188,19 @@ fn fire_notification(event: &NotifyEvent, icon_uri: Option<&str>) {
 fn toast(title: &str, body: &str, icon_uri: Option<&str>) {
     let ps_esc = |s: &str| s.replace('\'', "''");
     let xml_esc = |s: &str| {
-        s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+        s.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
     };
     let t = ps_esc(&xml_esc(title));
     let b = ps_esc(&xml_esc(body));
-    
+
     let image_xml = if let Some(uri) = icon_uri {
         format!(r#"<image placement="appLogoOverride" src="{}" />"#, uri)
     } else {
         String::new()
     };
-    
+
     let script = format!(
         "[Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime]|Out-Null;\
          [Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom,ContentType=WindowsRuntime]|Out-Null;\
@@ -193,9 +210,16 @@ fn toast(title: &str, body: &str, icon_uri: Option<&str>) {
          $tn=[Windows.UI.Notifications.ToastNotification]::new($x);\
          [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($a).Show($tn)",
     );
-    // Fire-and-forget — don't block the message loop waiting for PowerShell.
+    // Fire-and-forget - don't block the message loop waiting for PowerShell.
     let _ = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &script])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            &script,
+        ])
         .spawn();
 }
 
@@ -206,9 +230,10 @@ fn toast(title: &str, body: &str, icon_uri: Option<&str>) {
 fn is_pt() -> bool {
     for var in ["LANG", "LANGUAGE", "LC_ALL", "LC_MESSAGES"] {
         if let Ok(v) = std::env::var(var)
-            && v.to_ascii_lowercase().starts_with("pt") {
-                return true;
-            }
+            && v.to_ascii_lowercase().starts_with("pt")
+        {
+            return true;
+        }
     }
     unsafe extern "system" {
         fn GetUserDefaultLocaleName(lp_locale_name: *mut u16, cch_locale_name: i32) -> i32;
@@ -232,8 +257,13 @@ fn fmt_bytes(b: u64) -> String {
     const GB: u64 = 1 << 30;
     const MB: u64 = 1 << 20;
     const KB: u64 = 1 << 10;
-    if b >= GB      { format!("{:.1} GB", b as f64 / GB as f64) }
-    else if b >= MB { format!("{:.1} MB", b as f64 / MB as f64) }
-    else if b >= KB { format!("{:.1} KB", b as f64 / KB as f64) }
-    else            { format!("{b} B") }
+    if b >= GB {
+        format!("{:.1} GB", b as f64 / GB as f64)
+    } else if b >= MB {
+        format!("{:.1} MB", b as f64 / MB as f64)
+    } else if b >= KB {
+        format!("{:.1} KB", b as f64 / KB as f64)
+    } else {
+        format!("{b} B")
+    }
 }

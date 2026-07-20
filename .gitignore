@@ -206,3 +206,5 @@ apps/app/backups/*
 apps/client/out/*
 
 .claude
+
+apps/agent/codesign/

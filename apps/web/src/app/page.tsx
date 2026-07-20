@@ -29,7 +29,7 @@ export default function RootRedirect() {
 				}
 			})
 			.catch(() => {
-				// network error — assume authenticated and redirect to dashboard
+				// network error - assume authenticated and redirect to dashboard
 				setRedirect("/dashboard");
 			})
 			.finally(() => {

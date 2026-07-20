@@ -1,4 +1,3 @@
-import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import {
 	Eye,
 	FloppyDisk,
@@ -7,6 +6,7 @@ import {
 	UserCircle,
 	XSquare,
 } from "@phosphor-icons/react";
+import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import { PageNav } from "./page-nav";
 
 interface Props {
@@ -34,10 +34,10 @@ const content = {
 		createAction: 'Click "Add" to create the account.',
 		viewTitle: "Viewing a user",
 		viewDesc:
-			'Click the eye icon on any row to open the user in read-only mode. All fields are visible but not editable.',
+			"Click the eye icon on any row to open the user in read-only mode. All fields are visible but not editable.",
 		editTitle: "Editing a user",
 		editDesc:
-			'Click the pencil icon on any row to open the Edit User dialog. You can update the name, username, email, or password.',
+			"Click the pencil icon on any row to open the Edit User dialog. You can update the name, username, email, or password.",
 		editPasswordNote:
 			"Leave the password field empty to keep the current password. Only fill it in if you want to set a new one.",
 		editAction: 'Click "Save" to apply the changes.',
@@ -142,7 +142,9 @@ export function ManagingUsersPage({ nextPage, onNext, lang }: Props) {
 								{lang === "en" ? "Add User" : "Adicionar Usuário"}
 							</p>
 							<p className="text-xs text-muted-foreground">
-								{lang === "en" ? "Add a new user." : "Adicione um novo usuário."}
+								{lang === "en"
+									? "Add a new user."
+									: "Adicione um novo usuário."}
 							</p>
 						</div>
 						<MockInput
@@ -184,7 +186,7 @@ export function ManagingUsersPage({ nextPage, onNext, lang }: Props) {
 				<ul className="flex flex-col gap-1 list-disc list-inside">
 					{c.createFields.map((f) => (
 						<li key={f.label} className="text-sm text-muted-foreground">
-							<strong>{f.label}</strong> — {f.note}
+							<strong>{f.label}</strong> - {f.note}
 						</li>
 					))}
 				</ul>
@@ -225,7 +227,10 @@ export function ManagingUsersPage({ nextPage, onNext, lang }: Props) {
 						<div className="flex flex-col gap-2">
 							{[
 								{ label: lang === "en" ? "Name" : "Nome", val: "John Doe" },
-								{ label: lang === "en" ? "Username" : "Usuário", val: "johndoe" },
+								{
+									label: lang === "en" ? "Username" : "Usuário",
+									val: "johndoe",
+								},
 								{ label: "Email", val: "john@example.com" },
 							].map((f) => (
 								<div key={f.label} className="flex flex-col gap-0.5">

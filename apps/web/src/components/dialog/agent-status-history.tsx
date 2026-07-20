@@ -1,3 +1,8 @@
+import { XSquareIcon } from "@phosphor-icons/react";
+import { endOfDay, format, startOfDay, subDays } from "date-fns";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "../ui/button";
 import {
 	Dialog,
@@ -8,7 +13,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "../ui/dialog";
-import { useIsMobile } from "@/hooks/use-mobile";
 import {
 	Drawer,
 	DrawerClose,
@@ -18,10 +22,6 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "../ui/drawer";
-import { XSquareIcon } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import {
 	Tooltip,
 	TooltipContent,
@@ -202,7 +202,7 @@ function DayRow({ day, records }: { day: Date; records: StatusRecord[] }) {
 				className="relative h-8 flex-1 border dynround overflow-hidden"
 				style={{ backgroundColor: "oklch(0.13 0 0)" }}
 			>
-				{/* Base layer — full height */}
+				{/* Base layer - full height */}
 				{baseSegments.map((seg, i) => {
 					const startLabel = format(new Date(seg.startMs), "HH:mm");
 					const endLabel = seg.stillActive
@@ -237,7 +237,7 @@ function DayRow({ day, records }: { day: Date; records: StatusRecord[] }) {
 					);
 				})}
 
-				{/* Overlay layer — shorter pill so the green base peeks through */}
+				{/* Overlay layer - shorter pill so the green base peeks through */}
 				{overlaySegments.map((seg, i) => {
 					const startLabel = format(new Date(seg.startMs), "HH:mm");
 					const endLabel = seg.stillActive
@@ -407,7 +407,7 @@ function Content({
 				<StatPill
 					color="var(--blueish)"
 					label="Time running backups"
-					value={backupMs > 0 ? formatDuration(backupMs) : "—"}
+					value={backupMs > 0 ? formatDuration(backupMs) : "-"}
 				/>
 				<StatPill
 					color="var(--muted-foreground)"

@@ -1,5 +1,5 @@
-import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import { Eye, FloppyDisk, Pencil, Plus, XSquare } from "@phosphor-icons/react";
+import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import { PageNav } from "./page-nav";
 
 interface Props {
@@ -20,15 +20,15 @@ const content = {
 		rules: [
 			{
 				name: "Keep Last N Backups",
-				desc: 'Sets a maximum count of backups to retain per job. Once the limit is reached, the oldest backup is removed each time a new one completes. Leave empty to keep all backups regardless of count.',
+				desc: "Sets a maximum count of backups to retain per job. Once the limit is reached, the oldest backup is removed each time a new one completes. Leave empty to keep all backups regardless of count.",
 			},
 			{
 				name: "Max Backup Age (Days)",
-				desc: 'Any backup older than this many days is automatically removed. Leave empty for no age limit.',
+				desc: "Any backup older than this many days is automatically removed. Leave empty for no age limit.",
 			},
 		],
 		bothNote:
-			"If both rules are set, the policy applies whichever condition results in more retention — i.e. a backup is only deleted when both rules agree it should be removed. At least one rule must be configured.",
+			"If both rules are set, the policy applies whichever condition results in more retention - i.e. a backup is only deleted when both rules agree it should be removed. At least one rule must be configured.",
 		createTitle: "Creating a policy",
 		createDesc:
 			'Click "New Policy" on the Backup Policies page to open the creation dialog.',
@@ -40,7 +40,7 @@ const content = {
 			"Click the eye icon to inspect a policy's current settings in read-only mode.",
 		deleteTitle: "Deleting a policy",
 		deleteDesc:
-			"Click the delete icon on a policy row. A confirmation dialog appears before permanent removal. Deleting a policy does not delete the backups already stored — it only removes the rule so future backups are no longer subject to automatic cleanup.",
+			"Click the delete icon on a policy row. A confirmation dialog appears before permanent removal. Deleting a policy does not delete the backups already stored - it only removes the rule so future backups are no longer subject to automatic cleanup.",
 		attachTitle: "Attaching a policy to a job",
 		attachDesc:
 			'When creating or editing a backup job, select a policy from the "Retention Policy" dropdown. The label shows both rules in compact form.',
@@ -58,15 +58,15 @@ const content = {
 		rules: [
 			{
 				name: "Manter Últimos N Backups",
-				desc: 'Define um limite máximo de backups a manter por job. Quando o limite é atingido, o backup mais antigo é removido cada vez que um novo é concluído. Deixe vazio para manter todos os backups independentemente da quantidade.',
+				desc: "Define um limite máximo de backups a manter por job. Quando o limite é atingido, o backup mais antigo é removido cada vez que um novo é concluído. Deixe vazio para manter todos os backups independentemente da quantidade.",
 			},
 			{
 				name: "Idade Máxima do Backup (Dias)",
-				desc: 'Qualquer backup mais antigo que este número de dias é removido automaticamente. Deixe vazio para sem limite de idade.',
+				desc: "Qualquer backup mais antigo que este número de dias é removido automaticamente. Deixe vazio para sem limite de idade.",
 			},
 		],
 		bothNote:
-			"Se ambas as regras estiverem definidas, a política aplica a que resultar em mais retenção — ou seja, um backup só é excluído quando ambas as regras concordam com a remoção. Pelo menos uma regra deve ser configurada.",
+			"Se ambas as regras estiverem definidas, a política aplica a que resultar em mais retenção - ou seja, um backup só é excluído quando ambas as regras concordam com a remoção. Pelo menos uma regra deve ser configurada.",
 		createTitle: "Criando uma política",
 		createDesc:
 			'Clique em "Nova Política" na página de Políticas de Backup para abrir o diálogo de criação.',
@@ -78,7 +78,7 @@ const content = {
 			"Clique no ícone de olho para inspecionar as configurações atuais de uma política em modo somente leitura.",
 		deleteTitle: "Excluindo uma política",
 		deleteDesc:
-			"Clique no ícone de exclusão em uma linha de política. Um diálogo de confirmação aparece antes da remoção permanente. Excluir uma política não exclui os backups já armazenados — apenas remove a regra para que futuros backups não estejam mais sujeitos à limpeza automática.",
+			"Clique no ícone de exclusão em uma linha de política. Um diálogo de confirmação aparece antes da remoção permanente. Excluir uma política não exclui os backups já armazenados - apenas remove a regra para que futuros backups não estejam mais sujeitos à limpeza automática.",
 		attachTitle: "Anexando uma política a um job",
 		attachDesc:
 			'Ao criar ou editar um job de backup, selecione uma política no menu suspenso "Política de Retenção". O rótulo mostra ambas as regras em forma compacta.',
@@ -132,7 +132,7 @@ export function PoliciesPage({ nextPage, onNext, lang }: Props) {
 					{c.rules.map((r) => (
 						<p key={r.name} className="text-sm">
 							<strong>{r.name}</strong>{" "}
-							<span className="text-muted-foreground">— {r.desc}</span>
+							<span className="text-muted-foreground">- {r.desc}</span>
 						</p>
 					))}
 				</div>
@@ -164,7 +164,9 @@ export function PoliciesPage({ nextPage, onNext, lang }: Props) {
 					<div className="border rounded-lg bg-background shadow-sm p-4 w-72 flex flex-col gap-3">
 						<div>
 							<p className="text-xs font-semibold">
-								{lang === "en" ? "New Backup Policy" : "Nova Política de Backup"}
+								{lang === "en"
+									? "New Backup Policy"
+									: "Nova Política de Backup"}
 							</p>
 							<p className="text-xs text-muted-foreground">
 								{lang === "en"
@@ -173,7 +175,11 @@ export function PoliciesPage({ nextPage, onNext, lang }: Props) {
 							</p>
 						</div>
 						<MockInput
-							label={lang === "en" ? "Keep Last N Backups" : "Manter Últimos N Backups"}
+							label={
+								lang === "en"
+									? "Keep Last N Backups"
+									: "Manter Últimos N Backups"
+							}
 							placeholder={lang === "en" ? "e.g., 10" : "ex.: 10"}
 							helper={
 								lang === "en"
@@ -182,7 +188,11 @@ export function PoliciesPage({ nextPage, onNext, lang }: Props) {
 							}
 						/>
 						<MockInput
-							label={lang === "en" ? "Max Backup Age (Days)" : "Idade Máxima do Backup (Dias)"}
+							label={
+								lang === "en"
+									? "Max Backup Age (Days)"
+									: "Idade Máxima do Backup (Dias)"
+							}
 							placeholder={lang === "en" ? "e.g., 30" : "ex.: 30"}
 							helper={
 								lang === "en"
@@ -249,14 +259,22 @@ export function PoliciesPage({ nextPage, onNext, lang }: Props) {
 
 					<div className="border rounded-lg bg-background shadow-sm p-4 w-64 flex flex-col gap-3">
 						<p className="text-xs font-semibold">
-							{lang === "en" ? "Edit Backup Policy" : "Editar Política de Backup"}
+							{lang === "en"
+								? "Edit Backup Policy"
+								: "Editar Política de Backup"}
 						</p>
 						<MockInput
-							label={lang === "en" ? "Keep Last N Backups" : "Manter Últimos N Backups"}
+							label={
+								lang === "en"
+									? "Keep Last N Backups"
+									: "Manter Últimos N Backups"
+							}
 							placeholder="10"
 						/>
 						<MockInput
-							label={lang === "en" ? "Max Backup Age (Days)" : "Idade Máxima (Dias)"}
+							label={
+								lang === "en" ? "Max Backup Age (Days)" : "Idade Máxima (Dias)"
+							}
 							placeholder="30"
 						/>
 						<div className="flex justify-end gap-2">

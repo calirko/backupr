@@ -34,7 +34,7 @@ echo "Title   : $TITLE"
 echo ""
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-# Always rebuild by default so the binaries can never lag behind Cargo.toml —
+# Always rebuild by default so the binaries can never lag behind Cargo.toml -
 # that mismatch is exactly what causes agents to update in an endless loop.
 if [[ "$BUILD" -eq 1 ]]; then
     echo "Building binaries for v$VERSION..."
@@ -57,7 +57,7 @@ done
 # ── Verify + summarize ────────────────────────────────────────────────────────
 # Both the agent and tray binaries embed CARGO_PKG_VERSION at compile time, so a
 # file that doesn't contain the current $VERSION string was built for a different
-# version and must not be shipped under this tag — that mismatch is what causes
+# version and must not be shipped under this tag - that mismatch is what causes
 # agents to update in an endless loop (the running binary self-reports the old
 # version).
 echo "Binaries to publish under $TAG:"
@@ -66,7 +66,7 @@ mismatch=0
 for f in "${FILES[@]}"; do
     size=$(du -h "$f" | cut -f1)
     # grep -c reads all input (unlike grep -q, which closes the pipe on the
-    # first match and would SIGPIPE `strings` — fatal under `pipefail`).
+    # first match and would SIGPIPE `strings` - fatal under `pipefail`).
     matches=$(strings -n 5 "$f" | grep -cF "$VERSION" || true)
     if [[ "${matches:-0}" -gt 0 ]]; then
         mark="yes"
@@ -79,7 +79,7 @@ done
 echo ""
 
 if [[ "$mismatch" -eq 1 ]]; then
-    echo "One or more binaries do not embed v$VERSION — they are stale."
+    echo "One or more binaries do not embed v$VERSION - they are stale."
     echo "Re-run without --no-build (or run scripts/build-all.sh) and retry."
     exit 1
 fi
@@ -92,7 +92,7 @@ fi
 # ── Sign ──────────────────────────────────────────────────────────────────────
 # The agent refuses to apply a self-update whose binary doesn't carry a valid
 # signature over the embedded public key (see UPDATE_PUBLIC_KEY_HEX in
-# src/update.rs) — so every binary asset needs a matching "<file>.sig" asset,
+# src/update.rs) - so every binary asset needs a matching "<file>.sig" asset,
 # or installed agents will treat the release as unusable and skip it.
 SIGNING_KEY="${BACKUPR_SIGNING_KEY:-$HOME/.backupr-signing-key.pem}"
 if [[ ! -f "$SIGNING_KEY" ]]; then

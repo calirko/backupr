@@ -53,7 +53,7 @@ export default async function backupRoutes(app: Hono) {
 		return c.json({ data, total, absoluteTotal, skip: s, take: t });
 	});
 
-	// Download redirect — generates a fresh presigned URL and redirects
+	// Download redirect - generates a fresh presigned URL and redirects
 	app.get("/api/backups/:id/download", rateLimit, auth, async (c) => {
 		const id = c.req.param("id");
 		const backup = await db.backup.findUnique({
@@ -67,7 +67,10 @@ export default async function backupRoutes(app: Hono) {
 
 		const date = backup.completed_at ?? backup.started_at ?? new Date();
 		const dateStr = date.toISOString().slice(0, 16).replace(/:/g, "-");
-		const safeName = backup.backup_job.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+		const safeName = backup.backup_job.name
+			.toLowerCase()
+			.replace(/\s+/g, "_")
+			.replace(/[^a-z0-9_]/g, "");
 		const filename = `${safeName}_${dateStr}.7z`;
 		const url = await presignedDownloadUrl(
 			backup.blob_key,

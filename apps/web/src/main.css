@@ -108,7 +108,7 @@
 	}
 }
 
-/* smooth breathe — symmetric fade, no sharp flash */
+/* smooth breathe - symmetric fade, no sharp flash */
 @keyframes status-fade {
 	0%, 100% {
 		opacity: 0.25;
@@ -145,7 +145,7 @@
 	color: var(--cs-color);
 }
 
-/* Status variants — soft desaturated OKLCH */
+/* Status variants - soft desaturated OKLCH */
 .cs-connected         { --cs-color: var(--greenish);  --cs-speed: 2.5s; }
 .cs-running           { --cs-color: var(--blueish);   --cs-speed: 1.1s; }
 .cs-queued            { --cs-color: var(--purpleish); --cs-speed: 2s; }

@@ -42,8 +42,6 @@ winresource = "0.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 [profile.release]
-lto = true
-codegen-units = 1
-strip = "debuginfo"
-opt-level = "s"
-panic = "abort"
+lto = false
+strip = false
+opt-level = 3

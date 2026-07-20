@@ -1,20 +1,3 @@
-import Data, { type Column } from "@/components/data/data";
-import type { TableAction } from "@/components/data/dataActions";
-import DataHeader, { type SearchField } from "@/components/data/dataHeader";
-import AgentDialog from "@/components/dialog/agent";
-import AgentCodeDialog from "@/components/dialog/agent-code";
-import AgentDetailDialog from "@/components/dialog/agent-detail";
-import AgentStatusHistoryDialog from "@/components/dialog/agent-status-history";
-import ConfirmDialog from "@/components/dialog/confirm";
-import ErrorDialog from "@/components/dialog/error";
-import { Button } from "@/components/ui/button";
-import {
-	ConnectionStatus,
-	type AgentConnectionStatus,
-} from "@/components/ui/connection-status";
-import { useData } from "@/hooks/use-data";
-import { useDialog } from "@/hooks/use-dialog";
-import { useSocket } from "@/hooks/use-socket";
 import {
 	ChartBarIcon,
 	CodeSimpleIcon,
@@ -26,6 +9,23 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import Data, { type Column } from "@/components/data/data";
+import type { TableAction } from "@/components/data/dataActions";
+import DataHeader, { type SearchField } from "@/components/data/dataHeader";
+import AgentDialog from "@/components/dialog/agent";
+import AgentCodeDialog from "@/components/dialog/agent-code";
+import AgentDetailDialog from "@/components/dialog/agent-detail";
+import AgentStatusHistoryDialog from "@/components/dialog/agent-status-history";
+import ConfirmDialog from "@/components/dialog/confirm";
+import ErrorDialog from "@/components/dialog/error";
+import { Button } from "@/components/ui/button";
+import {
+	type AgentConnectionStatus,
+	ConnectionStatus,
+} from "@/components/ui/connection-status";
+import { useData } from "@/hooks/use-data";
+import { useDialog } from "@/hooks/use-dialog";
+import { useSocket } from "@/hooks/use-socket";
 
 export default function AgentsPage() {
 	const { filters, orderBy } = useData("agents");
@@ -118,7 +118,7 @@ export default function AgentsPage() {
 			orderable: false,
 			format: (value) =>
 				value == null ? (
-					"—"
+					"-"
 				) : (
 					<span
 						className={value < 90 ? "text-destructive" : undefined}
@@ -139,7 +139,7 @@ export default function AgentsPage() {
 			label: "Created By",
 			orderable: true,
 			orderByKey: "created_by.name",
-			format: (value) => value?.name ?? "—",
+			format: (value) => value?.name ?? "-",
 		},
 		{
 			key: "total_size_bytes",

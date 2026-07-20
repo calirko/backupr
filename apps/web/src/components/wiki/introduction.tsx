@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { WikiLang } from "@/components/dialog/wiki/wiki";
-import { PageNav } from "./page-nav";
 import pkg from "../../../package.json";
+import { PageNav } from "./page-nav";
 
 interface Props {
 	nextPage: { id: string; name: string } | null;
@@ -22,7 +22,7 @@ const content = {
 			},
 			{ italic: "backupr agent" },
 			{
-				rest: ". All backup data is stored securely in your own infrastructure — no third-party cloud required.",
+				rest: ". All backup data is stored securely in your own infrastructure - no third-party cloud required.",
 			},
 		],
 		howTitle: "How it fits together",
@@ -42,7 +42,7 @@ const content = {
 		],
 		featuresTitle: "Key features",
 		features: [
-			"Agent pairing via one-time codes — no manual token configuration",
+			"Agent pairing via one-time codes - no manual token configuration",
 			"Cron-based job scheduling with configurable compression levels",
 			"Backup retention policies (keep last N, expire after X days)",
 			"Password-protected archives",
@@ -64,7 +64,7 @@ const content = {
 			},
 			{ italic: "agente backupr" },
 			{
-				rest: ". Todos os dados de backup são armazenados com segurança na sua própria infraestrutura — sem dependência de nuvem de terceiros.",
+				rest: ". Todos os dados de backup são armazenados com segurança na sua própria infraestrutura - sem dependência de nuvem de terceiros.",
 			},
 		],
 		howTitle: "Como as partes se conectam",
@@ -84,7 +84,7 @@ const content = {
 		],
 		featuresTitle: "Principais funcionalidades",
 		features: [
-			"Pareamento de agentes via códigos de uso único — sem configuração manual de token",
+			"Pareamento de agentes via códigos de uso único - sem configuração manual de token",
 			"Agendamento de jobs baseado em cron com níveis de compressão configuráveis",
 			"Políticas de retenção de backup (manter os últimos N, expirar após X dias)",
 			"Arquivos protegidos por senha",
@@ -152,7 +152,7 @@ export function IntroductionPage({ nextPage, onNext, lang }: Props) {
 					{c.howItems.map((item) => (
 						<p key={item.name} className="text-sm">
 							<strong>{item.name}</strong>{" "}
-							<span className="text-muted-foreground">— {item.desc}</span>
+							<span className="text-muted-foreground">- {item.desc}</span>
 						</p>
 					))}
 				</div>

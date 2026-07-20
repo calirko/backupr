@@ -237,7 +237,7 @@ impl BackuprAgent {
             self.config.agent_token.as_ref().unwrap()
         );
 
-        // Log without the query string — it carries the long-lived agent token,
+        // Log without the query string - it carries the long-lived agent token,
         // and agent logs are fetchable over the socket via get_logs.
         let log_url = ws_url.split('?').next().unwrap_or(&ws_url);
         raccoon!("[Agent] Connecting to {}...", log_url);
@@ -396,7 +396,7 @@ impl BackuprAgent {
                         let last = last_inbound_wd.load(Ordering::Relaxed);
                         if now - last > TOLERANCE_MS {
                             eprintln!(
-                                "[Agent] No server traffic for {}ms (>{}ms) — connection appears dead, reconnecting.",
+                                "[Agent] No server traffic for {}ms (>{}ms) - connection appears dead, reconnecting.",
                                 now - last,
                                 TOLERANCE_MS
                             );
@@ -482,7 +482,7 @@ impl BackuprAgent {
                     backup::remove_lockfile();
                 }
                 // Refresh session info on the server (version, hostname, RAM, disk …).
-                // Fire-and-forget — a failure here is non-fatal.
+                // Fire-and-forget - a failure here is non-fatal.
                 let cfg = config.clone();
                 tokio::spawn(async move {
                     if let Err(e) = update::refresh_session_info(&cfg).await {
@@ -517,7 +517,7 @@ impl BackuprAgent {
             ServerMessage::Update => {
                 raccoon!("[Agent] Received update command from server");
 
-                // Never interrupt an in-progress or queued backup — the update
+                // Never interrupt an in-progress or queued backup - the update
                 // restarts the process, which would fail the running job. Decline
                 // and report so the operator can retry once backups finish.
                 let busy = current_job.lock().await.is_some() || !job_queue.lock().await.is_empty();

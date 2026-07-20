@@ -1,4 +1,3 @@
-import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import {
 	Copy,
 	Eye,
@@ -7,6 +6,7 @@ import {
 	TestTube,
 	XSquare,
 } from "@phosphor-icons/react";
+import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import { PageNav } from "./page-nav";
 
 interface Props {
@@ -50,7 +50,7 @@ const content = {
 			{
 				label: "Compression",
 				required: false,
-				desc: "Level 9 (default) gives maximum compression but takes longer. Level 5 is a good balance. Level 0 skips compression entirely — fastest but largest files.",
+				desc: "Level 9 (default) gives maximum compression but takes longer. Level 5 is a good balance. Level 0 skips compression entirely - fastest but largest files.",
 			},
 			{
 				label: "Retention Policy",
@@ -60,7 +60,7 @@ const content = {
 			{
 				label: "Password Protection",
 				required: false,
-				desc: "When checked, an Archive Password field appears. The 7z archive will be encrypted — the password is required to open the file.",
+				desc: "When checked, an Archive Password field appears. The 7z archive will be encrypted - the password is required to open the file.",
 			},
 			{
 				label: "Active",
@@ -133,7 +133,7 @@ const content = {
 			{
 				label: "Compressão",
 				required: false,
-				desc: "Nível 9 (padrão) oferece máxima compressão mas leva mais tempo. Nível 5 é um bom equilíbrio. Nível 0 pula a compressão — mais rápido, mas arquivos maiores.",
+				desc: "Nível 9 (padrão) oferece máxima compressão mas leva mais tempo. Nível 5 é um bom equilíbrio. Nível 0 pula a compressão - mais rápido, mas arquivos maiores.",
 			},
 			{
 				label: "Política de Retenção",
@@ -143,7 +143,7 @@ const content = {
 			{
 				label: "Proteção por Senha",
 				required: false,
-				desc: "Quando marcado, um campo de Senha do Arquivo aparece. O arquivo 7z será criptografado — a senha é necessária para abrir o arquivo.",
+				desc: "Quando marcado, um campo de Senha do Arquivo aparece. O arquivo 7z será criptografado - a senha é necessária para abrir o arquivo.",
 			},
 			{
 				label: "Ativo",
@@ -336,7 +336,7 @@ export function CreatingAJobPage({ nextPage, onNext, lang }: Props) {
 							{f.required && (
 								<span className="text-destructive text-xs ml-0.5">*</span>
 							)}{" "}
-							<span className="text-muted-foreground">— {f.desc}</span>
+							<span className="text-muted-foreground">- {f.desc}</span>
 						</p>
 					))}
 				</div>
@@ -423,7 +423,7 @@ export function CreatingAJobPage({ nextPage, onNext, lang }: Props) {
 					{c.actions.map((a) => (
 						<p key={a.name} className="text-sm">
 							<strong>{a.name}</strong>{" "}
-							<span className="text-muted-foreground">— {a.desc}</span>
+							<span className="text-muted-foreground">- {a.desc}</span>
 						</p>
 					))}
 				</div>

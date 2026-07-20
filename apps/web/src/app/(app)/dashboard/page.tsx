@@ -1,9 +1,18 @@
-import { ArrowRightIcon } from "@phosphor-icons/react";
+import {
+	ArrowRightIcon,
+	DesktopIcon,
+	HardDrivesIcon,
+	ShieldCheckIcon,
+	StackIcon,
+	UsersIcon,
+	WarningIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import { toast } from "sonner";
 import WikiDialog from "@/components/dialog/wiki/wiki";
+import Badge from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -19,7 +28,12 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from "@/components/ui/chart";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { useSocket } from "@/hooks/use-socket";
+import {
+	BACKUP_STATUS_BADGE_VARIANT,
+	BACKUP_STATUS_LABEL,
+} from "@/lib/backup-status";
 
 interface DashboardData {
 	stats: {
@@ -60,7 +74,7 @@ interface DashboardData {
 }
 
 function formatBytes(bytes: string | number | null | undefined): string {
-	if (bytes === null || bytes === undefined) return "—";
+	if (bytes === null || bytes === undefined) return "-";
 	const n = typeof bytes === "string" ? Number(bytes) : bytes;
 	if (isNaN(n) || n === 0) return "0 B";
 	const units = ["B", "KB", "MB", "GB", "TB"];
@@ -69,7 +83,7 @@ function formatBytes(bytes: string | number | null | undefined): string {
 }
 
 function formatRelative(dateStr: string | null | undefined): string {
-	if (!dateStr) return "—";
+	if (!dateStr) return "-";
 	const diff = Date.now() - new Date(dateStr).getTime();
 	const mins = Math.floor(diff / 60000);
 	if (mins < 1) return "Just now";
@@ -88,24 +102,6 @@ function getLast7Days(): string[] {
 		const day = String(d.getDate()).padStart(2, "0");
 		return `${year}-${month}-${day}`;
 	});
-}
-
-function StatusDot({ status }: { status: string }) {
-	const colors: Record<string, string> = {
-		COMPLETED: "var(--greenish)",
-		FAILED: "var(--destructive)",
-		IN_PROGRESS: "var(--blueish)",
-		PENDING: "var(muted-foreground)",
-	};
-	return (
-		<span
-			className={`inline-block w-2 h-2 shrink-0`}
-			style={{
-				backgroundColor: colors[status],
-				borderRadius: "2px",
-			}}
-		/>
-	);
 }
 
 const backupDayChartConfig = {
@@ -314,7 +310,10 @@ export default function DashboardPage() {
 
 					<Card>
 						<CardHeader>
-							<CardTitle>Storage Used</CardTitle>
+							<CardTitle className="flex items-center gap-1.5">
+								<HardDrivesIcon size={16} className="text-muted-foreground" />
+								Storage Used
+							</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<h2 className="text-3xl font-heading">
@@ -328,7 +327,7 @@ export default function DashboardPage() {
 							<p className="text-muted-foreground text-xs mt-0.5">
 								{data?.stats?.free_size_bytes
 									? "free available"
-									: `${data?.stats?.total_objects ?? "—"} objects in MinIO`}
+									: `${data?.stats?.total_objects ?? "-"} objects in MinIO`}
 							</p>
 						</CardContent>
 						<CardFooter>
@@ -345,7 +344,17 @@ export default function DashboardPage() {
 
 					<Card>
 						<CardHeader>
-							<CardTitle>Failed Backups</CardTitle>
+							<CardTitle className="flex items-center gap-1.5">
+								<WarningIcon
+									size={16}
+									className={
+										failedCount > 0
+											? "text-destructive"
+											: "text-muted-foreground"
+									}
+								/>
+								Failed Backups
+							</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<h2
@@ -411,22 +420,40 @@ export default function DashboardPage() {
 									No recent backups.
 								</p>
 							) : (
-								<div className="flex flex-col gap-2.5">
-									{recentBackups.map((b) => (
-										<div key={b.id} className="flex items-center gap-2 text-xs">
-											<StatusDot status={b.status} />
-											<span className="font-medium flex-1 truncate">
-												{b.job_name} - {b.agent_name}
-											</span>
-											<span className="text-muted-foreground shrink-0">
-												{formatBytes(b.size_bytes)}
-											</span>
-											<span className="text-muted-foreground shrink-0 w-14 text-right">
-												{formatRelative(b.started_at)}
-											</span>
-										</div>
-									))}
-								</div>
+								<Table>
+									<TableBody>
+										{recentBackups.map((b) => (
+											<TableRow key={b.id} className="text-xs">
+												<TableCell className="p-1.5 pl-0">
+													<Badge
+														variant={
+															BACKUP_STATUS_BADGE_VARIANT[
+																b.status as keyof typeof BACKUP_STATUS_BADGE_VARIANT
+															] ?? "default"
+														}
+													>
+														{BACKUP_STATUS_LABEL[
+															b.status as keyof typeof BACKUP_STATUS_LABEL
+														] ?? b.status}
+													</Badge>
+												</TableCell>
+												<TableCell className="p-1.5 font-medium truncate max-w-0 w-full">
+													{b.job_name}
+													<span className="text-muted-foreground font-normal">
+														{" "}
+														· {b.agent_name}
+													</span>
+												</TableCell>
+												<TableCell className="p-1.5 text-muted-foreground text-right">
+													{formatBytes(b.size_bytes)}
+												</TableCell>
+												<TableCell className="p-1.5 pr-0 text-muted-foreground text-right w-14">
+													{formatRelative(b.started_at)}
+												</TableCell>
+											</TableRow>
+										))}
+									</TableBody>
+								</Table>
 							)}
 						</CardContent>
 					</Card>
@@ -453,17 +480,26 @@ export default function DashboardPage() {
 										successRate === null && "text-muted-foreground"
 									}`}
 								>
-									{successRate !== null ? `${successRate}%` : "—"}
+									{successRate !== null ? `${successRate}%` : "-"}
 								</h2>
 								<p className="text-xs text-muted-foreground">success rate</p>
 							</div>
 							<div className="flex flex-col gap-1.5">
 								{statusBreakdown.map(({ status, count }) => (
 									<div key={status} className="flex items-center gap-2 text-xs">
-										<StatusDot status={status} />
-										<span className="text-muted-foreground capitalize">
-											{status.toLowerCase().replace("_", " ")}
-										</span>
+										<Badge
+											variant={
+												BACKUP_STATUS_BADGE_VARIANT[
+													status as keyof typeof BACKUP_STATUS_BADGE_VARIANT
+												]
+											}
+										>
+											{
+												BACKUP_STATUS_LABEL[
+													status as keyof typeof BACKUP_STATUS_LABEL
+												]
+											}
+										</Badge>
 										<span className="font-medium">{count}</span>
 									</div>
 								))}
@@ -476,103 +512,75 @@ export default function DashboardPage() {
 
 					{/* ── Row 4: Agents, Active Jobs, Users, Policies ── */}
 
-					<Card>
+					<Card className="col-span-2 md:col-span-4">
 						<CardHeader>
-							<CardTitle>Agents</CardTitle>
+							<CardTitle>Overview</CardTitle>
+							<CardDescription>
+								Quick counts across your account
+							</CardDescription>
 						</CardHeader>
-						<CardContent>
-							<h2 className="text-3xl font-heading">
-								{onlineCount}
-								<span className="text-muted-foreground text-xl font-normal">
-									/{data?.stats?.total_agents ?? "—"}
-								</span>
-							</h2>
-							<p className="text-muted-foreground text-xs mt-0.5">
-								online right now
-							</p>
+						<CardContent className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border/50">
+							{[
+								{
+									icon: DesktopIcon,
+									label: "Agents",
+									value: onlineCount,
+									suffix: `/${data?.stats?.total_agents ?? "-"}`,
+									detail: "online now",
+									href: "/agents",
+								},
+								{
+									icon: StackIcon,
+									label: "Active Jobs",
+									value: data?.stats?.total_jobs ?? "-",
+									detail: "across all agents",
+									href: "/backup-jobs",
+								},
+								{
+									icon: UsersIcon,
+									label: "Users",
+									value: data?.total_users ?? "-",
+									detail: "with access",
+									href: "/users",
+								},
+								{
+									icon: ShieldCheckIcon,
+									label: "Policies",
+									value: data?.total_policies ?? "-",
+									detail: "retention rules",
+									href: "/backup-policies",
+								},
+							].map((stat) => (
+								<button
+									key={stat.label}
+									type="button"
+									onClick={() => navigate(stat.href)}
+									className="group flex items-center justify-between gap-2 py-3 first:pt-0 last:pb-0 md:py-0 md:px-4 md:first:pl-0 md:last:pr-0 text-left cursor-pointer"
+								>
+									<div className="flex flex-col gap-1">
+										<div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+											<stat.icon size={14} />
+											{stat.label}
+										</div>
+										<div className="flex items-baseline gap-1">
+											<h2 className="text-2xl font-heading">{stat.value}</h2>
+											{stat.suffix && (
+												<span className="text-muted-foreground text-sm">
+													{stat.suffix}
+												</span>
+											)}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											{stat.detail}
+										</p>
+									</div>
+									<ArrowRightIcon
+										className="shrink-0 opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0"
+										size={16}
+									/>
+								</button>
+							))}
 						</CardContent>
-						<CardFooter>
-							<Button
-								variant="outline"
-								className="w-full"
-								onClick={() => navigate("/agents")}
-							>
-								<ArrowRightIcon />
-								Manage Agents
-							</Button>
-						</CardFooter>
-					</Card>
-
-					<Card>
-						<CardHeader>
-							<CardTitle>Active Jobs</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<h2 className="text-3xl font-heading">
-								{data?.stats?.total_jobs ?? "—"}
-							</h2>
-							<p className="text-muted-foreground text-xs mt-0.5">
-								across all agents
-							</p>
-						</CardContent>
-						<CardFooter>
-							<Button
-								variant="outline"
-								className="w-full"
-								onClick={() => navigate("/backup-jobs")}
-							>
-								<ArrowRightIcon />
-								Manage Jobs
-							</Button>
-						</CardFooter>
-					</Card>
-
-					<Card>
-						<CardHeader>
-							<CardTitle>Users</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<h2 className="text-3xl font-heading">
-								{data?.total_users ?? "—"}
-							</h2>
-							<p className="text-muted-foreground text-xs mt-0.5">
-								with access to this server
-							</p>
-						</CardContent>
-						<CardFooter>
-							<Button
-								variant="outline"
-								className="w-full"
-								onClick={() => navigate("/users")}
-							>
-								<ArrowRightIcon />
-								Manage Users
-							</Button>
-						</CardFooter>
-					</Card>
-
-					<Card>
-						<CardHeader>
-							<CardTitle>Policies</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<h2 className="text-3xl font-heading">
-								{data?.total_policies ?? "—"}
-							</h2>
-							<p className="text-muted-foreground text-xs mt-0.5">
-								retention policies defined
-							</p>
-						</CardContent>
-						<CardFooter>
-							<Button
-								variant="outline"
-								className="w-full"
-								onClick={() => navigate("/backup-policies")}
-							>
-								<ArrowRightIcon />
-								Manage Policies
-							</Button>
-						</CardFooter>
 					</Card>
 				</div>
 			</div>

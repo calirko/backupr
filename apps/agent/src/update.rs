@@ -1,13 +1,13 @@
 //! Auto-update for the Backupr agent.
 //!
 //! # Update flow
-//! 1. `run_update()` — called when the server sends an "update" command:
+//! 1. `run_update()` - called when the server sends an "update" command:
 //!    a. Fetches the latest GitHub release metadata.
 //!    b. Downloads new binaries to `<dir>/<asset>.new` files.
-//!    c. **Windows**: spawns `agent apply-update` as an independent helper process and returns (does NOT exit — lets WinSW stop the service).
+//!    c. **Windows**: spawns `agent apply-update` as an independent helper process and returns (does NOT exit - lets WinSW stop the service).
 //!    d. **Linux**: replaces binaries in-place and restarts the process.
 //!
-//! 2. `run_apply_update_helper()` — entry point for the `apply-update`
+//! 2. `run_apply_update_helper()` - entry point for the `apply-update`
 //!    subcommand (a short-lived helper process, Windows only):
 //!    a. Stops the WinSW service (`sc stop`).
 //!    b. Kills all tray processes (for every logged-in user).
@@ -35,7 +35,7 @@ const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Public half of the Ed25519 keypair used to sign release binaries
 /// (generated with `scripts/keygen.sh`; private key never leaves the
 /// release machine). Every downloaded update must carry a valid `.sig`
-/// asset verifying against this key before it's swapped into place — this
+/// asset verifying against this key before it's swapped into place - this
 /// is what stops a compromised/spoofed GitHub release (or a MITM on the
 /// download) from getting the agent to self-replace with an arbitrary
 /// binary, which is also the exact "process rewrites its own exe and
@@ -160,8 +160,13 @@ async fn fetch_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
 
 /// Downloads `url`, verifies it against the signature at `sig_url`, and only
 /// then writes it to `dest`. Refuses to write anything on a verification
-/// failure — an update that doesn't verify must never be applied.
-async fn download_file(client: &reqwest::Client, url: &str, sig_url: &str, dest: &Path) -> Result<()> {
+/// failure - an update that doesn't verify must never be applied.
+async fn download_file(
+    client: &reqwest::Client,
+    url: &str,
+    sig_url: &str,
+    dest: &Path,
+) -> Result<()> {
     raccoon!("[Update] Downloading {} ...", url);
     let bytes = fetch_bytes(client, url).await?;
 
@@ -204,7 +209,7 @@ fn replace_binary(target: &Path, replacement: &Path) -> Result<()> {
         .ok_or_else(|| anyhow!("No filename: {}", target.display()))?;
 
     let bak = target.with_file_name(format!("{}.bak", filename));
-    let _ = std::fs::remove_file(&bak); // stale backup — ignore error
+    let _ = std::fs::remove_file(&bak); // stale backup - ignore error
 
     std::fs::rename(target, &bak).map_err(|e| {
         anyhow!(
@@ -243,17 +248,15 @@ pub fn cleanup_stale_artifacts() {
 
     // <agent>.bak  (e.g. backupr-agent.exe.bak)
     let agent_bak = exe.with_file_name(format!("{}.bak", name.to_string_lossy()));
-    if agent_bak.exists()
-        && std::fs::remove_file(&agent_bak).is_ok() {
-            raccoon!("[Update] Removed stale backup: {}", agent_bak.display());
-        }
+    if agent_bak.exists() && std::fs::remove_file(&agent_bak).is_ok() {
+        raccoon!("[Update] Removed stale backup: {}", agent_bak.display());
+    }
 
     // <tray>.bak  (e.g. tray.exe.bak)
     let tray_bak = dir.join(format!("{}.bak", tray_local_filename()));
-    if tray_bak.exists()
-        && std::fs::remove_file(&tray_bak).is_ok() {
-            raccoon!("[Update] Removed stale backup: {}", tray_bak.display());
-        }
+    if tray_bak.exists() && std::fs::remove_file(&tray_bak).is_ok() {
+        raccoon!("[Update] Removed stale backup: {}", tray_bak.display());
+    }
 
     // Leftover *.new downloads from an interrupted or failed update. A
     // successful update renames these into place, so anything remaining is a
@@ -282,7 +285,7 @@ fn restart_self(exe_path: &Path) -> Result<()> {
         .args(std::env::args().skip(1))
         .spawn()
         .map_err(|e| anyhow!("Failed to spawn updated agent: {}", e))?;
-    raccoon!("[Update] Update complete — exiting old process.");
+    raccoon!("[Update] Update complete - exiting old process.");
     std::process::exit(0);
 }
 
@@ -441,7 +444,7 @@ pub async fn refresh_session_info(config: &AgentConfig) -> Result<()> {
 /// Checks GitHub for a newer release and downloads the new binaries.
 ///
 /// **Windows**: spawns an `apply-update` helper process that stops the WinSW
-/// service, swaps the binaries, and restarts the service — then returns so
+/// service, swaps the binaries, and restarts the service - then returns so
 /// WinSW can stop this process cleanly.
 ///
 /// **Linux**: replaces binaries in-place and restarts the process directly.
@@ -449,7 +452,7 @@ pub async fn refresh_session_info(config: &AgentConfig) -> Result<()> {
 /// Returns `Ok(())` without doing anything if already on the latest version.
 pub async fn run_update() -> Result<()> {
     if UPDATE_IN_PROGRESS.swap(true, Ordering::SeqCst) {
-        raccoon!("[Update] Update already in progress — ignoring duplicate request.");
+        raccoon!("[Update] Update already in progress - ignoring duplicate request.");
         return Ok(());
     }
 
@@ -503,7 +506,8 @@ async fn run_update_inner() -> Result<()> {
 
     raccoon!(
         "[Update] New version available: v{} \u{2192} v{}",
-        CURRENT_VERSION, latest_str
+        CURRENT_VERSION,
+        latest_str
     );
 
     // 3. Resolve the exe directory (all binaries live alongside the agent).
@@ -514,11 +518,10 @@ async fn run_update_inner() -> Result<()> {
         .ok_or_else(|| anyhow!("Exe has no parent directory: {}", exe_path.display()))?;
 
     // Every binary asset must ship with a `<name>.sig` asset in the same
-    // release — an asset with no signature is treated as missing, not as
+    // release - an asset with no signature is treated as missing, not as
     // "unsigned, apply anyway".
-    let find_asset = |name: &str| -> Option<&ReleaseAsset> {
-        release.assets.iter().find(|a| a.name == name)
-    };
+    let find_asset =
+        |name: &str| -> Option<&ReleaseAsset> { release.assets.iter().find(|a| a.name == name) };
     let sig_url_for = |name: &str| -> Result<String> {
         find_asset(&format!("{}.sig", name))
             .map(|a| a.browser_download_url.clone())
@@ -557,7 +560,13 @@ async fn run_update_inner() -> Result<()> {
     })?;
     let agent_sig_url = sig_url_for(asset_name)?;
     let agent_tmp = exe_dir.join(format!("{}.new", asset_name));
-    download_file(&client, &agent_asset.browser_download_url, &agent_sig_url, &agent_tmp).await?;
+    download_file(
+        &client,
+        &agent_asset.browser_download_url,
+        &agent_sig_url,
+        &agent_tmp,
+    )
+    .await?;
 
     // 6. Platform-specific apply step.
     #[cfg(target_os = "windows")]
@@ -586,7 +595,7 @@ async fn run_update_inner() -> Result<()> {
             .creation_flags(CREATE_BREAKAWAY_FROM_JOB | CREATE_NEW_PROCESS_GROUP)
             .spawn()
             .map_err(|e| anyhow!("Failed to spawn apply-update helper: {}", e))?;
-        raccoon!("[Update] Apply-update helper spawned — service will restart shortly.");
+        raccoon!("[Update] Apply-update helper spawned - service will restart shortly.");
         return Ok(());
     }
 
@@ -608,11 +617,11 @@ async fn run_update_inner() -> Result<()> {
 ///
 /// This runs as a **separate process** (spawned by `run_update`) so that it
 /// can stop the WinSW-managed service, replace the binaries, and start the
-/// service again — without being the process that WinSW is tracking.
+/// service again - without being the process that WinSW is tracking.
 ///
-/// `service`   — WinSW service name (e.g. `"backupr-agent"`)
-/// `agent_tmp` — path to the downloaded `.new` agent binary
-/// `tray_tmp`  — path to the downloaded `.new` tray binary (optional)
+/// `service`   - WinSW service name (e.g. `"backupr-agent"`)
+/// `agent_tmp` - path to the downloaded `.new` agent binary
+/// `tray_tmp`  - path to the downloaded `.new` tray binary (optional)
 pub fn run_apply_update_helper(
     service: &str,
     agent_tmp: &Path,
@@ -633,7 +642,7 @@ pub fn run_apply_update_helper(
     if stop_ok {
         raccoon!("[apply-update] Service stopped.");
     } else {
-        // May already be stopped (e.g. manual run / dev mode) — continue.
+        // May already be stopped (e.g. manual run / dev mode) - continue.
         raccoon!("[apply-update] Service stop returned non-zero (may already be stopped).");
     }
 
@@ -693,7 +702,7 @@ mod tests {
 
     // Real-world regression check: this signature was produced by
     // `openssl pkeyutl -sign -rawin` against the actual release signing key,
-    // over the message below — confirms release.sh's OpenSSL output and
+    // over the message below - confirms release.sh's OpenSSL output and
     // ed25519-dalek's verification actually interoperate, not just that the
     // math is self-consistent within Rust.
     const MSG: &[u8] = b"hello world test payload";

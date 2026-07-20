@@ -1,6 +1,13 @@
+import {
+	CheckSquareIcon,
+	Info,
+	WarningIcon,
+	XSquareIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { Button } from "@/components/ui/button";
+import { ConnectionStatus } from "@/components/ui/connection-status";
 import {
 	Dialog,
 	DialogClose,
@@ -19,20 +26,13 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "@/components/ui/drawer";
-import { Button } from "@/components/ui/button";
-import {
-	CheckSquareIcon,
-	WarningIcon,
-	XSquareIcon,
-	Info,
-} from "@phosphor-icons/react";
-import { ConnectionStatus } from "@/components/ui/connection-status";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface PathResult {
 	path: string;
@@ -56,7 +56,7 @@ interface TestJobResult {
 }
 
 function formatBytes(bytes: number | null): string {
-	if (bytes === null) return "—";
+	if (bytes === null) return "-";
 	if (bytes === 0) return "0 B";
 	const units = ["B", "KB", "MB", "GB", "TB"];
 	const i = Math.floor(Math.log(bytes) / Math.log(1024));

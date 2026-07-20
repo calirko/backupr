@@ -1,4 +1,3 @@
-import type { WikiLang } from "@/components/dialog/wiki/wiki";
 import {
 	CheckSquareIcon,
 	ClipboardTextIcon,
@@ -8,8 +7,9 @@ import {
 	PlusIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
-import { PageNav } from "./page-nav";
 import { EyeIcon, FloppyDiskIcon } from "@phosphor-icons/react/dist/ssr";
+import type { WikiLang } from "@/components/dialog/wiki/wiki";
+import { PageNav } from "./page-nav";
 
 interface Props {
 	nextPage: { id: string; name: string } | null;
@@ -197,7 +197,7 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 					{c.statuses.map((s) => (
 						<p key={s.label} className="text-sm">
 							<strong>{s.label}</strong>{" "}
-							<span className="text-muted-foreground">— {s.desc}</span>
+							<span className="text-muted-foreground">- {s.desc}</span>
 						</p>
 					))}
 				</div>
@@ -329,7 +329,7 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 						{c.installSteps.map((s) => (
 							<p key={s.step} className="text-sm">
 								<strong>{s.step}</strong>{" "}
-								<span className="text-muted-foreground">— {s.desc}</span>
+								<span className="text-muted-foreground">- {s.desc}</span>
 							</p>
 						))}
 					</div>
@@ -348,7 +348,7 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 						</p>
 						{c.menuItems.map((m) => (
 							<p key={m.name} className="text-muted-foreground">
-								| <span className="text-foreground">{m.name}</span> — {m.desc}
+								| <span className="text-foreground">{m.name}</span> - {m.desc}
 							</p>
 						))}
 						<p className="text-muted-foreground">

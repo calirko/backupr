@@ -1,6 +1,6 @@
-import { rateLimiter } from "hono-rate-limiter";
-import { getConnInfo } from "hono/bun";
 import type { Context, Next } from "hono";
+import { getConnInfo } from "hono/bun";
+import { rateLimiter } from "hono-rate-limiter";
 
 const getClientIp = (c: Context): string => {
 	const headers = Object.fromEntries(
@@ -37,7 +37,7 @@ export const rateLimit =
 				},
 			})
 		: async (c: Context, next: Next) => {
-				// console.log("[rate-limiter] dev mode — all headers:", {
+				// console.log("[rate-limiter] dev mode - all headers:", {
 				// 	...Object.fromEntries(
 				// 		Object.entries(c.req.header()).map(([k, v]) => [k, v]),
 				// 	),
@@ -61,7 +61,7 @@ export const authRateLimit =
 				},
 			})
 		: async (c: Context, next: Next) => {
-				// console.log("[rate-limiter] dev mode — all headers:", {
+				// console.log("[rate-limiter] dev mode - all headers:", {
 				// 	...Object.fromEntries(
 				// 		Object.entries(c.req.header()).map(([k, v]) => [k, v]),
 				// 	),

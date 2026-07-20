@@ -13,7 +13,7 @@ const content = {
 		subtitle: "An overview of the backupr architecture and backup flow.",
 		archTitle: "Architecture",
 		archDesc:
-			"backupr is composed of three parts that work together: the server, the web dashboard, and the agent. The server is the central hub — it stores all configuration and backup data, and coordinates communication between the dashboard and the agents running on your machines.",
+			"backupr is composed of three parts that work together: the server, the web dashboard, and the agent. The server is the central hub - it stores all configuration and backup data, and coordinates communication between the dashboard and the agents running on your machines.",
 		flowTitle: "Backup flow",
 		flowSteps: [
 			{
@@ -42,14 +42,14 @@ const content = {
 			"Each agent maintains a persistent WebSocket connection to the server after pairing. The server uses this channel to dispatch job commands and receive status reports. If the connection drops, the agent reconnects automatically with exponential backoff.",
 		storageTitle: "Storage",
 		storageDesc:
-			"Backup archives are stored in MinIO, an S3-compatible object store. When you download a backup from the dashboard, a short-lived presigned URL is generated — the file is served directly from storage without passing through the server again.",
+			"Backup archives are stored in MinIO, an S3-compatible object store. When you download a backup from the dashboard, a short-lived presigned URL is generated - the file is served directly from storage without passing through the server again.",
 	},
 	"pt-br": {
 		title: "Como Funciona",
 		subtitle: "Uma visão geral da arquitetura do backupr e do fluxo de backup.",
 		archTitle: "Arquitetura",
 		archDesc:
-			"O backupr é composto por três partes que trabalham juntas: o servidor, o painel web e o agente. O servidor é o hub central — ele armazena toda a configuração e os dados de backup, e coordena a comunicação entre o painel e os agentes em execução nas suas máquinas.",
+			"O backupr é composto por três partes que trabalham juntas: o servidor, o painel web e o agente. O servidor é o hub central - ele armazena toda a configuração e os dados de backup, e coordena a comunicação entre o painel e os agentes em execução nas suas máquinas.",
 		flowTitle: "Fluxo de backup",
 		flowSteps: [
 			{
@@ -78,7 +78,7 @@ const content = {
 			"Cada agente mantém uma conexão WebSocket persistente com o servidor após o pareamento. O servidor usa esse canal para despachar comandos de job e receber relatórios de status. Se a conexão cair, o agente reconecta automaticamente com backoff exponencial.",
 		storageTitle: "Armazenamento",
 		storageDesc:
-			"Os arquivos de backup são armazenados no MinIO, um armazenamento de objetos compatível com S3. Ao baixar um backup pelo painel, uma URL pré-assinada de curta duração é gerada — o arquivo é servido diretamente do armazenamento sem passar novamente pelo servidor.",
+			"Os arquivos de backup são armazenados no MinIO, um armazenamento de objetos compatível com S3. Ao baixar um backup pelo painel, uma URL pré-assinada de curta duração é gerada - o arquivo é servido diretamente do armazenamento sem passar novamente pelo servidor.",
 	},
 };
 
@@ -105,7 +105,7 @@ export function HowItWorksPage({ nextPage, onNext, lang }: Props) {
 					{c.flowSteps.map((item) => (
 						<p key={item.step} className="text-sm">
 							<strong>{item.step}</strong>{" "}
-							<span className="text-muted-foreground">— {item.desc}</span>
+							<span className="text-muted-foreground">- {item.desc}</span>
 						</p>
 					))}
 				</div>

@@ -50,7 +50,7 @@ impl IpcHandle {
 pub async fn run_ipc_server(handle: std::sync::Arc<IpcHandle>) {
     let addr = format!("127.0.0.1:{}", IPC_PORT);
 
-    // Retry binding — during a self-update the old process may still hold
+    // Retry binding - during a self-update the old process may still hold
     // the port for a brief moment after it spawns the new one.
     let listener = {
         const MAX_ATTEMPTS: u32 = 20;
@@ -97,16 +97,18 @@ pub async fn run_ipc_server(handle: std::sync::Arc<IpcHandle>) {
                 tokio::spawn(async move {
                     // Send current state immediately so the tray shows the right status on connect.
                     if let Ok(line) = serde_json::to_string(&IpcMessage::Status { state: initial })
-                        && stream.write_all((line + "\n").as_bytes()).await.is_err() {
-                            return;
-                        }
+                        && stream.write_all((line + "\n").as_bytes()).await.is_err()
+                    {
+                        return;
+                    }
 
                     let mut rx = tx.subscribe();
                     while let Ok(msg) = rx.recv().await {
                         if let Ok(line) = serde_json::to_string(&msg)
-                            && stream.write_all((line + "\n").as_bytes()).await.is_err() {
-                                break;
-                            }
+                            && stream.write_all((line + "\n").as_bytes()).await.is_err()
+                        {
+                            break;
+                        }
                     }
                     println!("[IPC] Tray disconnected");
                 });

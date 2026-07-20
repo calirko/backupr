@@ -123,7 +123,7 @@ async function clearExpiredAgentCodes(): Promise<void> {
  * Evaluates active BackupJob rows and triggers any whose cron expression
  * indicates they are due.
  *
- * NOTE: Actual backup execution is a stub — only the scheduling logic lives here.
+ * NOTE: Actual backup execution is a stub - only the scheduling logic lives here.
  */
 async function triggerDueBackups(): Promise<void> {
 	const now = new Date();
@@ -244,9 +244,23 @@ export function getSchedulerQueuedJobIds(): ReadonlySet<string> {
 // ─── Cron helpers ────────────────────────────────────────────────────────────
 
 const SCHEDULER_TZ = process.env.TZ ?? "UTC";
-const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DOW_NAMES = [
+	"Sunday",
+	"Monday",
+	"Tuesday",
+	"Wednesday",
+	"Thursday",
+	"Friday",
+	"Saturday",
+];
 
-function getZonedParts(date: Date): { minute: number; hour: number; dom: number; month: number; dow: number } {
+function getZonedParts(date: Date): {
+	minute: number;
+	hour: number;
+	dom: number;
+	month: number;
+	dow: number;
+} {
 	const parts = new Intl.DateTimeFormat("en-US", {
 		timeZone: SCHEDULER_TZ,
 		minute: "2-digit",
@@ -256,8 +270,12 @@ function getZonedParts(date: Date): { minute: number; hour: number; dom: number;
 		hour12: false,
 	}).formatToParts(date);
 
-	const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value ?? "0", 10);
-	const weekday = new Intl.DateTimeFormat("en-US", { timeZone: SCHEDULER_TZ, weekday: "long" }).format(date);
+	const get = (type: string) =>
+		parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+	const weekday = new Intl.DateTimeFormat("en-US", {
+		timeZone: SCHEDULER_TZ,
+		weekday: "long",
+	}).format(date);
 
 	return {
 		minute: get("minute"),
@@ -291,7 +309,9 @@ function isCronDue(
 ): boolean {
 	const fields = expression.trim().split(/\s+/);
 	if (fields.length !== 5) {
-		console.error(`[Scheduler] Invalid cron expression (expected 5 fields, got ${fields.length}): "${expression}" — job will never fire`);
+		console.error(
+			`[Scheduler] Invalid cron expression (expected 5 fields, got ${fields.length}): "${expression}" - job will never fire`,
+		);
 		return false;
 	}
 
@@ -305,10 +325,18 @@ function isCronDue(
 
 	const { minute, hour, dom, month, dow } = getZonedParts(now);
 
-	// Validate each field is parseable before evaluating — log once if malformed
-	for (const [label, field] of [["minute", minuteField], ["hour", hourField], ["dom", domField], ["month", monthField], ["dow", dowField]] as const) {
+	// Validate each field is parseable before evaluating - log once if malformed
+	for (const [label, field] of [
+		["minute", minuteField],
+		["hour", hourField],
+		["dom", domField],
+		["month", monthField],
+		["dow", dowField],
+	] as const) {
 		if (field !== "*" && !field.match(/^[\d,\-\/\*]+$/)) {
-			console.error(`[Scheduler] Invalid cron field "${label}=${field}" in "${expression}" — job will never fire`);
+			console.error(
+				`[Scheduler] Invalid cron field "${label}=${field}" in "${expression}" - job will never fire`,
+			);
 			return false;
 		}
 	}
@@ -323,7 +351,11 @@ function isCronDue(
 	if (!matches) return false;
 
 	// Guard: don't fire again within the same UTC minute (timezone-independent)
-	if (lastRun && Math.floor(lastRun.getTime() / 60_000) === Math.floor(now.getTime() / 60_000)) {
+	if (
+		lastRun &&
+		Math.floor(lastRun.getTime() / 60_000) ===
+			Math.floor(now.getTime() / 60_000)
+	) {
 		return false;
 	}
 
@@ -450,7 +482,7 @@ let retentionRunning = false;
 /**
  * Enforces retention policies across all backup jobs.
  * For each job, all attached policies are evaluated and the union of their
- * constraints is applied — whichever rule demands the most aggressive pruning wins.
+ * constraints is applied - whichever rule demands the most aggressive pruning wins.
  *
  * Rules:
  *   keep_last_n_backups    – delete COMPLETED backups beyond the N most recent
@@ -462,7 +494,9 @@ let retentionRunning = false;
  */
 async function enforceRetentionPolicies(): Promise<void> {
 	if (retentionRunning) {
-		console.warn("[Scheduler] enforceRetentionPolicies already running, skipping.");
+		console.warn(
+			"[Scheduler] enforceRetentionPolicies already running, skipping.",
+		);
 		return;
 	}
 	retentionRunning = true;
@@ -490,19 +524,27 @@ async function _pruneJob(jobId: string, jobName: string): Promise<void> {
 
 	if (!jobWithPolicies) return;
 
-	const policies = jobWithPolicies.backupJobPolicies.map((bjp) => bjp.backup_policy);
+	const policies = jobWithPolicies.backupJobPolicies.map(
+		(bjp) => bjp.backup_policy,
+	);
 
 	const keepLastN = policies
 		.map((p) => p.keep_last_n_backups)
 		.filter((v): v is number => v !== null)
-		.reduce<number | null>((min, v) => (min === null ? v : Math.min(min, v)), null);
+		.reduce<number | null>(
+			(min, v) => (min === null ? v : Math.min(min, v)),
+			null,
+		);
 
 	const maxAgeDays = policies
 		.map((p) => p.max_backup_age_in_days)
 		.filter((v): v is number => v !== null)
-		.reduce<number | null>((min, v) => (min === null ? v : Math.min(min, v)), null);
+		.reduce<number | null>(
+			(min, v) => (min === null ? v : Math.min(min, v)),
+			null,
+		);
 
-	// Map of id → blob_key for all candidates — avoids a second DB round-trip
+	// Map of id → blob_key for all candidates - avoids a second DB round-trip
 	const toDelete = new Map<string, string | null>();
 
 	if (keepLastN !== null) {
@@ -539,7 +581,10 @@ async function _pruneJob(jobId: string, jobName: string): Promise<void> {
 		try {
 			await db.backup.delete({ where: { id } });
 		} catch (err) {
-			console.error(`[Scheduler] Failed to delete DB row for backup ${id}:`, err);
+			console.error(
+				`[Scheduler] Failed to delete DB row for backup ${id}:`,
+				err,
+			);
 			continue;
 		}
 		deleted++;
@@ -548,7 +593,7 @@ async function _pruneJob(jobId: string, jobName: string): Promise<void> {
 				await removeObject(blobKey);
 			} catch (err) {
 				console.error(
-					`[Scheduler] Failed to remove storage object ${blobKey} (DB row already deleted — blob is orphaned):`,
+					`[Scheduler] Failed to remove storage object ${blobKey} (DB row already deleted - blob is orphaned):`,
 					err,
 				);
 			}
@@ -556,7 +601,9 @@ async function _pruneJob(jobId: string, jobName: string): Promise<void> {
 	}
 
 	if (deleted > 0) {
-		console.log(`[Scheduler] Pruned ${deleted} backup(s) for job ${jobId} (${jobName}).`);
+		console.log(
+			`[Scheduler] Pruned ${deleted} backup(s) for job ${jobId} (${jobName}).`,
+		);
 	}
 }
 
@@ -576,7 +623,7 @@ async function _enforceRetentionPolicies(): Promise<void> {
 
 /**
  * Immediately enforces retention for a single job. Safe to call after each
- * backup completes — runs independently of the hourly full sweep.
+ * backup completes - runs independently of the hourly full sweep.
  */
 export async function enforceRetentionForJob(jobId: string): Promise<void> {
 	const job = await db.backupJob.findFirst({

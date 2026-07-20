@@ -1,4 +1,3 @@
-import { Cron } from "croner";
 import {
 	ArrowLeftIcon,
 	CheckSquareIcon,
@@ -10,9 +9,12 @@ import {
 	SquaresFourIcon,
 	XSquareIcon,
 } from "@phosphor-icons/react";
+import { Cron } from "croner";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { AddCard, AddRow } from "@/components/add-tile";
+import BackupJobDialog from "@/components/dialog/backup-job";
 import BackupVersionsDialog from "@/components/dialog/backup-versions";
 import { Button } from "@/components/ui/button";
 import {
@@ -104,12 +106,18 @@ function getAgentStatus(
 	return "unknown";
 }
 
+function gridColsClass(itemCount: number): string {
+	if (itemCount <= 1) return "grid-cols-1";
+	if (itemCount === 2) return "grid-cols-1 sm:grid-cols-2";
+	return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+}
+
 function nextCronRun(cron: string): string {
 	try {
 		const next = new Cron(cron).nextRun();
-		return next ? next.toLocaleString() : "—";
+		return next ? next.toLocaleString() : "-";
 	} catch {
-		return "—";
+		return "-";
 	}
 }
 
@@ -533,7 +541,7 @@ export default function AgentJobsPage() {
 					Backups
 				</button>
 				<div className="flex items-center gap-3">
-					<h1 className="text-4xl font-heading">{agent?.name ?? "—"}</h1>
+					<h1 className="text-4xl font-heading">{agent?.name ?? "-"}</h1>
 					<span className="mt-0.5">
 						<ConnectionStatus
 							status={getAgentStatus(agentStatuses, agentId ?? "")}
@@ -610,14 +618,26 @@ export default function AgentJobsPage() {
 					<Spinner />
 				</div>
 			)}
-			{!loading && visibleJobs.length === 0 ? (
-				<div className="h-40 w-full flex items-center justify-center">
-					<p className="text-sm text-muted-foreground">
-						No backup jobs configured for this agent.
-					</p>
-				</div>
-			) : viewMode === "grid" ? (
-				<div className="grid pb-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+			{!loading && viewMode === "grid" ? (
+				<div
+					className={`grid pb-6 gap-4 ${gridColsClass(visibleJobs.length + 1)}`}
+				>
+					<AddCard
+						label="Add Backup Job"
+						onClick={() =>
+							openDialog(BackupJobDialog, {
+								defaultData: { agent_id: agentId, name: "" },
+								onConfirm: () => fetchData(),
+							})
+						}
+					/>
+					{visibleJobs.length === 0 && (
+						<div className="col-span-full h-40 flex items-center justify-center">
+							<p className="text-sm text-muted-foreground">
+								No backup jobs configured for this agent.
+							</p>
+						</div>
+					)}
 					{visibleJobs.map((job) => {
 						const agentStatus = agentStatuses.find(
 							(s) => s.agentId === agentId,
@@ -646,8 +666,24 @@ export default function AgentJobsPage() {
 						);
 					})}
 				</div>
-			) : (
+			) : !loading ? (
 				<div className="flex flex-col gap-2 pb-6">
+					<AddRow
+						label="Add Backup Job"
+						onClick={() =>
+							openDialog(BackupJobDialog, {
+								defaultData: { agent_id: agentId, name: "" },
+								onConfirm: () => fetchData(),
+							})
+						}
+					/>
+					{visibleJobs.length === 0 && (
+						<div className="h-40 w-full flex items-center justify-center">
+							<p className="text-sm text-muted-foreground">
+								No backup jobs configured for this agent.
+							</p>
+						</div>
+					)}
 					{visibleJobs.map((job) => {
 						const agentStatus = agentStatuses.find(
 							(s) => s.agentId === agentId,
@@ -676,7 +712,7 @@ export default function AgentJobsPage() {
 						);
 					})}
 				</div>
-			)}
+			) : null}
 
 			{dataIsFiltered && (
 				<p className="text-muted-foreground text-center text-xs">

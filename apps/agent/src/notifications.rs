@@ -18,7 +18,11 @@ pub fn notify_started() {
         }
         *g = Some(Instant::now());
     }
-    let body = if is_pt() { "Backup iniciado" } else { "Backup started" };
+    let body = if is_pt() {
+        "Backup iniciado"
+    } else {
+        "Backup started"
+    };
     fire("Backupr", body, Kind::Info);
 }
 
@@ -34,7 +38,11 @@ pub fn notify_finished(size_bytes: u64) {
 
 pub fn notify_failed(error: &str) {
     // Keep the message short enough to fit in a notification bubble.
-    let msg = if error.len() > 120 { &error[..120] } else { error };
+    let msg = if error.len() > 120 {
+        &error[..120]
+    } else {
+        error
+    };
     let body = if is_pt() {
         format!("Backup falhou: {msg}")
     } else {
@@ -54,7 +62,7 @@ enum Kind {
 }
 
 /// Dispatch the notification on a detached OS thread so we never block the
-/// async runtime — notification sends can take a moment (PowerShell startup on
+/// async runtime - notification sends can take a moment (PowerShell startup on
 /// Windows, or a brief D-Bus round-trip on Linux).
 fn fire(title: &str, body: &str, kind: Kind) {
     let title = title.to_owned();
@@ -67,12 +75,13 @@ fn fire(title: &str, body: &str, kind: Kind) {
 // ---------------------------------------------------------------------------
 
 fn is_pt() -> bool {
-    // Standard POSIX locale env vars — work on Linux and are sometimes set on Windows too.
+    // Standard POSIX locale env vars - work on Linux and are sometimes set on Windows too.
     for var in ["LANG", "LANGUAGE", "LC_ALL", "LC_MESSAGES"] {
         if let Ok(v) = std::env::var(var)
-            && v.to_ascii_lowercase().starts_with("pt") {
-                return true;
-            }
+            && v.to_ascii_lowercase().starts_with("pt")
+        {
+            return true;
+        }
     }
     #[cfg(windows)]
     return win_locale_is_pt();
@@ -133,10 +142,14 @@ fn send(title: &str, body: &str, kind: Kind) {
     // --icon uses a themed icon name; "drive-harddisk" is universally available.
     let _ = std::process::Command::new("notify-send")
         .args([
-            "-a", "Backupr",
-            "--icon", "drive-harddisk",
-            "-u", urgency,
-            "-t", "5000",
+            "-a",
+            "Backupr",
+            "--icon",
+            "drive-harddisk",
+            "-u",
+            urgency,
+            "-t",
+            "5000",
             title,
             body,
         ])

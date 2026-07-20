@@ -12,6 +12,9 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { AddCard, AddRow } from "@/components/add-tile";
+import AgentDialog from "@/components/dialog/agent";
+import { BackupErrorDialog } from "@/components/dialog/backup-versions";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -21,14 +24,11 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import type { AgentStatus } from "@/hooks/use-socket";
-import { useSocket } from "@/hooks/use-socket";
-import { Spinner } from "@/components/ui/spinner";
 import {
-	ConnectionStatus,
 	type AgentConnectionStatus,
+	ConnectionStatus,
 } from "@/components/ui/connection-status";
+import { Input } from "@/components/ui/input";
 import {
 	Select,
 	SelectContent,
@@ -36,7 +36,10 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { BackupErrorDialog } from "@/components/dialog/backup-versions";
+import { Spinner } from "@/components/ui/spinner";
+import { useDialog } from "@/hooks/use-dialog";
+import type { AgentStatus } from "@/hooks/use-socket";
+import { useSocket } from "@/hooks/use-socket";
 import {
 	BACKUP_STATUS_LABEL,
 	BACKUP_STATUS_STYLE,
@@ -121,7 +124,7 @@ function formatBytes(bytes: number): string {
 }
 
 function formatBytesStr(bytes: string | null | undefined): string {
-	if (!bytes) return "—";
+	if (!bytes) return "-";
 	const n = Number(bytes);
 	if (!Number.isFinite(n) || n === 0) return "0 B";
 	const units = ["B", "KB", "MB", "GB", "TB"];
@@ -170,8 +173,12 @@ function AgentCard({ agent, status, onNavigate }: AgentCardProps) {
 						</span>
 					</div>
 					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-						<span className="text-xs text-muted-foreground shrink-0">Last Backup</span>
-						<span className="text-xs text-right">{formatRelative(agent.last_backup_at)}</span>
+						<span className="text-xs text-muted-foreground shrink-0">
+							Last Backup
+						</span>
+						<span className="text-xs text-right">
+							{formatRelative(agent.last_backup_at)}
+						</span>
 					</div>
 					{agent.created_by && (
 						<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
@@ -257,9 +264,7 @@ function BackupRow({ backup, onError }: BackupRowProps) {
 		<div className="flex items-center gap-4 px-3 py-2.5 border bg-card dynround">
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-2 min-w-0">
-					<span className="font-medium text-sm truncate">
-						{job.agent.name}
-					</span>
+					<span className="font-medium text-sm truncate">{job.agent.name}</span>
 					<span className="text-muted-foreground text-sm shrink-0">·</span>
 					<span className="text-sm text-muted-foreground truncate">
 						{job.name}
@@ -270,9 +275,7 @@ function BackupRow({ backup, onError }: BackupRowProps) {
 				</span>
 			</div>
 			<span className="text-xs text-muted-foreground shrink-0 w-36 text-right">
-				{backup.started_at
-					? new Date(backup.started_at).toLocaleString()
-					: "—"}
+				{backup.started_at ? new Date(backup.started_at).toLocaleString() : "-"}
 			</span>
 			<span
 				className="text-xs shrink-0 w-20 text-right"
@@ -335,6 +338,7 @@ export default function BackupsPage() {
 	const [sortBy, setSortBy] = useState<SortOption>("date");
 	const [viewMode, setViewMode] = useState<ViewMode>("grid");
 	const { agentStatuses } = useSocket();
+	const { openDialog } = useDialog();
 	const navigate = useNavigate();
 	const [absoluteTotal, setAbsoluteTotal] = useState(0);
 
@@ -349,7 +353,10 @@ export default function BackupsPage() {
 			const serverOrderBy = SERVER_SORT_ORDER_BY[sort];
 			const params = new URLSearchParams();
 			if (serverOrderBy) {
-				params.set("orderBy", encodeURIComponent(JSON.stringify(serverOrderBy)));
+				params.set(
+					"orderBy",
+					encodeURIComponent(JSON.stringify(serverOrderBy)),
+				);
 			}
 			const response = await fetch(`/api/agents?${params}`, {
 				headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -385,9 +392,7 @@ export default function BackupsPage() {
 			});
 			if (response.ok) {
 				const result = await response.json();
-				setBackups((prev) =>
-					reset ? result.data : [...prev, ...result.data],
-				);
+				setBackups((prev) => (reset ? result.data : [...prev, ...result.data]));
 				setBackupsTotal(result.absoluteTotal);
 			} else {
 				const err = await response.json();
@@ -416,14 +421,20 @@ export default function BackupsPage() {
 	}, [viewMode]);
 
 	const filteredAgents = appliedSearch
-		? agents.filter((a) => a.name.toLowerCase().includes(appliedSearch.toLowerCase()))
+		? agents.filter((a) =>
+				a.name.toLowerCase().includes(appliedSearch.toLowerCase()),
+			)
 		: agents;
 
 	const visibleAgents =
 		sortBy === "last-backup"
 			? [...filteredAgents].sort((a, b) => {
-					const at = a.last_backup_at ? new Date(a.last_backup_at).getTime() : 0;
-					const bt = b.last_backup_at ? new Date(b.last_backup_at).getTime() : 0;
+					const at = a.last_backup_at
+						? new Date(a.last_backup_at).getTime()
+						: 0;
+					const bt = b.last_backup_at
+						? new Date(b.last_backup_at).getTime()
+						: 0;
 					return bt - at;
 				})
 			: filteredAgents;
@@ -435,6 +446,15 @@ export default function BackupsPage() {
 	function clearSearch() {
 		setSearch("");
 		setAppliedSearch("");
+	}
+
+	function addAgent() {
+		openDialog(AgentDialog, {
+			onConfirm: (agent) => {
+				fetchAgents();
+				if (agent) navigate(`/backups/${agent.id}/jobs`);
+			},
+		});
 	}
 
 	return (
@@ -562,12 +582,10 @@ export default function BackupsPage() {
 			) : (
 				<>
 					{loading && <Spinner className="self-center" />}
-					{!loading && visibleAgents.length === 0 && (
-						<p className="text-sm text-muted-foreground">No agents found.</p>
-					)}
 
 					{viewMode === "grid" ? (
 						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+							<AddCard label="Add Agent" onClick={addAgent} />
 							{visibleAgents.map((agent) => (
 								<AgentCard
 									key={agent.id}
@@ -579,6 +597,7 @@ export default function BackupsPage() {
 						</div>
 					) : (
 						<div className="flex flex-col gap-2">
+							<AddRow label="Add Agent" onClick={addAgent} />
 							{visibleAgents.map((agent) => (
 								<AgentRow
 									key={agent.id}
