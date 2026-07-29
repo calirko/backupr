@@ -252,8 +252,16 @@ async fn run_powershell(script: &str) -> Result<String> {
     }
 }
 
+// Windows only allows one ClientAccessible-context shadow copy per volume at
+// a time: calling Create() while one already exists just hands back the ID
+// of the *existing* (potentially stale) shadow instead of making a new one.
+// So if a previous job's shadow was never cleaned up (agent killed by AV/EDR,
+// crash, etc.), the next backup would silently be taken from old data. We
+// return the ShadowID alongside the DeviceObject so the caller can persist it
+// in the lockfile and explicitly delete that exact shadow on next startup if
+// the job never finished — see `delete_vss_shadow_by_id`.
 #[cfg(target_os = "windows")]
-async fn create_vss_shadow(volume: &str) -> Option<String> {
+async fn create_vss_shadow(volume: &str) -> Option<(String, String)> {
     // FIX 1: Ensure volume ends with a backslash (WMI requirement)
     let mut normalized_volume = volume.replace('\'', "''");
     if !normalized_volume.ends_with('\\') {
@@ -267,7 +275,9 @@ async fn create_vss_shadow(volume: &str) -> Option<String> {
          $params['Context'] = 'ClientAccessible'; \
          $result = $wmi.InvokeMethod('Create', $params, $null); \
          if ($result.ReturnValue -ne 0) {{ exit 1 }}; \
-         (Get-WmiObject Win32_ShadowCopy | Where-Object {{ $_.ID -eq $result.ShadowID }}).DeviceObject"
+         $copy = Get-WmiObject Win32_ShadowCopy | Where-Object {{ $_.ID -eq $result.ShadowID }}; \
+         Write-Output $copy.ID; \
+         Write-Output $copy.DeviceObject"
     );
 
     println!("[Backup] VSS: spawning powershell for {}...", volume);
@@ -275,10 +285,17 @@ async fn create_vss_shadow(volume: &str) -> Option<String> {
     println!("[Backup] VSS: powershell returned for {}", volume);
 
     match result {
-        Ok(out) if out.starts_with('\\') => Some(out),
         Ok(out) => {
-            eprintln!("[Backup] VSS output unexpected: {}", out);
-            None
+            let mut lines = out.lines();
+            match (lines.next(), lines.next()) {
+                (Some(id), Some(device)) if device.starts_with('\\') => {
+                    Some((id.trim().to_string(), device.trim().to_string()))
+                }
+                _ => {
+                    eprintln!("[Backup] VSS output unexpected: {}", out);
+                    None
+                }
+            }
         }
         Err(e) => {
             eprintln!("[Backup] VSS failed for {}: {}", volume, e);
@@ -297,6 +314,29 @@ async fn delete_vss_shadow(device_object: &str) {
     );
     run_powershell(&script).await.ok();
 }
+
+/// Deletes a specific shadow copy by its WMI `ID` (GUID), not by volume or
+/// context. Used to clean up exactly the shadow this agent created in an
+/// interrupted job, without touching any other shadow copies (e.g. System
+/// Restore points) that may exist on the same volume.
+#[cfg(target_os = "windows")]
+pub async fn delete_vss_shadow_by_id(shadow_id: &str) {
+    let escaped = shadow_id.replace('\'', "''");
+    let script = format!(
+        "$s = Get-WmiObject Win32_ShadowCopy | Where-Object {{ $_.ID -eq '{escaped}' }}; \
+         if ($s) {{ $s.Delete() }}"
+    );
+    match run_powershell(&script).await {
+        Ok(_) => println!("[Backup] Cleaned up orphaned VSS shadow {}", shadow_id),
+        Err(e) => eprintln!(
+            "[Backup] Failed to clean up orphaned VSS shadow {}: {}",
+            shadow_id, e
+        ),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub async fn delete_vss_shadow_by_id(_shadow_id: &str) {}
 
 #[cfg(target_os = "windows")]
 fn shadow_resolve_path(
@@ -325,6 +365,8 @@ async fn stage_files(
     files: &[String],
     stage_dir: &Path,
     _progress_tx: &tokio::sync::mpsc::Sender<String>,
+    _backup_id: &str,
+    _job_id: &str,
 ) -> Result<Vec<PathBuf>> {
     tokio::fs::create_dir_all(stage_dir).await?;
     let mut staged = Vec::new();
@@ -357,8 +399,13 @@ async fn stage_files(
             for vol in &volumes {
                 let _ = _progress_tx.try_send(format!("Creating VSS snapshot for {}...", vol));
                 println!("[Backup] Creating VSS shadow copy for {}...", vol);
-                if let Some(device) = create_vss_shadow(vol).await {
+                if let Some((shadow_id, device)) = create_vss_shadow(vol).await {
                     println!("[Backup] VSS shadow ready: {}", device);
+                    // Persist immediately so that if the agent is killed before
+                    // this job finishes, the next startup can find and delete
+                    // this exact shadow instead of it lingering and being
+                    // silently reused (stale) by the next backup's Create() call.
+                    record_shadow_in_lockfile(_backup_id, _job_id, &shadow_id);
                     map.insert(vol.clone(), device.clone());
                     shadow_devices.push(device);
                 } else {
@@ -683,6 +730,12 @@ pub fn kill_orphan_7z() {
 pub struct LockfileData {
     pub backup_id: String,
     pub job_id: String,
+    /// WMI ShadowIDs of any VSS shadow copies created for this job so far.
+    /// If the agent is killed mid-job, these are the exact shadows that must
+    /// be deleted on next startup — otherwise Windows will silently hand the
+    /// same (stale) shadow back on the next Create() call for that volume.
+    #[serde(default)]
+    pub shadow_ids: Vec<String>,
 }
 
 fn lockfile_path() -> PathBuf {
@@ -697,11 +750,34 @@ fn write_lockfile(backup_id: &str, job_id: &str) {
     let data = LockfileData {
         backup_id: backup_id.to_string(),
         job_id: job_id.to_string(),
+        shadow_ids: Vec::new(),
     };
     if let Ok(json) = serde_json::to_string(&data)
         && let Err(e) = std::fs::write(lockfile_path(), json)
     {
         eprintln!("[Backup] Warning: could not write lockfile: {}", e);
+    }
+}
+
+/// Appends a newly-created VSS shadow's ID to the current job's lockfile, so
+/// it can be cleaned up on next startup if the agent doesn't get to finish
+/// (and delete it normally) itself.
+#[allow(dead_code)]
+fn record_shadow_in_lockfile(backup_id: &str, job_id: &str, shadow_id: &str) {
+    let path = lockfile_path();
+    let mut data = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<LockfileData>(&raw).ok())
+        .unwrap_or_else(|| LockfileData {
+            backup_id: backup_id.to_string(),
+            job_id: job_id.to_string(),
+            shadow_ids: Vec::new(),
+        });
+    data.shadow_ids.push(shadow_id.to_string());
+    if let Ok(json) = serde_json::to_string(&data)
+        && let Err(e) = std::fs::write(&path, json)
+    {
+        eprintln!("[Backup] Warning: could not update lockfile with shadow id: {}", e);
     }
 }
 
@@ -755,7 +831,7 @@ pub async fn run_backup_job(
             stage_dir.display()
         );
 
-        let staged = stage_files(&job.files, &stage_dir, &progress_tx).await?;
+        let staged = stage_files(&job.files, &stage_dir, &progress_tx, &job.id, &job.job_id).await?;
 
         if staged.is_empty() {
             anyhow::bail!("No files could be staged for backup.");

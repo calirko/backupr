@@ -11,6 +11,11 @@ import { scheduler } from "./scheduler";
 const db = prisma;
 
 const RETENTION_DAYS = 7;
+// Purge only past RETENTION_DAYS + this buffer, so the uptime calculation's
+// "since - RETENTION_DAYS" baseline lookup (the last known status before the
+// window starts) always finds a surviving row, even right before an hourly
+// purge run.
+const RETENTION_BUFFER_DAYS = 1;
 // Re-record the same status if the last record is this old, so it never falls
 // outside the retention window while the agent stays in the same state.
 const HEARTBEAT_THRESHOLD_MS = 6 * 24 * 60 * 60 * 1000;
@@ -129,7 +134,7 @@ async function snapshotOfflineAgents(): Promise<void> {
 
 async function purgeOldAgentStatuses(): Promise<void> {
 	const cutoff = new Date();
-	cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
+	cutoff.setDate(cutoff.getDate() - (RETENTION_DAYS + RETENTION_BUFFER_DAYS));
 
 	const { count } = await db.agentStatus.deleteMany({
 		where: { date: { lt: cutoff } },

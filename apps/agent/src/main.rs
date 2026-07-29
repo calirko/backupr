@@ -473,6 +473,14 @@ impl BackuprAgent {
                         "[Agent] Stale lockfile found – backup {} was interrupted, reporting to server",
                         stale.backup_id
                     );
+                    // Any VSS shadow copies the interrupted job created were never
+                    // released. Windows only allows one ClientAccessible shadow per
+                    // volume, so if we leave these dangling, the next backup's
+                    // Create() call silently hands back this same old shadow
+                    // instead of a fresh one — resulting in a backup of stale data.
+                    for shadow_id in &stale.shadow_ids {
+                        backup::delete_vss_shadow_by_id(shadow_id).await;
+                    }
                     let msg = serde_json::json!({
                         "type": "stale_backup",
                         "backupId": stale.backup_id,
