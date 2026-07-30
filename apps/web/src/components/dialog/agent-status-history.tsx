@@ -3,6 +3,7 @@ import { endOfDay, format, startOfDay, subDays } from "date-fns";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { NoticeCard } from "../notice-card";
 import { Button } from "../ui/button";
 import {
 	Dialog,
@@ -143,6 +144,79 @@ function formatDuration(ms: number): string {
 	const m = Math.floor((ms % 3_600_000) / 60_000);
 	if (h > 0) return `${h}h ${m}m`;
 	return `${m}m`;
+}
+
+// ─── Cron schedule suggestion ──────────────────────────────────────────────
+
+// For each hour-of-day bucket (0-23), computes the fraction of observed time
+// the agent was online, aggregated across all days in the window.
+function computeHourlyOnlineFraction(
+	records: StatusRecord[],
+	days: Date[],
+): number[] {
+	const onlineMs = new Array(24).fill(0);
+	const totalMs = new Array(24).fill(0);
+
+	for (const day of days) {
+		const dayStart = startOfDay(day).getTime();
+		const dayEnd = Math.min(endOfDay(day).getTime(), Date.now());
+		if (dayEnd <= dayStart) continue;
+
+		for (let h = 0; h < 24; h++) {
+			const hourStart = dayStart + h * 3_600_000;
+			const hourEnd = Math.min(hourStart + 3_600_000, dayEnd);
+			if (hourEnd <= hourStart) continue;
+			totalMs[h] += hourEnd - hourStart;
+
+			for (let i = 0; i < records.length; i++) {
+				const r = records[i];
+				if (r.status === "OFFLINE") continue;
+
+				const recStart = new Date(r.date).getTime();
+				const next = records[i + 1];
+				const recEnd = next ? new Date(next.date).getTime() : Date.now();
+
+				const overlapStart = Math.max(recStart, hourStart);
+				const overlapEnd = Math.min(recEnd, hourEnd);
+				if (overlapEnd > overlapStart) onlineMs[h] += overlapEnd - overlapStart;
+			}
+		}
+	}
+
+	return onlineMs.map((ms, h) => (totalMs[h] > 0 ? ms / totalMs[h] : 0));
+}
+
+// Picks the top `count` hours by online fraction, preferring hours spread at
+// least `minGap` hours apart so suggested backups don't cluster together.
+function suggestBackupHours(hourlyFrac: number[], count = 3): number[] {
+	const ranked = hourlyFrac
+		.map((frac, hour) => ({ hour, frac }))
+		.filter((h) => h.frac > 0)
+		.sort((a, b) => b.frac - a.frac);
+
+	const minGap = 4;
+	const picked: number[] = [];
+
+	for (const { hour } of ranked) {
+		if (picked.length >= count) break;
+		const tooClose = picked.some((p) => {
+			const diff = Math.abs(p - hour);
+			return Math.min(diff, 24 - diff) < minGap;
+		});
+		if (!tooClose) picked.push(hour);
+	}
+
+	// If spacing left too few slots filled, top up ignoring the gap constraint.
+	for (const { hour } of ranked) {
+		if (picked.length >= count) break;
+		if (!picked.includes(hour)) picked.push(hour);
+	}
+
+	return picked.sort((a, b) => a - b);
+}
+
+function formatHourLabel(hour: number): string {
+	return `${hour.toString().padStart(2, "0")}:00`;
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────
@@ -321,6 +395,41 @@ function StatPill({
 	);
 }
 
+function CronSuggestions({ records }: { records: StatusRecord[] }) {
+	const days = Array.from({ length: 7 }, (_, i) => subDays(new Date(), i));
+	const hourlyFrac = computeHourlyOnlineFraction(records, days);
+
+	if (!hourlyFrac.some((f) => f > 0)) return null;
+
+	const hours = suggestBackupHours(hourlyFrac, 3);
+	if (hours.length === 0) return null;
+
+	const cronExpr = `0 ${hours.join(",")} * * *`;
+
+	return (
+		<NoticeCard>
+			<div className="space-y-1.5">
+				<p className="font-semibold">Suggested backup schedule</p>
+				<p>
+					Based on the last 7 days, this agent tends to stay online around{" "}
+					{hours.map((h, i) => (
+						<span key={h}>
+							{i > 0 && (i === hours.length - 1 ? " and " : ", ")}
+							<span className="font-medium">{formatHourLabel(h)}</span>{" "}
+							({Math.round(hourlyFrac[h] * 100)}% uptime)
+						</span>
+					))}
+					. Try scheduling backups around these times to reduce the chance of
+					a missed run:
+				</p>
+				<code className="block mt-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded text-[11px]">
+					{cronExpr}
+				</code>
+			</div>
+		</NoticeCard>
+	);
+}
+
 // ─── Main dialog content ───────────────────────────────────────────────────
 
 function Content({
@@ -415,6 +524,9 @@ function Content({
 					value={data.records.length.toString()}
 				/>
 			</div>
+
+			{/* Cron suggestion */}
+			<CronSuggestions records={data.records} />
 		</div>
 	);
 }
@@ -463,7 +575,8 @@ export default function AgentStatusHistoryDialog({
 		}
 	}
 
-	const title = agentName ? `Status History` : "Status History";
+	const name = agentName ?? data?.agent.name;
+	const title = name ? `${name} — Status History` : "Status History";
 	const description = "Connection and uptime history for the last 7 days";
 
 	const footer = (
