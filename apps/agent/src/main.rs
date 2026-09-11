@@ -477,7 +477,7 @@ impl BackuprAgent {
                     // released. Windows only allows one ClientAccessible shadow per
                     // volume, so if we leave these dangling, the next backup's
                     // Create() call silently hands back this same old shadow
-                    // instead of a fresh one — resulting in a backup of stale data.
+                    // instead of a fresh one, resulting in a backup of stale data.
                     for shadow_id in &stale.shadow_ids {
                         backup::delete_vss_shadow_by_id(shadow_id).await;
                     }

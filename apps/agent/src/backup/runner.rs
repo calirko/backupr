@@ -259,7 +259,7 @@ async fn run_powershell(script: &str) -> Result<String> {
 // crash, etc.), the next backup would silently be taken from old data. We
 // return the ShadowID alongside the DeviceObject so the caller can persist it
 // in the lockfile and explicitly delete that exact shadow on next startup if
-// the job never finished — see `delete_vss_shadow_by_id`.
+// the job never finished, see `delete_vss_shadow_by_id`.
 #[cfg(target_os = "windows")]
 async fn create_vss_shadow(volume: &str) -> Option<(String, String)> {
     // FIX 1: Ensure volume ends with a backslash (WMI requirement)
@@ -732,7 +732,7 @@ pub struct LockfileData {
     pub job_id: String,
     /// WMI ShadowIDs of any VSS shadow copies created for this job so far.
     /// If the agent is killed mid-job, these are the exact shadows that must
-    /// be deleted on next startup — otherwise Windows will silently hand the
+    /// be deleted on next startup, otherwise Windows will silently hand the
     /// same (stale) shadow back on the next Create() call for that volume.
     #[serde(default)]
     pub shadow_ids: Vec<String>,

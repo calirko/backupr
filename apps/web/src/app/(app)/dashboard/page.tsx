@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import { toast } from "sonner";
+import FailedBackupsDialog from "@/components/dialog/failed-backups";
 import WikiDialog from "@/components/dialog/wiki/wiki";
 import Badge from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -225,6 +226,7 @@ function StorageByJobChart({
 export default function DashboardPage() {
 	const [data, setData] = useState<DashboardData | null>(null);
 	const [wikiOpen, setWikiOpen] = useState(false);
+	const [failedBackupsOpen, setFailedBackupsOpen] = useState(false);
 	const { agentStatuses, backupUpdateCount } = useSocket();
 	const navigate = useNavigate();
 
@@ -298,6 +300,10 @@ export default function DashboardPage() {
 	return (
 		<>
 			<WikiDialog open={wikiOpen} onClose={() => setWikiOpen(false)} />
+			<FailedBackupsDialog
+				open={failedBackupsOpen}
+				onClose={() => setFailedBackupsOpen(false)}
+			/>
 			<div className="w-full grow px-3 sm:px-14 pt-4 flex flex-col gap-6">
 				<div>
 					<h1 className="text-4xl font-heading">Dashboard</h1>
@@ -370,10 +376,10 @@ export default function DashboardPage() {
 							<Button
 								variant="outline"
 								className="w-full"
-								onClick={() => navigate("/backups")}
+								onClick={() => setFailedBackupsOpen(true)}
 							>
 								<ArrowRightIcon />
-								View Backups
+								View Failed Backups
 							</Button>
 						</CardFooter>
 					</Card>

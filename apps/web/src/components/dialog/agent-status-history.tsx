@@ -576,7 +576,7 @@ export default function AgentStatusHistoryDialog({
 	}
 
 	const name = agentName ?? data?.agent.name;
-	const title = name ? `${name} — Status History` : "Status History";
+	const title = name ? `${name} - Status History` : "Status History";
 	const description = "Connection and uptime history for the last 7 days";
 
 	const footer = (
