@@ -23,6 +23,8 @@ TITLE="Backupr v$VERSION"
 FILES=(
     "$OUT/backupr-agent-x86_64-windows.exe"
     "$OUT/backupr-agent-i686-windows.exe"
+    "$OUT/backupr-agent-x86_64-win7-windows.exe"
+    "$OUT/backupr-agent-i686-win7-windows.exe"
     "$OUT/backupr-agent-x86_64-linux"
     "$OUT/backupr-tray-x86_64-windows.exe"
     "$OUT/backupr-tray-i686-windows.exe"
@@ -61,7 +63,7 @@ done
 # agents to update in an endless loop (the running binary self-reports the old
 # version).
 echo "Binaries to publish under $TAG:"
-printf "  %-34s %8s   %s\n" "FILE" "SIZE" "EMBEDS v$VERSION"
+printf "  %-40s %8s   %s\n" "FILE" "SIZE" "EMBEDS v$VERSION"
 mismatch=0
 for f in "${FILES[@]}"; do
     size=$(du -h "$f" | cut -f1)
@@ -74,7 +76,7 @@ for f in "${FILES[@]}"; do
         mark="NO  <-- stale!"
         mismatch=1
     fi
-    printf "  %-34s %8s   %s\n" "$(basename "$f")" "$size" "$mark"
+    printf "  %-40s %8s   %s\n" "$(basename "$f")" "$size" "$mark"
 done
 echo ""
 

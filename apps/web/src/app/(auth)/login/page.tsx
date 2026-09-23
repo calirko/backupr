@@ -6,7 +6,6 @@ import {
 	Card,
 	CardContent,
 	CardDescription,
-	CardFooter,
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
@@ -71,58 +70,69 @@ export default function LoginPage() {
 	}
 
 	return (
-		<div className="flex w-full h-full items-center justify-center flex-col gap-10">
-			<div className="flex gap-6 items-center">
-				<img src="/icon.png" className="h-24 sm:h-30" />
-				<h1 className="text-5xl sm:text-7xl font-heading">Backupr</h1>
-			</div>
-			<Card className="w-full max-w-sm">
-				<CardHeader>
-					<CardTitle>Login to your account</CardTitle>
-					<CardDescription>
-						Enter your username or email below to login to your account
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<form onSubmit={onSubmit} id="login-form">
-						<div className="flex flex-col gap-6">
-							<div className="grid gap-2">
-								<Label htmlFor="emailOrUsername">Username or Email</Label>
-								<Input
-									id="emailOrUsername"
-									name="emailOrUsername"
-									type="text"
-									placeholder="username or email@example.com"
-									required
-								/>
-							</div>
-							<div className="grid gap-2">
-								<div className="flex items-center">
-									<Label htmlFor="password">Password</Label>
+		<div className="flex w-full h-full items-center justify-center lg:p-6">
+			<div className="flex w-full h-full lg:max-w-6xl lg:max-h-176 lg:grid lg:grid-cols-[3fr_2fr] lg:grid-rows-1 lg:overflow-hidden dynround lg:bg-card lg:border">
+				<img
+					src="/login.webp"
+					alt=""
+					className="hidden lg:block h-full w-full object-cover"
+				/>
+				<div className="flex w-full h-full items-center justify-center flex-col gap-10 lg:px-8">
+					<div className="flex gap-6 items-center">
+						<img src="/icon.png" className="h-24 sm:h-30 lg:h-20 2xl:h-24" />
+						<h1 className="text-5xl sm:text-7xl lg:text-5xl 2xl:text-6xl font-heading">
+							Backupr
+						</h1>
+					</div>
+					<Card className="w-full max-w-sm lg:ring-0 lg:border-0 lg:bg-transparent">
+						<CardHeader>
+							<CardTitle>Login to your account</CardTitle>
+							<CardDescription>
+								Enter your username or email below to login to your account
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<form onSubmit={onSubmit} id="login-form">
+								<div className="flex flex-col gap-6">
+									<div className="grid gap-2">
+										<Label htmlFor="emailOrUsername">Username or Email</Label>
+										<Input
+											id="emailOrUsername"
+											name="emailOrUsername"
+											type="text"
+											placeholder="username or email@example.com"
+											required
+										/>
+									</div>
+									<div className="grid gap-2">
+										<div className="flex items-center">
+											<Label htmlFor="password">Password</Label>
+										</div>
+										<InputPassword
+											name="password"
+											type="password"
+											placeholder="Password"
+											required
+										/>
+									</div>
 								</div>
-								<InputPassword
-									name="password"
-									type="password"
-									placeholder="Password"
-									required
-								/>
-							</div>
+							</form>
+						</CardContent>
+						<div className="flex flex-col gap-2 px-4">
+							<Button type="submit" className="w-full" form="login-form">
+								<SignInIcon />
+								Login
+							</Button>
 						</div>
-					</form>
-				</CardContent>
-				<CardFooter className="flex-col gap-2">
-					<Button type="submit" className="w-full" form="login-form">
-						<SignInIcon />
-						Login
-					</Button>
-				</CardFooter>
-			</Card>
-			<p className="text-xs text-muted-foreground">
-				Developed and designed by{" "}
-				<a href="https://github.com/calirko" className="underline">
-					calirko
-				</a>
-			</p>
+					</Card>
+					<p className="text-xs text-muted-foreground">
+						Developed and designed by{" "}
+						<a href="https://github.com/calirko" className="underline">
+							calirko
+						</a>
+					</p>
+				</div>
+			</div>
 		</div>
 	);
 }

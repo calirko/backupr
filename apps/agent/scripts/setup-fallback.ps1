@@ -7,9 +7,11 @@
     Key differences from the main script:
       - No #Requires constraint
       - Uses System.Net.WebClient instead of Invoke-WebRequest (PS3+)
-      - TLS 1.2 forced via integer literal (3072) - enum field may not exist in old .NET
+      - TLS 1.2 forced via integer literal (3072) - enum field may not exist in old .NET;
+        when even that fails (CLR 2.0 without KB3154518), downloads go through WinHTTP
+      - Installs the *-win7-windows build of the agent on anything older than Windows 10
       - JSON parsed with regex - no ConvertFrom-Json (PS3+)
-      - WinSW pinned to v2.12.0 which supports .NET 4.0 (v3 requires .NET 4.6.1+)
+      - WinSW pinned to v2.12.0 .NET2/.NET4 builds (v3 requires .NET 4.6.1+)
       - No ValidateSet, no Get-Content -Raw/-Tail, no $PSCommandPath
 
 .PARAMETER Action
@@ -29,6 +31,10 @@ $ErrorActionPreference = "Stop"
 
 # TLS 1.2 via integer (3072) so this works even when the Tls12 enum field is absent
 # in older .NET versions shipped with Windows 7. GitHub rejects TLS 1.0/1.1.
+# PowerShell 2.0 always runs on CLR 2.0 (even with .NET 4.x installed), which only
+# knows Ssl3/Tls unless KB3154518 is installed - in that case Download-File goes
+# through WinHTTP instead, which gets TLS 1.2 from KB3140245.
+$WebClientTls12 = $true
 try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]3072
 } catch {
@@ -36,8 +42,7 @@ try {
         # Tls12 (3072) | Tls11 (768) combined in case 1.2 alone throws
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]3840
     } catch {
-        Write-Warning "Could not enable TLS 1.2. Downloads may fail."
-        Write-Warning "Install .NET 4.5 (KB2901907) or newer and re-run."
+        $WebClientTls12 = $false
     }
 }
 
@@ -49,26 +54,39 @@ $BootstrapUrl = "https://cdn.jsdelivr.net/gh/calirko/backupr@main/apps/agent/scr
 # PowerShell process runs on a 64-bit OS (WOW64 - common default on older Windows)
 if ($env:PROCESSOR_ARCHITECTURE -eq "AMD64" -or $env:PROCESSOR_ARCHITEW6432 -eq "AMD64") {
     $Arch     = "x86_64"
-    $WinSwArch = "x64"
     $SevenZipInstaller = "7z2409-x64.exe"
 } else {
     $Arch     = "i686"
-    $WinSwArch = "x86"
     $SevenZipInstaller = "7z2409.exe"
 }
 
 # --- Constants ----------------------------------------------------------------
 
-$AgentUrl    = "https://github.com/calirko/backupr/releases/latest/download/backupr-agent-$Arch-windows.exe"
+# The regular Windows build needs Windows 10+ (Rust std imports ProcessPrng,
+# WaitOnAddress, ...); anything older gets the *-win7-windows-gnu build.
+if ([Environment]::OSVersion.Version.Major -lt 10) {
+    $AgentAsset = "backupr-agent-$Arch-win7-windows.exe"
+} else {
+    $AgentAsset = "backupr-agent-$Arch-windows.exe"
+}
+$AgentUrl    = "https://github.com/calirko/backupr/releases/latest/download/$AgentAsset"
 $ServiceName = "backupr-agent"
 $InstallDir  = "C:\ProgramData\backupr"
 $AgentExe    = Join-Path $InstallDir "backupr-agent.exe"
 $ConfigFile  = Join-Path $InstallDir "backupr.conf"
 $WinSwDir    = Join-Path $InstallDir "winsw"
 $WinSwExe    = Join-Path $WinSwDir "winsw.exe"
-# Pinned to v2.12.0: last WinSW release that supports .NET 4.0 (Windows 7 default)
-# WinSW v3+ requires .NET 4.6.1 which is not available on unpatched Windows 7
-$WinSwUrl    = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-$WinSwArch.exe"
+# Pinned to v2.12.0: last WinSW release with .NET Framework 2.0/4.0 builds.
+# WinSW v3+ requires .NET 4.6.1 which is not available on unpatched Windows 7.
+# (The WinSW-x64/x86 assets of v2.12.0 are not the .NET Framework builds.)
+# Windows 7 / 2008 R2 ship .NET 3.5.1 (CLR 2.0); .NET 4.x is an optional install.
+$Net4Key = "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full"
+if ((Test-Path $Net4Key) -and ((Get-ItemProperty $Net4Key).Install -eq 1)) {
+    $WinSwFlavor = "NET4"
+} else {
+    $WinSwFlavor = "NET2"
+}
+$WinSwUrl    = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW.$WinSwFlavor.exe"
 $WinSwConfig = Join-Path $WinSwDir "winsw.xml"
 $SevenZipDir = Join-Path $InstallDir "7zip"
 $SevenZipExe = Join-Path $SevenZipDir "7z.exe"
@@ -106,15 +124,57 @@ function Confirm-Admin {
     }
 }
 
-# WebClient download helper - Invoke-WebRequest is PS3+
+# WinHTTP download - used when WebClient can't do TLS 1.2 (see top of script).
+# WinHTTP gets TLS 1.1/1.2 from KB3140245 and follows GitHub's release redirects.
+function Download-FileWinHttp {
+    param([string]$Url, [string]$Dest)
+    $req = New-Object -ComObject WinHttp.WinHttpRequest.5.1
+    try {
+        # Option 9 = SecureProtocols: TLS 1.0 (0x80) | 1.1 (0x200) | 1.2 (0x800).
+        # Throws without KB3140245; WinHTTP's registry default is used then.
+        $req.Option(9) = 0xA80
+    } catch {}
+    # resolve, connect, send, receive (ms) - the agent binary is ~10 MB
+    $req.SetTimeouts(0, 60000, 60000, 600000)
+    $req.Open("GET", $Url, $false)
+    $req.SetRequestHeader("User-Agent", "backupr-setup")
+    try {
+        $req.Send()
+    } catch {
+        throw ("Download failed: $Url - $($_.Exception.Message)`n" +
+            "  WinHTTP could not negotiate TLS 1.2. Install KB3140245 (and set " +
+            "DefaultSecureProtocols=0xA00 under HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp) " +
+            "or KB3154518, then re-run.")
+    }
+    if ($req.Status -ne 200) {
+        throw "Download failed: $Url - HTTP $($req.Status) $($req.StatusText)"
+    }
+    [IO.File]::WriteAllBytes($Dest, [byte[]]$req.ResponseBody)
+}
+
+# Download helper - Invoke-WebRequest is PS3+. Writes to a temp file first so a
+# failed download never leaves a truncated exe at $Dest (Ensure-*Present would
+# otherwise see it and skip the re-download).
 function Download-File {
     param([string]$Url, [string]$Dest)
-    $wc = New-Object System.Net.WebClient
-    $wc.DownloadFile($Url, $Dest)
+    $tmp = "$Dest.download"
+    if (Test-Path $tmp) { Remove-Item $tmp -Force }
+    try {
+        if ($WebClientTls12) {
+            $wc = New-Object System.Net.WebClient
+            $wc.DownloadFile($Url, $tmp)
+        } else {
+            Download-FileWinHttp $Url $tmp
+        }
+        if (Test-Path $Dest) { Remove-Item $Dest -Force }
+        Move-Item $tmp $Dest
+    } finally {
+        if (Test-Path $tmp) { Remove-Item $tmp -Force }
+    }
 }
 
 function Ensure-WinSwPresent {
-    if (Test-Path $WinSwExe) { return }
+    if ((Test-Path $WinSwExe) -and (Get-Item $WinSwExe).Length -gt 0) { return }
     Write-Host "  Downloading WinSW..." -ForegroundColor Yellow
     New-Item -ItemType Directory -Force -Path $WinSwDir | Out-Null
     Download-File $WinSwUrl $WinSwExe

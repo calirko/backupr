@@ -109,7 +109,17 @@ fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
 ///
 /// Matches the filenames produced by `scripts/build-all.sh`:
 /// `backupr-agent-{arch}-{os}[.exe]`
+///
+/// Builds for the `*-win7-windows-gnu` targets (Windows 7 / Server 2008 R2)
+/// must keep updating to the win7 asset - the regular Windows build needs
+/// Windows 10 and would fail to even load after the swap.
 fn agent_asset_name() -> &'static str {
+    if cfg!(target_vendor = "win7") {
+        return match std::env::consts::ARCH {
+            "x86_64" => "backupr-agent-x86_64-win7-windows.exe",
+            _ => "backupr-agent-i686-win7-windows.exe",
+        };
+    }
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("windows", "x86_64") => "backupr-agent-x86_64-windows.exe",
         ("windows", "x86") => "backupr-agent-i686-windows.exe",
@@ -120,8 +130,12 @@ fn agent_asset_name() -> &'static str {
 }
 
 /// Release asset name for the **tray** binary, or `None` on non-Windows
-/// (the tray is a Windows-only binary).
+/// (the tray is a Windows-only binary) and on win7 builds (no win7 tray is
+/// published - old Windows is installed headless via setup-fallback.ps1).
 fn tray_asset_name() -> Option<&'static str> {
+    if cfg!(target_vendor = "win7") {
+        return None;
+    }
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("windows", "x86_64") => Some("backupr-tray-x86_64-windows.exe"),
         ("windows", "x86") => Some("backupr-tray-i686-windows.exe"),
