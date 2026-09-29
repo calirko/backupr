@@ -1,6 +1,7 @@
 import type { Context, Next } from "hono";
 import { getConnInfo } from "hono/bun";
 import { rateLimiter } from "hono-rate-limiter";
+import { IS_PRODUCTION } from "./env";
 
 /**
  * Number of reverse proxies in front of the server that append to
@@ -40,7 +41,7 @@ const passthrough = async (_c: Context, next: Next) => {
 };
 
 export const rateLimit =
-	process.env.NODE_ENV === "production"
+	IS_PRODUCTION
 		? rateLimiter({
 				windowMs: 15 * 60 * 1000,
 				limit: 300,
@@ -51,7 +52,7 @@ export const rateLimit =
 		: passthrough;
 
 export const authRateLimit =
-	process.env.NODE_ENV === "production"
+	IS_PRODUCTION
 		? rateLimiter({
 				windowMs: 5 * 60 * 1000,
 				limit: 3,
@@ -63,7 +64,7 @@ export const authRateLimit =
 
 /** Unauthenticated agent endpoints (pairing): generous, but not unlimited. */
 export const agentRateLimit =
-	process.env.NODE_ENV === "production"
+	IS_PRODUCTION
 		? rateLimiter({
 				windowMs: 15 * 60 * 1000,
 				limit: 30,

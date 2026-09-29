@@ -884,6 +884,7 @@ fn create_private_work_dir(backup_id: &str) -> Result<PathBuf> {
 
     for _ in 0..8 {
         let dir = base.join(format!("backupr_{}_{:016x}", safe_id, rand::random::<u64>()));
+        #[cfg_attr(not(unix), allow(unused_mut))]
         let mut builder = std::fs::DirBuilder::new();
         #[cfg(unix)]
         {

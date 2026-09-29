@@ -1,4 +1,5 @@
 import { decode, sign, verify } from "hono/jwt";
+import { IS_PRODUCTION } from "./env";
 
 export interface TokenPayload {
 	user: {
@@ -17,7 +18,7 @@ const DEFAULT_SECRET = "your-secret-key-change-in-production";
 
 // A missing or default secret lets anyone forge tokens, so never run like that in production
 if (
-	process.env.NODE_ENV === "production" &&
+	IS_PRODUCTION &&
 	(!process.env.JWT_SECRET || process.env.JWT_SECRET === DEFAULT_SECRET)
 ) {
 	throw new Error("JWT_SECRET must be set to a random value in production");
