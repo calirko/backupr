@@ -47,6 +47,7 @@ import {
 import { useDialog } from "@/hooks/use-dialog";
 import { useSocket } from "@/hooks/use-socket";
 import { BACKUP_STATUS_LABEL, BACKUP_STATUS_STYLE } from "@/lib/backup-status";
+import { Hint, LastSeen, Rate } from "@/lib/health";
 
 interface BackupJob {
 	id: string;
@@ -62,6 +63,14 @@ interface BackupJob {
 		started_at: string | null;
 		completed_at: string | null;
 	}>;
+	completed_7d: number;
+	failed_7d: number;
+	runs_7d: number;
+	expected_runs_7d: number;
+	success_rate: number | null;
+	completion_rate: number | null;
+	last_success_at: string | null;
+	is_stale: boolean;
 }
 
 interface Agent {
@@ -186,6 +195,38 @@ function JobCard({
 						</span>
 						<span className="text-xs text-right">
 							{job._count?.backups ?? 0}
+						</span>
+					</div>
+					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+						<span className="text-xs text-muted-foreground shrink-0">
+							Last Success
+						</span>
+						<span className="text-xs text-right">
+							<LastSeen at={job.last_success_at} overdue={job.is_stale} />
+						</span>
+					</div>
+					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+						<span className="text-xs text-muted-foreground shrink-0">
+							Success (7d)
+						</span>
+						<span className="text-xs text-right">
+							<Rate
+								pct={job.success_rate}
+								num={job.completed_7d}
+								den={job.completed_7d + job.failed_7d}
+							/>
+						</span>
+					</div>
+					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+						<span className="text-xs text-muted-foreground shrink-0">
+							Ran on Schedule (7d)
+						</span>
+						<span className="text-xs text-right">
+							<Rate
+								pct={job.completion_rate}
+								num={Math.min(job.runs_7d, job.expected_runs_7d)}
+								den={job.expected_runs_7d}
+							/>
 						</span>
 					</div>
 					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
@@ -322,6 +363,31 @@ function JobRow({
 					{job.cron}
 				</span>
 			</div>
+			<Hint content="Successful backups in the last 7 days">
+				<span className="text-xs shrink-0 w-24 text-right">
+					<Rate
+						pct={job.success_rate}
+						num={job.completed_7d}
+						den={job.completed_7d + job.failed_7d}
+					/>
+				</span>
+			</Hint>
+			<Hint content="Scheduled runs that actually happened in the last 7 days">
+				<span className="text-xs shrink-0 w-24 text-right">
+					<Rate
+						pct={job.completion_rate}
+						num={Math.min(job.runs_7d, job.expected_runs_7d)}
+						den={job.expected_runs_7d}
+					/>
+				</span>
+			</Hint>
+			<span className="text-xs shrink-0 w-16 text-right text-muted-foreground">
+				<LastSeen
+					label="Last successful backup"
+					at={job.last_success_at}
+					overdue={job.is_stale}
+				/>
+			</span>
 			<span className="text-xs text-muted-foreground shrink-0 w-16 text-right">
 				{formatRelative(last?.started_at)}
 			</span>

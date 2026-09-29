@@ -83,6 +83,16 @@ impl ConfigManager {
             .await
             .map_err(|e| anyhow::anyhow!("[Config] Failed to write config: {}", e))?;
 
+        // The file holds the agent token, which is all it takes to act as this
+        // agent: keep it readable by the owner only.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            tokio::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+                .await
+                .map_err(|e| anyhow::anyhow!("[Config] Failed to restrict config permissions: {}", e))?;
+        }
+
         Ok(())
     }
 }

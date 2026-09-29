@@ -56,22 +56,27 @@ export default function UsersPage() {
 		{ key: "username", label: "Username", orderable: true },
 		{ key: "email", label: "Email", orderable: true },
 		{
-			key: "created_at",
-			label: "Created",
+			key: "receive_emails",
+			label: "Alerts",
 			orderable: true,
-			format: (value) => new Date(value).toLocaleString(),
+			format: (value) => (value ? "On" : "Off"),
 		},
 		{
-			key: "updated_at",
-			label: "Updated",
+			key: "receive_weekly_report",
+			label: "Weekly Report",
 			orderable: true,
-			format: (value) => new Date(value).toLocaleString(),
+			format: (value) => (value ? "On" : "Off"),
 		},
 		{
 			key: "last_login_at",
 			label: "Last Login",
 			orderable: true,
 			format: (value) => (value ? new Date(value).toLocaleString() : "Never"),
+		},
+		{
+			key: "active_sessions",
+			label: "Active Sessions",
+			orderable: false,
 		},
 	] as Column[];
 
@@ -90,6 +95,8 @@ export default function UsersPage() {
 						name: row.name,
 						username: row.username,
 						email: row.email,
+						receive_emails: row.receive_emails,
+						receive_weekly_report: row.receive_weekly_report,
 					},
 					userId: row.id,
 					readonly: true,
@@ -109,6 +116,8 @@ export default function UsersPage() {
 						name: row.name,
 						username: row.username,
 						email: row.email,
+						receive_emails: row.receive_emails,
+						receive_weekly_report: row.receive_weekly_report,
 					},
 					userId: row.id,
 					onConfirm: () => {

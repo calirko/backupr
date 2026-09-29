@@ -1,35 +1,34 @@
 import type { Hono } from "hono";
 import { auth } from "../lib/auth";
 import { prisma } from "../lib/prisma";
+import { type ListSpec, parseListQuery, toOrderBy } from "../lib/query";
+import { param } from "../lib/validate";
 import { rateLimit } from "../lib/rate-limit";
 import { presignedDownloadUrl } from "../lib/storage";
-import { Token } from "../lib/token";
 
 const db = prisma;
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
+
+const listSpec: ListSpec = {
+	filters: {
+		backup_job_id: "id",
+		status: { enum: ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED"] },
+		started_at: "date",
+		completed_at: "date",
+	},
+	sort: ["started_at", "completed_at", "status", "size_bytes"],
+};
 
 export default async function backupRoutes(app: Hono) {
 	// List Backups (filterable by backup_job_id)
 	app.get("/api/backups", rateLimit, auth, async (c) => {
-		const { filters, orderBy, skip, take } = c.req.query();
-		const parsedFilters = filters
-			? JSON.parse(decodeURIComponent(filters))
-			: {};
-		const parsedOrderBy = orderBy
-			? JSON.parse(decodeURIComponent(orderBy))
-			: {};
-
-		const s = skip ? parseInt(skip) : undefined;
-		const t = take ? parseInt(take) : undefined;
+		const { where, sort, skip, take } = parseListQuery(c.req.query(), listSpec);
 
 		const [rawData, total, absoluteTotal] = await Promise.all([
 			db.backup.findMany({
-				where: parsedFilters,
-				orderBy: Object.keys(parsedOrderBy).length
-					? parsedOrderBy
-					: { started_at: "desc" },
-				skip: s,
-				take: t,
+				where,
+				orderBy: toOrderBy(sort, { started_at: "desc" }),
+				skip,
+				take,
 				include: {
 					backup_job: {
 						select: {
@@ -41,7 +40,7 @@ export default async function backupRoutes(app: Hono) {
 					},
 				},
 			}),
-			db.backup.count({ where: parsedFilters }),
+			db.backup.count({ where }),
 			db.backup.count({}),
 		]);
 
@@ -50,12 +49,12 @@ export default async function backupRoutes(app: Hono) {
 			size_bytes: b.size_bytes !== null ? b.size_bytes.toString() : null,
 		}));
 
-		return c.json({ data, total, absoluteTotal, skip: s, take: t });
+		return c.json({ data, total, absoluteTotal, skip, take });
 	});
 
 	// Download redirect - generates a fresh presigned URL and redirects
 	app.get("/api/backups/:id/download", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
+		const id = param(c, "id");
 		const backup = await db.backup.findUnique({
 			where: { id },
 			include: { backup_job: true },

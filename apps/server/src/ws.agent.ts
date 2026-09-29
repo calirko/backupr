@@ -1,7 +1,9 @@
-import { upgradeWebSocket, getConnInfo } from "hono/bun";
+import { upgradeWebSocket } from "hono/bun";
 import { BackupStatus } from "../prisma/generated/prisma/enums";
 import { handleBackupStatusUpdate } from "./backup";
 import { prisma } from "./lib/prisma";
+import { getClientIp } from "./lib/rate-limit";
+import { notifyBackupsFailed } from "./notifications";
 import { pushBackupUpdate } from "./ws.web";
 
 const db = prisma;
@@ -42,13 +44,19 @@ export interface AgentState {
 export const agentRegistry = new Map<string, AgentState>();
 
 /**
- * Called whenever an agent (re)connects. Finds any backups that are stuck in
- * PENDING or IN_PROGRESS for this agent's jobs and marks them FAILED so the
- * dashboard doesn't show ghost in-progress runs.
+ * Called once per (re)connection, after the agent's first status report.
+ * Finds backups stuck in PENDING or IN_PROGRESS for this agent's jobs and
+ * marks them FAILED so the dashboard doesn't show ghost in-progress runs.
+ * Backups the agent reports as running or queued are left alone: a network
+ * blip mid-backup reconnects the socket while the job keeps going.
  */
-async function recoverStuckBackups(agentId: string): Promise<void> {
+async function recoverStuckBackups(
+	agentId: string,
+	stillActive: string[] = [],
+): Promise<void> {
 	const stuck = await db.backup.findMany({
 		where: {
+			id: { notIn: stillActive },
 			status: { in: [BackupStatus.PENDING, BackupStatus.IN_PROGRESS] },
 			backup_job: { agent_id: agentId, deleted_at: null },
 		},
@@ -70,6 +78,21 @@ async function recoverStuckBackups(agentId: string): Promise<void> {
 			completed_at: new Date(),
 		},
 	});
+	notifyBackupsFailed(ids);
+}
+
+const MAX_REPORTED_QUEUE = 100;
+const RECOVERY_FALLBACK_MS = 30000;
+
+/**
+ * Keeps only what the dashboard needs from an agent-reported job. Older agents
+ * include the archive password, and these reports are rebroadcast to every
+ * browser, so never pass them through as-is.
+ */
+function sanitizeReportedJob(job: unknown): BackupJob | null {
+	if (typeof job !== "object" || job === null) return null;
+	const { password: _password, ...rest } = job as BackupJob;
+	return rest;
 }
 
 const pendingRequests = new Map<
@@ -189,11 +212,27 @@ function send(ws: WebSocket, message: Record<string, unknown>) {
 }
 
 export default upgradeWebSocket((c) => {
-	const token = c.req.query("token");
+	// Current agents send the token in a header so it never lands in proxy
+	// access logs; older agents still pass it as ?token= until they update.
+	const token =
+		c.req.header("Authorization")?.replace(/^Bearer\s+/i, "") ||
+		c.req.query("token");
 	let agentId: string | null = null;
 	let sessionId: string | null = null;
+	let recoveryDone = false;
+	let recoveryFallbackId: ReturnType<typeof setTimeout> | null = null;
 	let pingIntervalId: ReturnType<typeof setInterval> | null = null;
 	let pingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+	function runRecovery(stillActive: string[]) {
+		if (recoveryDone || !agentId) return;
+		recoveryDone = true;
+		if (recoveryFallbackId) clearTimeout(recoveryFallbackId);
+		const id = agentId;
+		recoverStuckBackups(id, stillActive).catch((err) =>
+			console.error(`[ws agent] recoverStuckBackups failed for ${id}:`, err),
+		);
+	}
 
 	function clearPingTimeout() {
 		if (pingTimeoutId) {
@@ -286,11 +325,7 @@ export default upgradeWebSocket((c) => {
 				websocket: ws as unknown as WebSocket,
 			});
 
-			const clientIp =
-				c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-				c.req.header("x-real-ip") ??
-				getConnInfo(c).remote.address ??
-				"unknown";
+			const clientIp = getClientIp(c);
 			const existingInfo = (session.info as Record<string, unknown>) ?? {};
 			await db.agentSession.update({
 				where: { id: sessionId },
@@ -311,13 +346,11 @@ export default upgradeWebSocket((c) => {
 			onStatusChange?.();
 			onAgentConnect?.(agentId);
 
-			// Auto-fix any backups left in PENDING/IN_PROGRESS from a prior crash.
-			recoverStuckBackups(agentId).catch((err) =>
-				console.error(
-					`[ws agent] recoverStuckBackups failed for ${agentId}:`,
-					err,
-				),
-			);
+			// Auto-fix backups left in PENDING/IN_PROGRESS from a prior crash. This
+			// waits for the agent's first status report (sent right after connect)
+			// so jobs it is still running aren't failed; the timer covers agents
+			// that never report.
+			recoveryFallbackId = setTimeout(() => runRecovery([]), RECOVERY_FALLBACK_MS);
 
 			startPingCycle(ws as unknown as WebSocket);
 		},
@@ -361,15 +394,25 @@ export default upgradeWebSocket((c) => {
 						const state = agentRegistry.get(agentId);
 						if (state) {
 							state.lastSeen = new Date();
+							const reportedQueue = Array.isArray(message.jobQueue)
+								? message.jobQueue.slice(0, MAX_REPORTED_QUEUE)
+								: [];
 							state.lastStatusReport = {
-								currentJob: (message.currentJob as BackupJob | null) ?? null,
-								jobQueue: (message.jobQueue as BackupJob[]) ?? [],
+								currentJob: sanitizeReportedJob(message.currentJob),
+								jobQueue: reportedQueue
+									.map(sanitizeReportedJob)
+									.filter((j): j is BackupJob => j !== null),
 								timestamp:
 									(message.timestamp as string) ?? new Date().toISOString(),
 							};
 							state.currentJob = state.lastStatusReport.currentJob;
 							state.jobQueue = state.lastStatusReport.jobQueue;
 						}
+						runRecovery(
+							[state?.currentJob, ...(state?.jobQueue ?? [])]
+								.map((j) => j?.id)
+								.filter((id): id is string => typeof id === "string"),
+						);
 						if (state?.currentJob || state?.jobQueue?.length) {
 							console.log(
 								`[ws agent] Status from ${agentId}: job=${state?.currentJob?.id ?? "none"}, queued=${state?.jobQueue?.length ?? 0}`,
@@ -415,12 +458,17 @@ export default upgradeWebSocket((c) => {
 							break;
 						}
 
-						await handleBackupStatusUpdate(backupId, status as any, {
-							size_bytes: toBigIntOrUndefined(metadata?.size_bytes),
-							error: metadata?.error as string | undefined,
-							blob_key: metadata?.blob_key as string | undefined,
-							url: metadata?.url as string | undefined,
-						});
+						await handleBackupStatusUpdate(
+							backupId,
+							status as any,
+							{
+								size_bytes: toBigIntOrUndefined(metadata?.size_bytes),
+								error: metadata?.error as string | undefined,
+								blob_key: metadata?.blob_key as string | undefined,
+								url: metadata?.url as string | undefined,
+							},
+							agentId,
+						);
 
 						onStatusChange?.();
 						onAgentBackupStatus?.(agentId, statusStr);
@@ -437,9 +485,10 @@ export default upgradeWebSocket((c) => {
 						console.log(
 							`[ws agent] Agent ${agentId} reported stale backup ${staleId}`,
 						);
-						await db.backup.updateMany({
+						const marked = await db.backup.updateMany({
 							where: {
 								id: staleId,
+								backup_job: { agent_id: agentId },
 								status: {
 									in: [BackupStatus.PENDING, BackupStatus.IN_PROGRESS],
 								},
@@ -451,6 +500,7 @@ export default upgradeWebSocket((c) => {
 								completed_at: new Date(),
 							},
 						});
+						if (marked.count > 0) notifyBackupsFailed([staleId]);
 						onStatusChange?.();
 						break;
 					}
@@ -493,6 +543,7 @@ export default upgradeWebSocket((c) => {
 		},
 
 		onClose: async (_event, ws) => {
+			if (recoveryFallbackId) clearTimeout(recoveryFallbackId);
 			if (pingIntervalId) {
 				clearInterval(pingIntervalId);
 				pingIntervalId = null;

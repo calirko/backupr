@@ -1,29 +1,22 @@
-import type { Hono } from "hono";
-import { getConnInfo } from "hono/bun";
+import type { Context, Hono } from "hono";
 import pkg from "../../package.json";
 import { auth } from "../lib/auth";
 import { Password } from "../lib/password";
 import { prisma } from "../lib/prisma";
-import { authRateLimit, rateLimit } from "../lib/rate-limit";
+import { authRateLimit, getClientIp, rateLimit } from "../lib/rate-limit";
 import { getMinIOFreeBytes } from "../lib/storage";
 import { Token, type TokenPayload } from "../lib/token";
+import { readJson } from "../lib/validate";
 
 const db = prisma;
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
 
-function parseSessionInfo(
-	c: Parameters<typeof getConnInfo>[0] & {
-		req: { header: (h: string) => string | undefined };
-	},
-) {
-	const ua = c.req.header("user-agent") ?? "";
-	const ip =
-		c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-		c.req.header("x-real-ip") ??
-		c.req.header("cf-connecting-ip") ??
-		c.req.header("x-client-ip") ??
-		getConnInfo(c).remote.address ??
-		"unknown";
+// Compared against when the user doesn't exist, so a login attempt takes the
+// same time either way and can't be used to enumerate accounts.
+const DUMMY_HASH = Password.encrypt(crypto.randomUUID());
+
+function parseSessionInfo(c: Context) {
+	const ua = (c.req.header("user-agent") ?? "").slice(0, 512);
+	const ip = getClientIp(c);
 
 	const browser = /Edg\//.test(ua)
 		? "Edge"
@@ -57,15 +50,15 @@ export default async function generalRoutes(app: Hono) {
 
 	// user
 	app.post("/api/auth/login", authRateLimit, async (c) => {
-		let json;
-		try {
-			json = await c.req.json();
-		} catch (e) {
-			return c.json({ error: "Invalid or missing JSON body" }, 400);
-		}
-
-		const { emailOrUsername, password } = json ?? {};
-		if (!emailOrUsername || !password) {
+		const { emailOrUsername, password } = await readJson(c);
+		if (
+			typeof emailOrUsername !== "string" ||
+			typeof password !== "string" ||
+			!emailOrUsername ||
+			!password ||
+			emailOrUsername.length > 255 ||
+			password.length > 1024
+		) {
 			return c.json(
 				{
 					error: "Username/email and password are required",
@@ -83,7 +76,11 @@ export default async function generalRoutes(app: Hono) {
 				where: { username: emailOrUsername, deleted_at: null },
 			});
 		}
-		if (!user || !(await Password.compare(password, user.password))) {
+		const passwordOk = await Password.compare(
+			password,
+			user?.password ?? (await DUMMY_HASH),
+		);
+		if (!user || !passwordOk) {
 			return c.json({ error: "Invalid credentials" }, 401);
 		}
 
@@ -201,10 +198,20 @@ export default async function generalRoutes(app: Hono) {
 			}),
 
 			// last 7 days grouped - raw query since Prisma doesn't group by date natively
-			db.$queryRaw<{ day: string; count: bigint; size: bigint }[]>`
+			db.$queryRaw<
+				{
+					day: string;
+					count: bigint;
+					completed: bigint;
+					failed: bigint;
+					size: bigint;
+				}[]
+			>`
          SELECT
            DATE_TRUNC('day', started_at)::date::text AS day,
            COUNT(*)::bigint AS count,
+           COUNT(*) FILTER (WHERE status = 'COMPLETED')::bigint AS completed,
+           COUNT(*) FILTER (WHERE status = 'FAILED')::bigint AS failed,
            COALESCE(SUM(size_bytes), 0)::bigint AS size
          FROM backups
          WHERE started_at >= NOW() - INTERVAL '7 days'
@@ -274,6 +281,8 @@ export default async function generalRoutes(app: Hono) {
 			backups_by_day: backupsByDay.map((r) => ({
 				day: r.day,
 				count: Number(r.count),
+				completed: Number(r.completed),
+				failed: Number(r.failed),
 				size_bytes: Number(r.size),
 			})),
 			storage_by_job: storageByJob.map((r) => ({

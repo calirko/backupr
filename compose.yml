@@ -11,6 +11,23 @@ services:
       - PORT=5174
       - BUN_GC=aggressive
       - TZ=America/Sao_Paulo
+      # Proxies in front of the server that append to X-Forwarded-For
+      # (outer reverse proxy -> backupr_proxy). Used for rate limiting by client IP.
+      - TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS:-2}
+      # Email notifications (interpolated from the shell or the root .env)
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_SECURE=${MAIL_SECURE:-}
+      - MAIL_USER=${MAIL_USER:-}
+      - MAIL_PASS=${MAIL_PASS:-}
+      - MAIL_FROM=${MAIL_FROM:-}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-Backupr}
+      - APP_URL=${APP_URL:-}
+      - STALE_AFTER_DAYS=${STALE_AFTER_DAYS:-5}
+      - STALE_REMINDER_DAYS=${STALE_REMINDER_DAYS:-2}
+      - FAILURE_COOLDOWN_MINUTES=${FAILURE_COOLDOWN_MINUTES:-60}
+      - WEEKLY_REPORT_DAY=${WEEKLY_REPORT_DAY:-1}
+      - WEEKLY_REPORT_HOUR=${WEEKLY_REPORT_HOUR:-8}
     networks:
       backupr_network:
         aliases:

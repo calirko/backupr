@@ -26,6 +26,7 @@ import {
 import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
 import { useSocket } from "@/hooks/use-socket";
+import { AgentVersion, Count, formatBytes, LastSeen } from "@/lib/health";
 
 export default function AgentsPage() {
 	const { filters, orderBy } = useData("agents");
@@ -55,7 +56,7 @@ export default function AgentsPage() {
 			],
 		},
 		{
-			name: "created_by",
+			name: "created_by.name",
 			label: "Created By",
 			type: "string",
 			matching: "contains",
@@ -82,18 +83,6 @@ export default function AgentsPage() {
 		if (status.status === "connected") return "connected";
 		return "unknown";
 	};
-
-	function formatBytes(bytes: number | null | undefined): string {
-		if (!bytes) return "0 B";
-		const units = ["B", "KB", "MB", "GB", "TB"];
-		let value = bytes;
-		let unit = 0;
-		while (value >= 1024 && unit < units.length - 1) {
-			value /= 1024;
-			unit++;
-		}
-		return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
-	}
 
 	const columns = [
 		{ key: "name", label: "Name", orderable: true },
@@ -135,29 +124,52 @@ export default function AgentsPage() {
 				),
 		},
 		{
-			key: "created_by",
-			label: "Created By",
-			orderable: true,
-			orderByKey: "created_by.name",
-			format: (value) => value?.name ?? "-",
+			key: "jobs",
+			label: "Jobs",
+			orderable: false,
+			format: (value) => (
+				<span>
+					{value.active}
+					{value.total > value.active && (
+						<span className="text-muted-foreground">
+							{" "}
+							(+{value.total - value.active} paused)
+						</span>
+					)}
+					{value.stale > 0 && (
+						<span className="text-destructive"> · {value.stale} stale</span>
+					)}
+				</span>
+			),
+		},
+		{
+			key: "failed_7d",
+			label: "Failed (7d)",
+			orderable: false,
+			format: (value) => <Count value={value} />,
+		},
+		{
+			key: "last_success",
+			label: "Last Success",
+			orderable: false,
+			format: (value) => <LastSeen at={value.at} overdue={value.overdue} />,
+		},
+		{
+			key: "version",
+			label: "Version",
+			orderable: false,
+			format: (value) => (
+				<AgentVersion
+					version={value.version}
+					updateAvailable={value.updateAvailable}
+				/>
+			),
 		},
 		{
 			key: "total_size_bytes",
 			label: "Total Size",
 			orderable: false,
 			format: (value) => formatBytes(value),
-		},
-		{
-			key: "created_at",
-			label: "Created",
-			orderable: true,
-			format: (value) => new Date(value).toLocaleString(),
-		},
-		{
-			key: "updated_at",
-			label: "Updated",
-			orderable: true,
-			format: (value) => new Date(value).toLocaleString(),
 		},
 	] as Column[];
 
@@ -307,10 +319,24 @@ export default function AgentsPage() {
 			});
 			if (response.ok) {
 				const result = await response.json();
-				console.log(result.data);
 				setData({
 					...data,
-					data: result.data,
+					data: result.data.map((agent: any) => ({
+						...agent,
+						jobs: {
+							active: agent.active_jobs,
+							total: agent.total_jobs,
+							stale: agent.stale_jobs,
+						},
+						last_success: {
+							at: agent.last_backup_at,
+							overdue: agent.stale_jobs > 0,
+						},
+						version: {
+							version: agent.agent_version,
+							updateAvailable: agent.update_available,
+						},
+					})),
 					total: result.total,
 					absoluteTotal: result.absoluteTotal,
 				});

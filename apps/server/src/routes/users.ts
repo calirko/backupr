@@ -1,41 +1,81 @@
 import type { Hono } from "hono";
 import { auth } from "../lib/auth";
+import type { Prisma } from "../../prisma/generated/prisma/client";
 import { Password } from "../lib/password";
 import { prisma } from "../lib/prisma";
-import { authRateLimit, rateLimit } from "../lib/rate-limit";
-import { Token, type TokenPayload } from "../lib/token";
+import { type ListSpec, parseListQuery, toOrderBy } from "../lib/query";
+import { rateLimit } from "../lib/rate-limit";
+import { defined, field, param, readJson } from "../lib/validate";
 
 const db = prisma;
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
+
+const MIN_PASSWORD_LENGTH = 8;
+
+const listSpec: ListSpec = {
+	filters: {
+		name: "string",
+		username: "string",
+		email: "string",
+		created_at: "date",
+	},
+	sort: [
+		"name",
+		"username",
+		"email",
+		"created_at",
+		"updated_at",
+		"receive_emails",
+		"receive_weekly_report",
+		"last_login_at",
+	],
+};
+
+/**
+ * Ids of the users matching `where`, ordered by their newest session (users
+ * that never logged in last) and paginated. Sorted in memory: the user table is
+ * small, and this keeps the filters on the regular Prisma `where`.
+ */
+async function userIdsByLastLogin(
+	where: Prisma.UserWhereInput,
+	dir: "asc" | "desc",
+	skip = 0,
+	take?: number,
+): Promise<string[]> {
+	const users = await db.user.findMany({ where, select: { id: true } });
+	const lastLogins = await db.userSession.groupBy({
+		by: ["user_id"],
+		where: { user_id: { in: users.map((u) => u.id) } },
+		_max: { created_at: true },
+	});
+	const lastLoginById = new Map(
+		lastLogins.map((l) => [l.user_id, l._max.created_at?.getTime() ?? null]),
+	);
+
+	const sign = dir === "asc" ? 1 : -1;
+	return users
+		.map((u) => ({ id: u.id, at: lastLoginById.get(u.id) ?? null }))
+		.sort((a, b) => {
+			if (a.at === b.at) return a.id.localeCompare(b.id);
+			if (a.at === null) return 1;
+			if (b.at === null) return -1;
+			return (a.at - b.at) * sign;
+		})
+		.slice(skip, take === undefined ? undefined : skip + take)
+		.map((u) => u.id);
+}
 
 export default async function userRoutes(app: Hono) {
 	// List Users (Paginated)
 	app.get("/api/users", rateLimit, auth, async (c) => {
-		const { filters, orderBy, skip, take } = c.req.query();
-		const parsedFilters = filters
-			? JSON.parse(decodeURIComponent(filters))
-			: {};
-		const parsedOrderBy = orderBy
-			? JSON.parse(decodeURIComponent(orderBy))
-			: {};
+		const { where, sort, skip, take } = parseListQuery(c.req.query(), listSpec);
+		const baseWhere = { ...where, deleted_at: null };
 
-		const s = skip ? parseInt(skip) : undefined;
-		const t = take ? parseInt(take) : undefined;
-
-		const baseWhere = { deleted_at: null, ...parsedFilters };
-
-		// last_login_at is virtual (derived from userSessions); translate it to a
-		// Prisma relation-aggregate orderBy so server-side sorting works correctly.
-		let resolvedOrderBy: object = { created_at: "desc" };
-		if (Object.keys(parsedOrderBy).length) {
-			if ("last_login_at" in parsedOrderBy) {
-				resolvedOrderBy = {
-					userSessions: { _max: { created_at: parsedOrderBy.last_login_at } },
-				};
-			} else {
-				resolvedOrderBy = parsedOrderBy;
-			}
-		}
+		// last_login_at is virtual (the newest session) and Prisma can't order by a
+		// relation aggregate, so that sort is resolved to a page of ids up front.
+		const loginSort = sort.find(([path]) => path === "last_login_at")?.[1];
+		const pageIds = loginSort
+			? await userIdsByLastLogin(baseWhere, loginSort, skip, take)
+			: null;
 
 		const [raw, total, absoluteTotal] = await Promise.all([
 			db.user.findMany({
@@ -46,24 +86,36 @@ export default async function userRoutes(app: Hono) {
 					name: true,
 					updated_at: true,
 					username: true,
+					receive_emails: true,
+					receive_weekly_report: true,
 					userSessions: {
 						orderBy: { created_at: "desc" },
 						take: 1,
 						select: { created_at: true },
 					},
+					_count: {
+						select: {
+							userSessions: { where: { expires_at: { gt: new Date() } } },
+						},
+					},
 				},
-				where: baseWhere,
-				orderBy: resolvedOrderBy,
-				skip: s,
-				take: t,
+				where: pageIds ? { id: { in: pageIds } } : baseWhere,
+				orderBy: pageIds ? undefined : toOrderBy(sort, { created_at: "desc" }),
+				skip: pageIds ? undefined : skip,
+				take: pageIds ? undefined : take,
 			}),
 			db.user.count({ where: baseWhere }),
 			db.user.count({ where: { deleted_at: null } }),
 		]);
 
-		const data = raw.map(({ userSessions, ...u }) => ({
+		if (pageIds) {
+			raw.sort((a, b) => pageIds.indexOf(a.id) - pageIds.indexOf(b.id));
+		}
+
+		const data = raw.map(({ userSessions, _count, ...u }) => ({
 			...u,
 			last_login_at: userSessions[0]?.created_at ?? null,
+			active_sessions: _count.userSessions,
 		}));
 
 		return c.json({ data, total, absoluteTotal });
@@ -71,20 +123,26 @@ export default async function userRoutes(app: Hono) {
 
 	// Create User
 	app.post("/api/users", rateLimit, auth, async (c) => {
-		let json;
-		try {
-			json = await c.req.json();
-		} catch (e) {
-			return c.json({ error: "Invalid JSON" }, 400);
-		}
-
-		const { name, username, email, password } = json;
-		if (!email || !password || !name || !username)
-			return c.json({ error: "Missing fields" }, 400);
+		const json = await readJson(c);
+		const name = field.string(json, "name", { required: true });
+		const username = field.string(json, "username", { required: true });
+		const email = field.string(json, "email", { required: true });
+		const password = field.string(json, "password", {
+			required: true,
+			min: MIN_PASSWORD_LENGTH,
+		})!;
 
 		const hashedPassword = await Password.encrypt(password);
 		const user = await db.user.create({
-			data: { name, username, email, password: hashedPassword },
+			data: {
+				name,
+				username: username!,
+				email: email!,
+				password: hashedPassword,
+				receive_emails: field.boolean(json, "receive_emails") ?? false,
+				receive_weekly_report:
+					field.boolean(json, "receive_weekly_report") ?? false,
+			},
 			select: { id: true, email: true },
 		});
 		return c.json(user, 201);
@@ -92,21 +150,27 @@ export default async function userRoutes(app: Hono) {
 
 	// Update User
 	app.patch("/api/users/:id", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
-		let json;
-		try {
-			json = await c.req.json();
-		} catch (e) {
-			return c.json({ error: "Invalid JSON" }, 400);
-		}
+		const id = param(c, "id");
+		const json = await readJson(c);
 
-		if (json.password) {
-			json.password = await Password.encrypt(json.password);
-		}
+		// Only these fields can be changed through this endpoint.
+		// An empty password means "keep the current one".
+		if (json.password === "") delete json.password;
+		const password = field.string(json, "password", {
+			min: MIN_PASSWORD_LENGTH,
+		});
+		const data = defined({
+			name: field.string(json, "name", { nullable: true }),
+			username: field.string(json, "username", { min: 1 }) ?? undefined,
+			email: field.string(json, "email", { min: 1 }) ?? undefined,
+			password: password ? await Password.encrypt(password) : undefined,
+			receive_emails: field.boolean(json, "receive_emails"),
+			receive_weekly_report: field.boolean(json, "receive_weekly_report"),
+		});
 
 		const user = await db.user.update({
-			where: { id },
-			data: json,
+			where: { id, deleted_at: null },
+			data,
 			select: { id: true, email: true },
 		});
 		return c.json(user);
@@ -151,7 +215,7 @@ export default async function userRoutes(app: Hono) {
 	app.delete("/api/users/me/sessions/:id", rateLimit, auth, async (c) => {
 		const user = c.get("user");
 		const currentToken = c.get("token");
-		const sessionId = c.req.param("id");
+		const sessionId = param(c, "id");
 
 		const session = await db.userSession.findUnique({
 			where: { id: sessionId },
@@ -170,18 +234,14 @@ export default async function userRoutes(app: Hono) {
 
 	// Delete User
 	app.delete("/api/users/:id", rateLimit, auth, async (c) => {
-		const tokenPayload = await Token.verify(
-			c.req.header("Authorization")?.split(" ")[1] ?? "",
-		);
-		const userId = tokenPayload.user.id;
-		if (userId === c.req.param("id")) {
+		if (c.get("user").id === param(c, "id")) {
 			return c.json({ error: "You cannot delete your own account" }, 400);
 		}
 
-		const targetId = c.req.param("id");
+		const targetId = param(c, "id");
 		await db.$transaction([
 			db.user.update({
-				where: { id: targetId },
+				where: { id: targetId, deleted_at: null },
 				data: { deleted_at: new Date() },
 			}),
 			db.userSession.deleteMany({ where: { user_id: targetId } }),

@@ -27,12 +27,26 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::{interval, sleep};
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{client::IntoClientRequest, http::HeaderValue, Message},
+};
 
 const RECONNECT_TIMEOUT_MS: u64 = 5000;
 const MAX_RECONNECT_TIMEOUT_MS: u64 = 30000;
 const HEARTBEAT_INTERVAL_MS: u64 = 30000;
 const STATUS_REPORT_INTERVAL_MS: u64 = 15000;
+/// Backups waiting behind the running one. More than this means the server is
+/// misbehaving (or the agent is badly behind), so extra jobs are refused.
+const MAX_QUEUED_JOBS: usize = 50;
+/// A dry run must answer before the server's 30s request timeout.
+const DRY_RUN_BUDGET: Duration = Duration::from_secs(20);
+
+/// Interrupted-backup recovery (lockfile, orphaned 7z, VSS shadows) only makes
+/// sense for a previous process. Reconnects of this process must skip it: the
+/// lockfile then belongs to a backup that is still running.
+static STARTUP_RECOVERY_DONE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 static IPC: std::sync::OnceLock<std::sync::Arc<ipc_server::IpcHandle>> = std::sync::OnceLock::new();
 
@@ -61,7 +75,9 @@ struct BackupJobState {
     files: Vec<String>,
     compression_level: u8,
     use_password: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // Never serialized: this struct is sent to the server in status reports,
+    // which the server shows on every open dashboard.
+    #[serde(skip_serializing)]
     password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     started_at: Option<String>,
@@ -231,18 +247,21 @@ impl BackuprAgent {
             .replace("http://", "ws://")
             .replace("https://", "wss://");
 
-        let ws_url = format!(
-            "{}/api/agent/ws?token={}",
-            ws_base,
-            self.config.agent_token.as_ref().unwrap()
+        let ws_url = format!("{}/api/agent/ws", ws_base);
+        raccoon!("[Agent] Connecting to {}...", ws_url);
+
+        // The long-lived agent token goes in a header, not the URL, so it never
+        // shows up in proxy access logs.
+        let mut request = ws_url.as_str().into_client_request()?;
+        request.headers_mut().insert(
+            "Authorization",
+            HeaderValue::from_str(&format!(
+                "Bearer {}",
+                self.config.agent_token.as_ref().unwrap()
+            ))?,
         );
 
-        // Log without the query string - it carries the long-lived agent token,
-        // and agent logs are fetchable over the socket via get_logs.
-        let log_url = ws_url.split('?').next().unwrap_or(&ws_url);
-        raccoon!("[Agent] Connecting to {}...", log_url);
-
-        let (ws_stream, _) = connect_async(&ws_url).await?;
+        let (ws_stream, _) = connect_async(request).await?;
         raccoon!("\x1b[32m[Agent] Connected and authenticated.\x1b[0m");
 
         let (mut write, mut read) = ws_stream.split();
@@ -460,15 +479,23 @@ impl BackuprAgent {
                     "[Agent] Server acknowledged connection (session: {})",
                     sessionId
                 );
-                // If the agent was killed mid-backup, 7z may still be running.
-                // Kill it before reporting the stale lockfile so it isn't left
-                // chewing CPU/disk while we mark the backup as failed.
-                backup::kill_orphan_7z();
-
                 // Report any stale lockfile left over from an interrupted backup.
                 // The server will also auto-detect stuck IN_PROGRESS records on
                 // reconnect, but this gives it the exact backup_id immediately.
-                if let Some(stale) = backup::read_stale_lockfile() {
+                // Only on the first connection of this process, and never while
+                // a job is running: the lockfile would be that live job's.
+                let first_connect = !STARTUP_RECOVERY_DONE.swap(true, Ordering::SeqCst);
+                let stale = if first_connect && current_job.lock().await.is_none() {
+                    backup::read_stale_lockfile()
+                } else {
+                    None
+                };
+                if let Some(stale) = stale {
+                    // The previous process was killed mid-backup, so its 7z may
+                    // still be running. Kill it before reporting the failure so
+                    // it isn't left chewing CPU/disk.
+                    backup::kill_orphan_7z();
+
                     raccoon!(
                         "[Agent] Stale lockfile found – backup {} was interrupted, reporting to server",
                         stale.backup_id
@@ -499,7 +526,13 @@ impl BackuprAgent {
                 });
             }
             ServerMessage::StartBackup { backupJob } => {
-                raccoon!("[Agent] Received start_backup command: {:?}", backupJob);
+                // Log without the payload: it carries the archive password.
+                raccoon!(
+                    "[Agent] Received start_backup command: backup {} (job {}, {} path(s))",
+                    backupJob.id,
+                    backupJob.job_id,
+                    backupJob.files.len()
+                );
                 let job_state = BackupJobState {
                     id: backupJob.id,
                     job_id: backupJob.job_id,
@@ -630,77 +663,103 @@ impl BackuprAgent {
             error: Option<String>,
         }
 
-        fn get_dir_size(dir: &std::path::Path) -> u64 {
+        /// Sums file sizes under `dir` without following symlinks (a link
+        /// loop would otherwise recurse forever and overflow the stack),
+        /// iteratively, and giving up at `deadline`. Returns (bytes, complete).
+        fn get_dir_size(dir: &std::path::Path, deadline: std::time::Instant) -> (u64, bool) {
             let mut total = 0u64;
-            if let Ok(entries) = fs::read_dir(dir) {
+            let mut stack = vec![dir.to_path_buf()];
+            while let Some(current) = stack.pop() {
+                if std::time::Instant::now() > deadline {
+                    return (total, false);
+                }
+                let Ok(entries) = fs::read_dir(&current) else {
+                    continue;
+                };
                 for entry in entries.flatten() {
-                    if let Ok(metadata) = entry.metadata() {
-                        total += if metadata.is_dir() {
-                            get_dir_size(&entry.path())
-                        } else {
-                            metadata.len()
-                        };
+                    let Ok(metadata) = fs::symlink_metadata(entry.path()) else {
+                        continue;
+                    };
+                    if metadata.is_dir() {
+                        stack.push(entry.path());
+                    } else if metadata.is_file() {
+                        total = total.saturating_add(metadata.len());
                     }
                 }
             }
-            total
+            (total, true)
         }
 
-        let mut path_results = Vec::new();
-        let mut total_bytes = 0u64;
+        // Walking large trees is slow blocking I/O: keep it off the async
+        // runtime so heartbeats and the socket keep flowing meanwhile.
+        let deadline = std::time::Instant::now() + DRY_RUN_BUDGET;
+        let walk_paths = paths.clone();
+        let (path_results, total_bytes) = tokio::task::spawn_blocking(move || {
+            let mut path_results = Vec::new();
+            let mut total_bytes = 0u64;
 
-        for p in &paths {
-            let path = std::path::Path::new(p);
-            let mut result = PathResult {
-                path: p.clone(),
-                exists: false,
-                readable: false,
-                file_type: "unknown".to_string(),
-                size_bytes: 0,
-                error: None,
-            };
+            for p in &walk_paths {
+                let path = std::path::Path::new(p);
+                let mut result = PathResult {
+                    path: p.clone(),
+                    exists: false,
+                    readable: false,
+                    file_type: "unknown".to_string(),
+                    size_bytes: 0,
+                    error: None,
+                };
 
-            if let Ok(metadata) = fs::metadata(path) {
-                result.exists = true;
-                result.file_type = if metadata.is_dir() {
-                    "directory"
-                } else {
-                    "file"
-                }
-                .to_string();
-
-                // Check readability
-                if fs::File::open(path).is_ok() || metadata.is_dir() {
-                    result.readable = true;
-                    result.size_bytes = if metadata.is_dir() {
-                        get_dir_size(path)
+                if let Ok(metadata) = fs::metadata(path) {
+                    result.exists = true;
+                    result.file_type = if metadata.is_dir() {
+                        "directory"
                     } else {
-                        metadata.len()
-                    };
-                    total_bytes += result.size_bytes;
+                        "file"
+                    }
+                    .to_string();
+
+                    // Check readability
+                    if fs::File::open(path).is_ok() || metadata.is_dir() {
+                        result.readable = true;
+                        result.size_bytes = if metadata.is_dir() {
+                            let (size, complete) = get_dir_size(path, deadline);
+                            if !complete {
+                                result.error = Some(
+                                    "Size estimate incomplete (directory too large to scan in time)"
+                                        .to_string(),
+                                );
+                            }
+                            size
+                        } else {
+                            metadata.len()
+                        };
+                        total_bytes = total_bytes.saturating_add(result.size_bytes);
+                    } else {
+                        result.error = Some("Not readable".to_string());
+                    }
                 } else {
-                    result.error = Some("Not readable".to_string());
+                    result.error = Some("Path does not exist".to_string());
                 }
-            } else {
-                result.error = Some("Path does not exist".to_string());
+
+                raccoon!(
+                    "[Agent] dry_run path \"{}\": exists={} readable={} type={} size={}B{}",
+                    result.path,
+                    result.exists,
+                    result.readable,
+                    result.file_type,
+                    result.size_bytes,
+                    result
+                        .error
+                        .as_ref()
+                        .map(|e| format!(" error=\"{}\"", e))
+                        .unwrap_or_default()
+                );
+
+                path_results.push(result);
             }
-
-            raccoon!(
-                "[Agent] dry_run path \"{}\": exists={} readable={} type={} size={}B{}",
-                result.path,
-                result.exists,
-                result.readable,
-                result.file_type,
-                result.size_bytes,
-                result
-                    .error
-                    .as_ref()
-                    .map(|e| format!(" error=\"{}\"", e))
-                    .unwrap_or_default()
-            );
-
-            path_results.push(result);
-        }
+            (path_results, total_bytes)
+        })
+        .await?;
 
         let reachable: Vec<_> = path_results
             .iter()
@@ -709,7 +768,9 @@ impl BackuprAgent {
             .collect();
 
         let compressed_estimate = (total_bytes as f64 * compression_ratio).ceil() as u64;
-        let storage_required = total_bytes + total_bytes + compressed_estimate;
+        let storage_required = total_bytes
+            .saturating_add(total_bytes)
+            .saturating_add(compressed_estimate);
 
         let response = serde_json::json!({
             "type": "dry_run_result",
@@ -740,12 +801,41 @@ impl BackuprAgent {
         current_job: &Arc<Mutex<Option<BackupJobState>>>,
         cmd_tx: &tokio::sync::mpsc::Sender<Message>,
     ) {
-        job_queue.lock().await.push_back(job.clone());
-        raccoon!(
-            "[Agent] Backup job {} queued. Queue length: {}",
-            job.id,
-            job_queue.lock().await.len()
-        );
+        let already_running = current_job
+            .lock()
+            .await
+            .as_ref()
+            .is_some_and(|j| j.id == job.id);
+        {
+            let mut queue = job_queue.lock().await;
+            // A resent command (e.g. after a reconnect) must not run twice.
+            if already_running || queue.iter().any(|j| j.id == job.id) {
+                raccoon!("[Agent] Backup {} is already queued or running; ignoring.", job.id);
+                return;
+            }
+            if queue.len() >= MAX_QUEUED_JOBS {
+                drop(queue);
+                eprintln!(
+                    "[Agent] Queue full ({} jobs); refusing backup {}.",
+                    MAX_QUEUED_JOBS, job.id
+                );
+                Self::send_backup_status(
+                    &job.id,
+                    "failed",
+                    Some(format!("Agent queue is full ({} jobs waiting)", MAX_QUEUED_JOBS)),
+                    None,
+                    cmd_tx,
+                )
+                .await;
+                return;
+            }
+            queue.push_back(job.clone());
+            raccoon!(
+                "[Agent] Backup job {} queued. Queue length: {}",
+                job.id,
+                queue.len()
+            );
+        }
 
         // Process if nothing is running
         if current_job.lock().await.is_none() {

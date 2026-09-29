@@ -1,73 +1,67 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { generateAgentCode, generateAgentToken } from "../lib/agent";
+import { getLatestAgentVersion, isOutdated } from "../lib/agent-release";
 import { auth } from "../lib/auth";
 import { prisma } from "../lib/prisma";
-import { rateLimit } from "../lib/rate-limit";
+import { type ListSpec, parseListQuery, toOrderBy } from "../lib/query";
+import { agentRateLimit, rateLimit } from "../lib/rate-limit";
+import { computeUptimePct } from "../lib/uptime";
 import { presignedDownloadUrl, presignedPutUrl } from "../lib/storage";
-import { Token } from "../lib/token";
+import { defined, field, HttpError, param, readJson } from "../lib/validate";
+import { STALE_AFTER_DAYS } from "../notifications";
 import { enforceRetentionForJob } from "../scheduler";
 import { agentRegistry, sendToAgent } from "../ws.agent";
 import { pushBackupUpdate } from "../ws.web";
 
 const db = prisma;
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:5174";
+const DAY_MS = 24 * 60 * 60_000;
+const MAX_AGENT_INFO_BYTES = 16 * 1024;
 
-// Fraction of the [since, now) window the agent spent in a non-OFFLINE status.
-// `records` must be sorted by date ascending and may start before `since`
-// (a baseline record) to avoid treating the window's start as downtime.
-function computeUptimePct(
-	records: { status: string; date: Date }[],
-	since: Date,
-): number {
-	const now = Date.now();
-	const sinceMs = since.getTime();
-	const totalMs = now - sinceMs;
-	if (totalMs <= 0) return 0;
+const listSpec: ListSpec = {
+	filters: {
+		name: "string",
+		is_active: "boolean",
+		"created_by.name": "string",
+		created_at: "date",
+	},
+	sort: ["name", "is_active", "created_at", "updated_at", "created_by.name"],
+};
 
-	let onlineMs = 0;
-	for (let i = 0; i < records.length; i++) {
-		const r = records[i]!;
-		if (r.status === "OFFLINE") continue;
+/** Resolves the agent session from the `Authorization: Bearer <agent token>` header. */
+async function requireAgentSession(c: Context) {
+	const token = c.req.header("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+	if (!token) throw new HttpError(401, "Missing Authorization header");
 
-		const start = Math.max(new Date(r.date).getTime(), sinceMs);
-		const next = records[i + 1];
-		const end = next ? new Date(next.date).getTime() : now;
-		if (end > start) onlineMs += end - start;
+	const session = await db.agentSession.findUnique({
+		where: { token },
+		include: { agent: true },
+	});
+	if (!session || session.agent.deleted_at) {
+		throw new HttpError(401, "Invalid agent token");
 	}
+	return session;
+}
 
-	return (onlineMs / totalMs) * 100;
+/** Agent-reported system info: a small, flat-ish JSON object. */
+function parseAgentInfo(value: unknown): Record<string, unknown> {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		throw new HttpError(400, "info must be an object");
+	}
+	if (JSON.stringify(value).length > MAX_AGENT_INFO_BYTES) {
+		throw new HttpError(400, "info is too large");
+	}
+	return value as Record<string, unknown>;
 }
 
 export default async function agentRoutes(app: Hono) {
 	// Step 1: agent calls this to get a presigned PUT URL + backup record ID
 	app.post("/api/agent/upload/prepare", async (c) => {
-		const token =
-			c.req.header("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-		if (!token) return c.json({ error: "Missing Authorization header" }, 401);
-
-		const session = await db.agentSession.findUnique({
-			where: { token },
-			include: { agent: true },
-		});
-		if (!session) return c.json({ error: "Invalid agent token" }, 401);
-
-		let json: {
-			backup_job_id?: string;
-			backup_id?: string;
-			requires_password?: boolean;
-		};
-		try {
-			json = await c.req.json();
-		} catch {
-			return c.json({ error: "Invalid JSON" }, 400);
-		}
-
-		const {
-			backup_job_id: backupJobId,
-			backup_id: backupId,
-			requires_password: requiresPassword = false,
-		} = json;
-		if (!backupJobId) return c.json({ error: "backup_job_id required" }, 400);
+		const session = await requireAgentSession(c);
+		const json = await readJson(c);
+		const backupJobId = field.string(json, "backup_job_id", { required: true })!;
+		const backupId = field.string(json, "backup_id");
+		const requiresPassword = field.boolean(json, "requires_password") ?? false;
 
 		const job = await db.backupJob.findFirst({
 			where: { id: backupJobId, agent_id: session.agent_id, deleted_at: null },
@@ -113,39 +107,17 @@ export default async function agentRoutes(app: Hono) {
 
 	// Step 2: agent calls this after the direct PUT to MinIO completes
 	app.post("/api/agent/upload/complete", async (c) => {
-		const token =
-			c.req.header("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-		if (!token) return c.json({ error: "Missing Authorization header" }, 401);
+		const session = await requireAgentSession(c);
+		const json = await readJson(c);
+		const backupId = field.string(json, "backup_id", { required: true })!;
+		const backupJobId = field.string(json, "backup_job_id", { required: true })!;
+		const key = field.string(json, "blob_key", { required: true, max: 512 })!;
+		const sizeBytes = field.int(json, "size_bytes", { min: 0 });
 
-		const session = await db.agentSession.findUnique({
-			where: { token },
-			include: { agent: true },
-		});
-		if (!session) return c.json({ error: "Invalid agent token" }, 401);
-
-		let json: {
-			backup_id?: string;
-			backup_job_id?: string;
-			blob_key?: string;
-			size_bytes?: number;
-		};
-		try {
-			json = await c.req.json();
-		} catch {
-			return c.json({ error: "Invalid JSON" }, 400);
-		}
-
-		const {
-			backup_id: backupId,
-			backup_job_id: backupJobId,
-			blob_key: key,
-			size_bytes: sizeBytes,
-		} = json;
-		if (!backupId || !backupJobId || !key) {
-			return c.json(
-				{ error: "backup_id, backup_job_id, and blob_key are required" },
-				400,
-			);
+		// The object key is derived server-side in /prepare; anything else would
+		// let an agent point its backup at another agent's blob.
+		if (key !== `${session.agent_id}/${backupJobId}/${backupId}`) {
+			return c.json({ error: "blob_key does not match this backup" }, 400);
 		}
 
 		const job = await db.backupJob.findFirst({
@@ -161,6 +133,12 @@ export default async function agentRoutes(app: Hono) {
 			.replace(/[^a-z0-9_]/g, "");
 		const filename = `${safeName}_${dateStr}.7z`;
 		const url = await presignedDownloadUrl(key, undefined, filename);
+
+		const backup = await db.backup.findFirst({
+			where: { id: backupId, backup_job_id: backupJobId },
+			select: { id: true },
+		});
+		if (!backup) return c.json({ error: "Backup not found for this job" }, 404);
 
 		const updated = await db.backup.update({
 			where: { id: backupId },
@@ -181,7 +159,10 @@ export default async function agentRoutes(app: Hono) {
 
 		// Fire-and-forget: prune this job immediately rather than waiting for the hourly sweep
 		enforceRetentionForJob(backupJobId).catch((err) =>
-			console.error(`[agent/upload] Retention enforcement failed for job ${backupJobId}:`, err),
+			console.error(
+				`[agent/upload] Retention enforcement failed for job ${backupJobId}:`,
+				err,
+			),
 		);
 
 		return c.json({
@@ -192,15 +173,12 @@ export default async function agentRoutes(app: Hono) {
 		});
 	});
 
-	app.get("/api/agents/:id/code", rateLimit, async (c) => {
-		const id = c.req.param("id");
+	app.get("/api/agents/:id/code", rateLimit, auth, async (c) => {
+		const id = param(c, "id");
 		const agent = await db.agent.findFirst({ where: { id, deleted_at: null } });
 		if (!agent) return c.json({ error: "Agent not found" }, 404);
 
-		const tokenPayload = await Token.verify(
-			c.req.header("Authorization")?.split(" ")[1] ?? "",
-		);
-		const created_by_id = tokenPayload.user.id;
+		const created_by_id = c.get("user").id;
 
 		const existingCode = await db.agentCode.findFirst({
 			where: { agent_id: agent.id },
@@ -243,20 +221,10 @@ export default async function agentRoutes(app: Hono) {
 		});
 	});
 
-	app.post("/api/agents/pair", rateLimit, async (c) => {
-		let json;
-
-		try {
-			json = await c.req.json();
-		} catch (e) {
-			return c.json({ error: "Invalid JSON" }, 400);
-		}
-
-		const { agentCode, name, info } = json;
-
-		if (!agentCode) {
-			return c.json({ error: "agentCode is required" }, 400);
-		}
+	app.post("/api/agents/pair", agentRateLimit, async (c) => {
+		const json = await readJson(c);
+		const agentCode = field.string(json, "agentCode", { required: true })!;
+		const info = json.info === undefined ? {} : parseAgentInfo(json.info);
 
 		const agentCodeRecord = await db.agentCode.findUnique({
 			where: { code: agentCode },
@@ -279,18 +247,22 @@ export default async function agentRoutes(app: Hono) {
 		}
 
 		const result = await db.$transaction(async (tx) => {
-			// Mark the code as used
-			await tx.agentCode.update({
-				where: { id: agentCodeRecord.id },
+			// Mark the code as used; the used_at guard makes this single-use even
+			// when two pair requests race with the same code.
+			const claimed = await tx.agentCode.updateMany({
+				where: { id: agentCodeRecord.id, used_at: null },
 				data: { used_at: new Date() },
 			});
+			if (claimed.count === 0) {
+				throw new HttpError(401, "Code already used");
+			}
 
 			const agent = await tx.agent.findFirst({
 				where: { id: agentCodeRecord.agent_id, deleted_at: null },
 			});
 
 			if (!agent) {
-				throw new Error("Associated agent not found");
+				throw new HttpError(404, "Associated agent not found");
 			}
 
 			// Create the session first (without token)
@@ -298,7 +270,7 @@ export default async function agentRoutes(app: Hono) {
 				data: {
 					agent_id: agent.id,
 					token: "", // Temporary placeholder
-					info: info ?? {},
+					info: info as object,
 					last_seen_at: new Date(),
 				},
 			});
@@ -328,35 +300,33 @@ export default async function agentRoutes(app: Hono) {
 	});
 
 	app.get("/api/agents", rateLimit, auth, async (c) => {
-		const { filters, orderBy, skip, take } = c.req.query();
-		const parsedFilters = filters
-			? JSON.parse(decodeURIComponent(filters))
-			: {};
-		const parsedOrderBy = orderBy
-			? JSON.parse(decodeURIComponent(orderBy))
-			: {};
-
-		const s = skip ? parseInt(skip) : undefined;
-		const t = take ? parseInt(take) : undefined;
-
-		const baseWhere = { deleted_at: null, ...parsedFilters };
+		const { where, sort, skip, take } = parseListQuery(c.req.query(), listSpec);
+		const baseWhere = { ...where, deleted_at: null };
 
 		const since = new Date();
 		since.setDate(since.getDate() - 7);
+		const staleCutoff = new Date(Date.now() - STALE_AFTER_DAYS * DAY_MS);
 
 		const [rawData, total, absoluteTotal] = await Promise.all([
 			db.agent.findMany({
 				where: baseWhere,
-				orderBy: Object.keys(parsedOrderBy).length
-					? parsedOrderBy
-					: { created_at: "desc" },
-				skip: s,
-				take: t,
+				orderBy: toOrderBy(sort, { created_at: "desc" }),
+				skip,
+				take,
 				include: {
 					created_by: { select: { name: true } },
 					backupJobs: {
 						where: { deleted_at: null },
 						select: {
+							is_active: true,
+							created_at: true,
+							_count: {
+								select: {
+									backups: {
+										where: { status: "FAILED", started_at: { gte: since } },
+									},
+								},
+							},
 							backups: {
 								where: { status: "COMPLETED" },
 								select: { size_bytes: true, started_at: true },
@@ -368,11 +338,17 @@ export default async function agentRoutes(app: Hono) {
 						orderBy: { date: "asc" },
 						select: { status: true, date: true },
 					},
+					agentSessions: {
+						orderBy: { last_seen_at: "desc" },
+						take: 1,
+						select: { info: true },
+					},
 				},
 			}),
 			db.agent.count({ where: baseWhere }),
 			db.agent.count({ where: { deleted_at: null } }),
 		]);
+		const latestAgentVersion = await getLatestAgentVersion();
 
 		const agentIds = rawData.map((agent) => agent.id);
 		const baselines = agentIds.length
@@ -385,78 +361,112 @@ export default async function agentRoutes(app: Hono) {
 			: [];
 		const baselineByAgentId = new Map(baselines.map((b) => [b.agent_id, b]));
 
-		const data = rawData.map(({ backupJobs, agentStatuses, ...agent }) => {
-			let lastBackupAt: Date | null = null;
-			let totalSizeBytes = 0;
-			for (const job of backupJobs) {
-				for (const b of job.backups) {
-					totalSizeBytes += Number(b.size_bytes) || 0;
-					if (b.started_at && (!lastBackupAt || b.started_at > lastBackupAt)) {
-						lastBackupAt = b.started_at;
+		const data = rawData.map(
+			({ backupJobs, agentStatuses, agentSessions, ...agent }) => {
+				let lastBackupAt: Date | null = null;
+				let totalSizeBytes = 0;
+				let failed7d = 0;
+				let activeJobs = 0;
+				let staleJobs = 0;
+				for (const job of backupJobs) {
+					let jobLastSuccess: Date | null = null;
+					for (const b of job.backups) {
+						totalSizeBytes += Number(b.size_bytes) || 0;
+						if (
+							b.started_at &&
+							(!jobLastSuccess || b.started_at > jobLastSuccess)
+						) {
+							jobLastSuccess = b.started_at;
+						}
+					}
+					if (
+						jobLastSuccess &&
+						(!lastBackupAt || jobLastSuccess > lastBackupAt)
+					) {
+						lastBackupAt = jobLastSuccess;
+					}
+					failed7d += job._count.backups;
+					if (job.is_active) {
+						activeJobs++;
+						// Same rule as the stale-jobs email
+						if (
+							agent.is_active &&
+							(jobLastSuccess ?? job.created_at) < staleCutoff
+						) {
+							staleJobs++;
+						}
 					}
 				}
-			}
 
-			const baseline = baselineByAgentId.get(agent.id);
-			const statusRecords = baseline
-				? [baseline, ...agentStatuses]
-				: agentStatuses;
-			const uptimePct = computeUptimePct(statusRecords, since);
+				const baseline = baselineByAgentId.get(agent.id);
+				const statusRecords = baseline
+					? [baseline, ...agentStatuses]
+					: agentStatuses;
+				const uptimePct = computeUptimePct(statusRecords, since);
+				const info = agentSessions[0]?.info as
+					| { agent_version?: unknown }
+					| undefined;
+				const agentVersion =
+					typeof info?.agent_version === "string" ? info.agent_version : null;
 
-			return {
-				...agent,
-				total_size_bytes: totalSizeBytes,
-				last_backup_at: lastBackupAt,
-				uptime_pct: uptimePct,
-			};
+				return {
+					...agent,
+					total_size_bytes: totalSizeBytes,
+					last_backup_at: lastBackupAt,
+					uptime_pct: uptimePct,
+					total_jobs: backupJobs.length,
+					active_jobs: activeJobs,
+					stale_jobs: staleJobs,
+					failed_7d: failed7d,
+					agent_version: agentVersion,
+					update_available:
+						agentVersion != null &&
+						latestAgentVersion != null &&
+						isOutdated(agentVersion, latestAgentVersion),
+				};
+			},
+		);
+
+		return c.json({
+			data,
+			total,
+			absoluteTotal,
+			skip,
+			take,
+			latest_agent_version: latestAgentVersion,
 		});
-
-		return c.json({ data, total, absoluteTotal, skip: s, take: t });
 	});
 
 	// Create Agent
-	app.post("/api/agents", rateLimit, async (c) => {
-		let json;
-		try {
-			json = await c.req.json();
-		} catch (e) {
-			return c.json({ error: "Invalid JSON" }, 400);
-		}
-
-		const tokenPayload = await Token.verify(
-			c.req.header("Authorization")?.split(" ")[1] ?? "",
-		);
-		const created_by_id = tokenPayload.user.id;
-
-		const { name } = json;
-		if (!name) return c.json({ error: "Name is required" }, 400);
+	app.post("/api/agents", rateLimit, auth, async (c) => {
+		const json = await readJson(c);
+		const name = field.string(json, "name", { required: true })!;
 
 		const agent = await db.agent.create({
-			data: { name, created_by_id },
+			data: { name, created_by_id: c.get("user").id },
 		});
 		return c.json(agent, 201);
 	});
 
 	// Update Agent
 	app.patch("/api/agents/:id", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
-		let json;
-		try {
-			json = await c.req.json();
-		} catch (e) {
-			return c.json({ error: "Invalid JSON" }, 400);
-		}
+		const id = param(c, "id");
+		const json = await readJson(c);
 
+		// Only these fields can be changed through this endpoint
 		const agent = await db.agent.update({
-			where: { id },
-			data: json,
+			where: { id, deleted_at: null },
+			data: defined({
+				name: field.string(json, "name", { min: 1 }) ?? undefined,
+				is_active: field.boolean(json, "is_active"),
+			}),
 		});
 		return c.json(agent);
 	});
 
 	// Disable/Enable Agent (Toggle)
 	app.patch("/api/agents/:id/toggle", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
+		const id = param(c, "id");
 		const agent = await db.agent.findFirst({ where: { id, deleted_at: null } });
 		if (!agent) return c.json({ error: "Agent not found" }, 404);
 
@@ -469,7 +479,7 @@ export default async function agentRoutes(app: Hono) {
 
 	// Disable Agent
 	app.post("/api/agents/:id/disable", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
+		const id = param(c, "id");
 		const agent = await db.agent.findFirst({ where: { id, deleted_at: null } });
 		if (!agent) return c.json({ error: "Agent not found" }, 404);
 
@@ -482,7 +492,7 @@ export default async function agentRoutes(app: Hono) {
 
 	// Get Agent Status History (last 7 days)
 	app.get("/api/agents/:id/status", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
+		const id = param(c, "id");
 
 		const agent = await db.agent.findFirst({
 			where: { id, deleted_at: null },
@@ -514,12 +524,21 @@ export default async function agentRoutes(app: Hono) {
 
 	// Get Agent Details with Sessions
 	app.get("/api/agents/:id", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
+		const id = param(c, "id");
 		const agent = await db.agent.findFirst({
 			where: { id, deleted_at: null },
 			include: {
 				agentSessions: {
 					orderBy: { last_seen_at: "desc" },
+					// Never send agent session tokens to the browser
+					select: {
+						id: true,
+						agent_id: true,
+						created_at: true,
+						updated_at: true,
+						last_seen_at: true,
+						info: true,
+					},
 				},
 				agentCodes: {
 					where: { used_at: null },
@@ -549,8 +568,8 @@ export default async function agentRoutes(app: Hono) {
 		rateLimit,
 		auth,
 		async (c) => {
-			const agentId = c.req.param("id");
-			const sessionId = c.req.param("sessionId");
+			const agentId = param(c, "id");
+			const sessionId = param(c, "sessionId");
 
 			const session = await db.agentSession.findFirst({
 				where: { id: sessionId, agent_id: agentId },
@@ -572,27 +591,13 @@ export default async function agentRoutes(app: Hono) {
 	// Called on every reconnect and after a self-update so the dashboard stays
 	// current without needing a full re-pair.
 	app.patch("/api/agent/session/info", rateLimit, async (c) => {
-		const token =
-			c.req.header("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-		if (!token) return c.json({ error: "Missing Authorization header" }, 401);
-
-		const session = await db.agentSession.findUnique({
-			where: { token },
-			include: { agent: true },
-		});
-		if (!session) return c.json({ error: "Invalid agent token" }, 401);
-
-		let json: { info?: Record<string, unknown> };
-		try {
-			json = await c.req.json();
-		} catch {
-			return c.json({ error: "Invalid JSON" }, 400);
-		}
-		if (!json.info) return c.json({ error: "info is required" }, 400);
+		const session = await requireAgentSession(c);
+		const json = await readJson(c);
+		if (json.info === undefined) return c.json({ error: "info is required" }, 400);
 
 		// Merge new fields into the existing info so nothing is lost.
 		const existing = (session.info as Record<string, unknown>) ?? {};
-		const merged = { ...existing, ...json.info };
+		const merged = parseAgentInfo({ ...existing, ...parseAgentInfo(json.info) });
 		await db.agentSession.update({
 			where: { id: session.id },
 			data: { info: merged as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -606,10 +611,12 @@ export default async function agentRoutes(app: Hono) {
 
 	// Fetch agent log files
 	app.get("/api/agents/:id/logs", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
+		const id = param(c, "id");
 
 		try {
-			const response = await sendToAgent(id, { type: "get_logs" }, 15000) as { content?: string };
+			const response = (await sendToAgent(id, { type: "get_logs" }, 15000)) as {
+				content?: string;
+			};
 			return c.json({ content: response.content ?? "" });
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -619,7 +626,7 @@ export default async function agentRoutes(app: Hono) {
 
 	// Trigger agent auto-update
 	app.post("/api/agents/:id/update", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
+		const id = param(c, "id");
 
 		const state = agentRegistry.get(id);
 		if (!state || state.status !== "online") {
@@ -637,7 +644,7 @@ export default async function agentRoutes(app: Hono) {
 
 	// Delete Agent
 	app.delete("/api/agents/:id", rateLimit, auth, async (c) => {
-		const id = c.req.param("id");
+		const id = param(c, "id");
 		try {
 			const backupJobs = await db.backupJob.findMany({
 				where: { agent_id: id, deleted_at: null },

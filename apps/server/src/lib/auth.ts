@@ -44,6 +44,7 @@ export const auth = async (
 						id: true,
 						name: true,
 						email: true,
+						deleted_at: true,
 					},
 				},
 			},
@@ -60,11 +61,12 @@ export const auth = async (
 			return c.json({ error: "Unauthorized: Session expired" }, 401);
 		}
 
-		if (!session.user) {
+		if (!session.user || session.user.deleted_at) {
 			return c.json({ error: "Unauthorized: User no longer exists" }, 401);
 		}
 
-		c.set("user", session.user);
+		const { deleted_at: _, ...user } = session.user;
+		c.set("user", user);
 		c.set("token", token);
 
 		await next();

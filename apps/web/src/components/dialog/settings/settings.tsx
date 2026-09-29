@@ -1,7 +1,9 @@
 import {
 	AppleLogoIcon,
 	ArrowClockwiseIcon,
+	ChartBarIcon,
 	DeviceMobileIcon,
+	EnvelopeSimpleIcon,
 	FloppyDiskIcon,
 	HardDrivesIcon,
 	LinuxLogoIcon,
@@ -16,6 +18,7 @@ import { jwtDecode } from "jwt-decode";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Card,
 	CardContent,
@@ -230,10 +233,171 @@ function AccountPanel() {
 	);
 }
 
+type EmailPreference = "receive_emails" | "receive_weekly_report";
+
+const EMAIL_PREFERENCES: {
+	key: EmailPreference;
+	label: string;
+	description: string;
+	enabledToast: string;
+	disabledToast: string;
+}[] = [
+	{
+		key: "receive_emails",
+		label: "Alerts",
+		description:
+			"Get an email when a backup fails, and reminders while a job goes 5+ days without a successful backup.",
+		enabledToast: "Email alerts enabled",
+		disabledToast: "Email alerts disabled",
+	},
+	{
+		key: "receive_weekly_report",
+		label: "Weekly report",
+		description:
+			"A summary every Monday: backups run, success rate, daily activity, agent uptime, job health and storage.",
+		enabledToast: "Weekly report enabled",
+		disabledToast: "Weekly report disabled",
+	},
+];
+
 function PreferencesPanel() {
+	const [status, setStatus] = useState<
+		({ enabled: boolean } & Record<EmailPreference, boolean>) | null
+	>(null);
+	const [userId, setUserId] = useState("");
+	const [saving, setSaving] = useState<EmailPreference | null>(null);
+	const [sending, setSending] = useState<"test" | "weekly-report" | null>(null);
+
+	useEffect(() => {
+		const token = localStorage.getItem("token");
+		if (token) {
+			const decoded: any = jwtDecode(token);
+			setUserId(decoded.user?.id ?? "");
+		}
+		fetch("/api/notifications/status", {
+			headers: { Authorization: `Bearer ${token}` },
+		})
+			.then((res) => (res.ok ? res.json() : null))
+			.then(setStatus)
+			.catch(() => setStatus(null));
+	}, []);
+
+	async function handleToggle(
+		pref: (typeof EMAIL_PREFERENCES)[number],
+		value: boolean,
+	) {
+		if (!status) return;
+		setSaving(pref.key);
+		try {
+			const res = await fetch(`/api/users/${userId}`, {
+				method: "PATCH",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${localStorage.getItem("token")}`,
+				},
+				body: JSON.stringify({ [pref.key]: value }),
+			});
+			if (!res.ok) {
+				const err = await res.json();
+				toast.error("Failed to update email preferences", {
+					description: err.error,
+				});
+			} else {
+				setStatus({ ...status, [pref.key]: value });
+				toast.success(value ? pref.enabledToast : pref.disabledToast);
+			}
+		} catch (err) {
+			toast.error("Failed to update email preferences", {
+				description: err instanceof Error ? err.message : String(err),
+			});
+		} finally {
+			setSaving(null);
+		}
+	}
+
+	async function handleSend(kind: "test" | "weekly-report") {
+		const label = kind === "test" ? "test email" : "weekly report";
+		setSending(kind);
+		try {
+			const res = await fetch(`/api/notifications/${kind}`, {
+				method: "POST",
+				headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+			});
+			const body = await res.json();
+			if (!res.ok) {
+				toast.error(`Failed to send ${label}`, { description: body.error });
+			} else {
+				toast.success(
+					kind === "test" ? "Test email sent" : "Weekly report sent",
+					{ description: body.message },
+				);
+			}
+		} catch (err) {
+			toast.error(`Failed to send ${label}`, {
+				description: err instanceof Error ? err.message : String(err),
+			});
+		} finally {
+			setSending(null);
+		}
+	}
+
 	return (
-		<div className="text-sm text-muted-foreground">
-			Preferences coming soon.
+		<div className="flex flex-col gap-3">
+			<Card size="sm">
+				<CardHeader className="border-b">
+					<CardTitle>Email</CardTitle>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-3">
+					{EMAIL_PREFERENCES.map((pref) => (
+						<div key={pref.key} className="flex items-start gap-2">
+							<Checkbox
+								id={`settings_${pref.key}`}
+								checked={status?.[pref.key] ?? false}
+								onCheckedChange={(v) => handleToggle(pref, v === true)}
+								disabled={!status || saving !== null}
+								className="mb-0 mt-0.5"
+							/>
+							<div className="min-w-0">
+								<Label
+									htmlFor={`settings_${pref.key}`}
+									className="cursor-pointer"
+								>
+									{pref.label}
+								</Label>
+								<p className="text-xs text-muted-foreground mt-0.5">
+									{pref.description}
+								</p>
+							</div>
+						</div>
+					))}
+					{status && !status.enabled && (
+						<p className="text-xs text-muted-foreground">
+							Email isn't configured on the server yet, so no emails will be
+							sent until the MAIL_* settings are set.
+						</p>
+					)}
+				</CardContent>
+				<CardFooter className="justify-end gap-2 flex-wrap">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => handleSend("weekly-report")}
+						disabled={!status?.enabled || sending !== null}
+					>
+						<ChartBarIcon />
+						{sending === "weekly-report" ? "Sending..." : "Send report now"}
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => handleSend("test")}
+						disabled={!status?.enabled || sending !== null}
+					>
+						<EnvelopeSimpleIcon />
+						{sending === "test" ? "Sending..." : "Send test email"}
+					</Button>
+				</CardFooter>
+			</Card>
 		</div>
 	);
 }

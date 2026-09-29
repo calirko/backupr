@@ -69,7 +69,9 @@ export function SocketProvider({
 		if (!shouldReconnectRef.current) return;
 
 		const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-		const wsUrl = `${wsProtocol}//${window.location.host}/api/web/ws?token=${token}`;
+		// The token goes in the first message, not the URL, so it stays out of
+		// proxy access logs
+		const wsUrl = `${wsProtocol}//${window.location.host}/api/web/ws`;
 		console.log("[socket] connecting...");
 
 		try {
@@ -77,6 +79,7 @@ export function SocketProvider({
 			wsRef.current = ws;
 
 			ws.onopen = () => {
+				ws.send(JSON.stringify({ type: "auth", token }));
 				console.log("[socket] connected");
 				setIsConnected(true);
 				reconnectAttemptsRef.current = 0;

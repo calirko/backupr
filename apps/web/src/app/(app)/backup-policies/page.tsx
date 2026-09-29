@@ -17,6 +17,7 @@ import ErrorDialog from "@/components/dialog/error";
 import { Button } from "@/components/ui/button";
 import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
+import { formatBytes, LastSeen } from "@/lib/health";
 
 export default function BackupPoliciesPage() {
 	const { filters, orderBy } = useData("backup-policies");
@@ -76,16 +77,39 @@ export default function BackupPoliciesPage() {
 			format: (value) => value?.name ?? "-",
 		},
 		{
-			key: "created_at",
-			label: "Created",
-			orderable: true,
-			format: (value) => new Date(value).toLocaleString(),
+			key: "job_count",
+			label: "Jobs",
+			orderable: false,
+			format: (value) =>
+				value ? value : <span className="text-muted-foreground">Unused</span>,
 		},
 		{
-			key: "updated_at",
-			label: "Updated",
-			orderable: true,
-			format: (value) => new Date(value).toLocaleString(),
+			key: "backup_count",
+			label: "Backups Kept",
+			orderable: false,
+		},
+		{
+			key: "size_bytes",
+			label: "Storage",
+			orderable: false,
+			format: (value) => formatBytes(value),
+		},
+		{
+			key: "oldest_backup_at",
+			label: "Oldest Backup",
+			orderable: false,
+			format: (value) => <LastSeen at={value} />,
+		},
+		{
+			key: "retention_overdue",
+			label: "Retention",
+			orderable: false,
+			format: (value) =>
+				value ? (
+					<span className="text-destructive">Not enforced</span>
+				) : (
+					<span style={{ color: "var(--greenish)" }}>OK</span>
+				),
 		},
 	] as Column[];
 

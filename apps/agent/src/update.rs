@@ -157,8 +157,12 @@ pub fn tray_local_filename() -> &'static str {
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
 fn http_client() -> Result<reqwest::Client> {
+    // Without timeouts a stalled request would hang forever and, for updates,
+    // keep UPDATE_IN_PROGRESS set so no later update could ever run.
     reqwest::Client::builder()
         .user_agent(format!("backupr-agent/{}", CURRENT_VERSION))
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(15 * 60))
         .build()
         .map_err(|e| anyhow!("Failed to build HTTP client: {}", e))
 }
@@ -410,7 +414,7 @@ pub fn read_agent_logs() -> String {
     for name in LOG_FILES {
         let path = dir.join(name);
         out.push_str(&format!("=== {} ===\n", name));
-        match std::fs::read_to_string(&path) {
+        match read_log_tail(&path, MAX_LOG_BYTES_PER_FILE) {
             Ok(content) if content.is_empty() => out.push_str("(empty)\n"),
             Ok(content) => out.push_str(&content),
             Err(e) => out.push_str(&format!("(could not read: {})\n", e)),
@@ -419,6 +423,37 @@ pub fn read_agent_logs() -> String {
     }
 
     out
+}
+
+/// Only the end of each log is sent: the files grow without bound, and the
+/// whole response travels as a single WebSocket message, which the server
+/// drops (closing the connection) past its size limit.
+const MAX_LOG_BYTES_PER_FILE: u64 = 256 * 1024;
+
+fn read_log_tail(path: &Path, max_bytes: u64) -> std::io::Result<String> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let mut file = std::fs::File::open(path)?;
+    let len = file.metadata()?.len();
+    let truncated = len > max_bytes;
+    if truncated {
+        file.seek(SeekFrom::Start(len - max_bytes))?;
+    }
+    let mut buf = Vec::with_capacity(len.min(max_bytes) as usize);
+    file.read_to_end(&mut buf)?;
+    let text = String::from_utf8_lossy(&buf);
+
+    if !truncated {
+        return Ok(text.into_owned());
+    }
+    // Drop the partial first line left by seeking into the middle of the file.
+    let rest = text.split_once('\n').map(|(_, r)| r).unwrap_or(&text);
+    Ok(format!(
+        "(showing the last {} KB of {} KB)\n{}",
+        max_bytes / 1024,
+        len / 1024,
+        rest
+    ))
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

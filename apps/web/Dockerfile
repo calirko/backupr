@@ -15,7 +15,10 @@ WORKDIR /app/apps/web
 ARG VITE_TZ=America/Sao_Paulo
 ENV VITE_TZ=$VITE_TZ
 
-RUN bun run build
+RUN bun run build \
+    && find dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.html' \
+        -o -name '*.svg' -o -name '*.json' -o -name '*.txt' \) \
+        -size +1k -exec gzip -9 -k {} +
 
 FROM nginx:alpine
 

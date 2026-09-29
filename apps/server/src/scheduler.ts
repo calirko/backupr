@@ -1,5 +1,6 @@
 import { prisma } from "./lib/prisma";
 import { removeObject } from "./lib/storage";
+import { notifyBackupsFailed } from "./notifications";
 
 const db = prisma;
 
@@ -254,6 +255,20 @@ const DOW_NAMES = [
 	"Saturday",
 ];
 
+// Formatters are costly to construct; build them once and reuse
+const ZONED_PARTS_FORMAT = new Intl.DateTimeFormat("en-US", {
+	timeZone: SCHEDULER_TZ,
+	minute: "2-digit",
+	hour: "2-digit",
+	day: "2-digit",
+	month: "2-digit",
+	hour12: false,
+});
+const ZONED_WEEKDAY_FORMAT = new Intl.DateTimeFormat("en-US", {
+	timeZone: SCHEDULER_TZ,
+	weekday: "long",
+});
+
 function getZonedParts(date: Date): {
 	minute: number;
 	hour: number;
@@ -261,21 +276,11 @@ function getZonedParts(date: Date): {
 	month: number;
 	dow: number;
 } {
-	const parts = new Intl.DateTimeFormat("en-US", {
-		timeZone: SCHEDULER_TZ,
-		minute: "2-digit",
-		hour: "2-digit",
-		day: "2-digit",
-		month: "2-digit",
-		hour12: false,
-	}).formatToParts(date);
+	const parts = ZONED_PARTS_FORMAT.formatToParts(date);
 
 	const get = (type: string) =>
 		parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
-	const weekday = new Intl.DateTimeFormat("en-US", {
-		timeZone: SCHEDULER_TZ,
-		weekday: "long",
-	}).format(date);
+	const weekday = ZONED_WEEKDAY_FORMAT.format(date);
 
 	return {
 		minute: get("minute"),
@@ -430,6 +435,76 @@ function cronFieldMatches(
 	return !isNaN(exact) && exact === value;
 }
 
+type CronFields = {
+	minute: string;
+	hour: string;
+	dom: string;
+	month: string;
+	dow: string;
+};
+
+/** Whether the scheduler can run this cron expression. */
+export function isValidCron(expression: string): boolean {
+	return parseCronFields(expression) !== null;
+}
+
+function parseCronFields(expression: string): CronFields | null {
+	const fields = expression.trim().split(/\s+/);
+	if (fields.length !== 5) return null;
+	if (fields.some((f) => f !== "*" && !/^[\d,\-\/\*]+$/.test(f))) return null;
+	const [minute, hour, dom, month, dow] = fields as [
+		string,
+		string,
+		string,
+		string,
+		string,
+	];
+	return { minute, hour, dom, month, dow };
+}
+
+/**
+ * Counts how many times each cron expression was scheduled to fire within
+ * [from, to), using the same matching rules as the scheduler. The window is
+ * walked one scheduler-timezone hour at a time so the timezone lookups are
+ * shared by every expression. Invalid expressions count as 0.
+ */
+export function countScheduledRuns(
+	expressions: string[],
+	from: Date,
+	to: Date,
+): number[] {
+	const parsed = expressions.map(parseCronFields);
+	const counts = expressions.map(() => 0);
+	const fromMs = from.getTime();
+	const toMs = to.getTime();
+
+	// Align to minute 0 of the scheduler-timezone hour containing `from`
+	const first = new Date(fromMs);
+	first.setSeconds(0, 0);
+	const startMs = first.getTime() - getZonedParts(first).minute * 60_000;
+
+	for (let hourMs = startMs; hourMs < toMs; hourMs += 3_600_000) {
+		const { hour, dom, month, dow } = getZonedParts(new Date(hourMs));
+		parsed.forEach((f, i) => {
+			if (
+				!f ||
+				!cronFieldMatches(f.hour, hour, 0, 23) ||
+				!cronFieldMatches(f.dom, dom, 1, 31) ||
+				!cronFieldMatches(f.month, month, 1, 12) ||
+				!cronFieldMatches(f.dow, dow, 0, 6)
+			)
+				return;
+			for (let m = 0; m < 60; m++) {
+				const t = hourMs + m * 60_000;
+				if (t < fromMs || t >= toMs) continue;
+				if (cronFieldMatches(f.minute, m, 0, 59)) counts[i]!++;
+			}
+		});
+	}
+
+	return counts;
+}
+
 /**
  * Marks IN_PROGRESS backups as FAILED if they have been running for over 1 hour.
  * Also removes any storage blobs that were uploaded for timed-out backups.
@@ -457,6 +532,7 @@ async function timeoutStaleBackups(): Promise<void> {
 	console.log(
 		`[Scheduler] Marked ${staleBackups.length} stale backup(s) as FAILED (timeout).`,
 	);
+	notifyBackupsFailed(staleBackups.map((b) => b.id));
 
 	// Best-effort: remove any blobs that were partially uploaded
 	for (const backup of staleBackups) {

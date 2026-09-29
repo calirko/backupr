@@ -1,4 +1,5 @@
 import { upgradeWebSocket } from "hono/bun";
+import type { WSContext } from "hono/ws";
 import { prisma } from "./lib/prisma";
 import { getSchedulerQueuedJobIds } from "./scheduler";
 import { agentRegistry, setOnAgentStatusChange } from "./ws.agent";
@@ -86,9 +87,11 @@ export function pushBackupUpdate() {
 	}
 }
 
-export default upgradeWebSocket((c) => {
-	const token = c.req.query("token");
+const AUTH_TIMEOUT_MS = 10000;
+
+export default upgradeWebSocket(() => {
 	let clientId: string | null = null;
+	let authTimeoutId: ReturnType<typeof setTimeout> | null = null;
 	let pingIntervalId: ReturnType<typeof setInterval> | null = null;
 	let pingTimeoutId: ReturnType<typeof setTimeout> | null = null;
 	let statusIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -120,55 +123,75 @@ export default upgradeWebSocket((c) => {
 		statusIntervalId = setInterval(() => broadcastStatus(ws), STATUS_BROADCAST_INTERVAL_MS);
 	}
 
+	let authenticating = false;
+
+	async function authenticate(token: unknown, wsCtx: WSContext) {
+		if (authenticating) return;
+		authenticating = true;
+		const ws = wsCtx as unknown as WebSocket;
+
+		const session =
+			typeof token === "string" && token
+				? await db.userSession.findUnique({
+						where: { token },
+						include: { user: { select: { deleted_at: true } } },
+					})
+				: null;
+
+		if (!session || new Date() > session.expires_at) {
+			console.warn("[ws web] Connection rejected: invalid or expired token");
+			send(ws, { type: "error", message: "Invalid or expired token" });
+			ws.close();
+			return;
+		}
+
+		if (session.user.deleted_at) {
+			console.warn(`[ws web] Connection rejected: user ${session.user_id} is deleted`);
+			send(ws, { type: "error", message: "Account has been deleted" });
+			ws.close();
+			return;
+		}
+
+		if (authTimeoutId) clearTimeout(authTimeoutId);
+		clientId = crypto.randomUUID();
+		webRegistry.set(clientId, {
+			clientId,
+			userId: session.user_id,
+			websocket: ws,
+			lastSeen: new Date(),
+		});
+
+		console.log(`[ws web] Client connected: ${clientId} (user: ${session.user_id})`);
+		send(ws, { type: "connected" });
+
+		startPingCycle(ws);
+		startStatusBroadcast(ws);
+	}
+
 	return {
-		onOpen: async (_event, ws) => {
-			if (!token) {
-				send(ws as unknown as WebSocket, { type: "error", message: "Missing token" });
+		// The session token arrives as the first message ({ type: "auth" })
+		// rather than in the URL, so it never shows up in proxy access logs.
+		onOpen: (_event, ws) => {
+			authTimeoutId = setTimeout(() => {
+				if (clientId) return;
+				send(ws as unknown as WebSocket, {
+					type: "error",
+					message: "Authentication timed out",
+				});
 				ws.close();
-				return;
-			}
-
-			const session = await db.userSession.findUnique({
-				where: { token },
-				include: { user: { select: { deleted_at: true } } },
-			});
-
-			if (!session || new Date() > session.expires_at) {
-				console.warn("[ws web] Connection rejected: invalid or expired token");
-				send(ws as unknown as WebSocket, { type: "error", message: "Invalid or expired token" });
-				ws.close();
-				return;
-			}
-
-			if (session.user.deleted_at) {
-				console.warn(`[ws web] Connection rejected: user ${session.user_id} is deleted`);
-				send(ws as unknown as WebSocket, { type: "error", message: "Account has been deleted" });
-				ws.close();
-				return;
-			}
-
-			clientId = crypto.randomUUID();
-			webRegistry.set(clientId, {
-				clientId,
-				userId: session.user_id,
-				websocket: ws as unknown as WebSocket,
-				lastSeen: new Date(),
-			});
-
-			console.log(`[ws web] Client connected: ${clientId} (user: ${session.user_id})`);
-			send(ws as unknown as WebSocket, { type: "connected" });
-
-			startPingCycle(ws as unknown as WebSocket);
-			startStatusBroadcast(ws as unknown as WebSocket);
+			}, AUTH_TIMEOUT_MS);
 		},
 
 		onMessage: async (event, _ws) => {
-			if (!clientId) return;
-
 			let message: Record<string, unknown>;
 			try {
 				message = JSON.parse(event.data.toString());
 			} catch {
+				return;
+			}
+
+			if (!clientId) {
+				if (message.type === "auth") await authenticate(message.token, _ws);
 				return;
 			}
 
@@ -208,6 +231,7 @@ export default upgradeWebSocket((c) => {
 		},
 
 		onClose: async (_event, _ws) => {
+			if (authTimeoutId) clearTimeout(authTimeoutId);
 			if (pingIntervalId) clearInterval(pingIntervalId);
 			if (statusIntervalId) clearInterval(statusIntervalId);
 			clearPingTimeout();

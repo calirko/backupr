@@ -47,7 +47,12 @@ impl IpcHandle {
     }
 }
 
+/// Trays are one per logged-in user; anything beyond this is a local process
+/// opening connections to exhaust the agent.
+const MAX_IPC_CLIENTS: usize = 16;
+
 pub async fn run_ipc_server(handle: std::sync::Arc<IpcHandle>) {
+    let clients = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let addr = format!("127.0.0.1:{}", IPC_PORT);
 
     // Retry binding - during a self-update the old process may still hold
@@ -90,11 +95,27 @@ pub async fn run_ipc_server(handle: std::sync::Arc<IpcHandle>) {
     loop {
         match listener.accept().await {
             Ok((mut stream, peer)) => {
+                use std::sync::atomic::Ordering;
+                if clients.fetch_add(1, Ordering::SeqCst) >= MAX_IPC_CLIENTS {
+                    clients.fetch_sub(1, Ordering::SeqCst);
+                    eprintln!("[IPC] Too many clients; refusing {}", peer);
+                    continue; // dropping the stream closes it
+                }
                 println!("[IPC] Tray connected ({})", peer);
                 let tx = handle.tx.clone();
                 let initial = handle.current_state();
+                let clients = clients.clone();
 
                 tokio::spawn(async move {
+                    // Released however this task ends
+                    struct Slot(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+                    impl Drop for Slot {
+                        fn drop(&mut self) {
+                            self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                        }
+                    }
+                    let _slot = Slot(clients);
+
                     // Send current state immediately so the tray shows the right status on connect.
                     if let Ok(line) = serde_json::to_string(&IpcMessage::Status { state: initial })
                         && stream.write_all((line + "\n").as_bytes()).await.is_err()

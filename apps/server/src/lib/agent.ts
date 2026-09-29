@@ -20,7 +20,8 @@ export interface AgentToken {
 	sessionId: string;
 }
 
-// Update the generateAgentToken function to include sessionId
+// The IDs are visible in the UI, so the random `secret` is what actually
+// makes the token unguessable. Agents treat the token as opaque.
 export function generateAgentToken({
 	agentName,
 	agentId,
@@ -36,6 +37,9 @@ export function generateAgentToken({
 			agentId,
 			agentName,
 			sessionId,
+			secret: Buffer.from(
+				crypto.getRandomValues(new Uint8Array(32)),
+			).toString("base64url"),
 		}),
 	);
 }

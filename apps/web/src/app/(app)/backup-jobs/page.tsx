@@ -20,6 +20,12 @@ import TestJobDialog from "@/components/dialog/test-job";
 import { Button } from "@/components/ui/button";
 import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
+import {
+	BACKUP_STATUS_LABEL,
+	BACKUP_STATUS_STYLE,
+	type BackupStatus,
+} from "@/lib/backup-status";
+import { formatRelative, Hint, LastSeen, Rate } from "@/lib/health";
 
 export default function BackupJobsPage() {
 	const { filters, orderBy } = useData("backup-jobs");
@@ -65,6 +71,13 @@ export default function BackupJobsPage() {
 			orderable: true,
 			orderByKey: "agent.name",
 		},
+		{
+			key: "is_active",
+			label: "Status",
+			orderable: true,
+			format: (value) =>
+				value ? "Active" : <span className="text-destructive">Inactive</span>,
+		},
 		{ key: "cron", label: "Schedule", orderable: true },
 		{
 			key: "next_run",
@@ -78,23 +91,48 @@ export default function BackupJobsPage() {
 				),
 		},
 		{
+			key: "last_run",
+			label: "Last Run",
+			orderable: false,
+			format: (value) =>
+				value ? (
+					<Hint content={new Date(value.started_at).toLocaleString()}>
+						<span>
+							{formatRelative(value.started_at)}
+							<span className="text-muted-foreground"> · </span>
+							<span style={BACKUP_STATUS_STYLE[value.status as BackupStatus]}>
+								{BACKUP_STATUS_LABEL[value.status as BackupStatus] ??
+									value.status}
+							</span>
+						</span>
+					</Hint>
+				) : (
+					<span className="text-muted-foreground">Never</span>
+				),
+		},
+		{
+			key: "last_success",
+			label: "Last Success",
+			orderable: false,
+			format: (value) => <LastSeen at={value.at} overdue={value.overdue} />,
+		},
+		{
+			key: "success",
+			label: "Success (7d)",
+			orderable: false,
+			format: (value) => <Rate {...value} />,
+		},
+		{
+			key: "completion",
+			label: "Ran on Schedule (7d)",
+			orderable: false,
+			format: (value) => <Rate {...value} />,
+		},
+		{
 			key: "policy",
 			label: "Policy",
 			orderable: false,
 			format: (value) => value ?? "-",
-		},
-		{
-			key: "use_password",
-			label: "Protected",
-			format: (value) =>
-				value ? "Yes" : <span className="text-muted-foreground">No</span>,
-		},
-		{
-			key: "is_active",
-			label: "Status",
-			orderable: true,
-			format: (value) =>
-				value ? "Active" : <span className="text-destructive">Inactive</span>,
 		},
 		{
 			key: "files",
@@ -107,16 +145,10 @@ export default function BackupJobsPage() {
 			},
 		},
 		{
-			key: "created_at",
-			label: "Created",
-			orderable: true,
-			format: (value) => new Date(value).toLocaleString(),
-		},
-		{
-			key: "updated_at",
-			label: "Updated",
-			orderable: true,
-			format: (value) => new Date(value).toLocaleString(),
+			key: "use_password",
+			label: "Protected",
+			format: (value) =>
+				value ? "Yes" : <span className="text-muted-foreground">No</span>,
 		},
 	] as Column[];
 
@@ -276,6 +308,21 @@ export default function BackupJobsPage() {
 						policy_id: item.backupJobPolicies?.[0]?.backup_policy_id ?? null,
 						policy: policyParts.length ? policyParts.join(" · ") : null,
 						next_run,
+						last_run: item.backups?.[0] ?? null,
+						last_success: {
+							at: item.last_success_at,
+							overdue: item.is_stale,
+						},
+						success: {
+							pct: item.success_rate,
+							num: item.completed_7d,
+							den: item.completed_7d + item.failed_7d,
+						},
+						completion: {
+							pct: item.completion_rate,
+							num: Math.min(item.runs_7d, item.expected_runs_7d),
+							den: item.expected_runs_7d,
+						},
 					};
 				});
 				setData({

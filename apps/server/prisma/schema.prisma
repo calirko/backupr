@@ -8,14 +8,17 @@ datasource db {
 }
 
 model User {
-  id         String    @id @default(uuid())
-  name       String?
-  username   String    @unique
-  email      String    @unique
-  password   String
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-  deleted_at DateTime?
+  id                    String    @id @default(uuid())
+  name                  String?
+  username              String    @unique
+  email                 String    @unique
+  password              String
+  receive_emails        Boolean   @default(false)
+  receive_weekly_report Boolean   @default(false)
+  weekly_report_sent_at DateTime? // last weekly report delivered to this user
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  deleted_at            DateTime?
 
   agents         Agent[]
   backupJobs     BackupJob[]
@@ -90,23 +93,25 @@ model AgentSession {
 
 // the job for the backup
 model BackupJob {
-  id                String            @id @default(uuid())
-  name              String
-  cron              String // cron expression for when the backup job should run
-  files             String[] // list of files/directories to backup
-  use_password      Boolean           @default(false) // whether to use a password for the backup
-  password          String? // password for the backup, if use_password is true
-  compression_level Int               @default(9)
-  agent_id          String
-  agent             Agent             @relation(fields: [agent_id], references: [id])
-  is_active         Boolean           @default(true)
-  created_by_id     String
-  created_by        User              @relation(fields: [created_by_id], references: [id])
-  created_at        DateTime          @default(now())
-  updated_at        DateTime          @updatedAt
-  backups           Backup[]
-  backupJobPolicies BackupJobPolicy[]
-  deleted_at        DateTime?
+  id                  String            @id @default(uuid())
+  name                String
+  cron                String // cron expression for when the backup job should run
+  files               String[] // list of files/directories to backup
+  use_password        Boolean           @default(false) // whether to use a password for the backup
+  password            String? // password for the backup, if use_password is true
+  compression_level   Int               @default(9)
+  agent_id            String
+  agent               Agent             @relation(fields: [agent_id], references: [id])
+  is_active           Boolean           @default(true)
+  created_by_id       String
+  created_by          User              @relation(fields: [created_by_id], references: [id])
+  created_at          DateTime          @default(now())
+  updated_at          DateTime          @updatedAt
+  backups             Backup[]
+  backupJobPolicies   BackupJobPolicy[]
+  deleted_at          DateTime?
+  stale_notified_at   DateTime? // last "no successful backup" warning; null = not currently warned
+  failure_notified_at DateTime? // last failure email, used as a cooldown
 
   @@map("backup_jobs")
 }

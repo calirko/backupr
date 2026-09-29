@@ -41,6 +41,14 @@ const content = {
 		editPasswordNote:
 			"Leave the password field empty to keep the current password. Only fill it in if you want to set a new one.",
 		editAction: 'Click "Save" to apply the changes.',
+		notificationsTitle: "Email notifications",
+		notificationsDesc:
+			'Each user has two email options, set in the user dialog (or in Settings → Preferences for your own account). Use "Send test email" in Settings to confirm the server can deliver mail, and "Send report now" to preview the weekly report.',
+		notificationsItems: [
+			"Alerts - a backup fails: one email per job, grouped when a job fails repeatedly within an hour.",
+			"Alerts - a job has no successful backup for 5+ days: a warning listing each agent and job, then a reminder every 2 days until the job succeeds again.",
+			"Weekly report - every Monday morning: backups run, success rate, data backed up, daily activity, agent uptime, job health and storage for the previous week.",
+		],
 		deleteTitle: "Deleting a user",
 		deleteDesc:
 			'Click the delete icon on any row (under the "Dangerous" section of the row menu). A confirmation dialog will appear before the account is permanently removed.',
@@ -71,6 +79,14 @@ const content = {
 		editPasswordNote:
 			"Deixe o campo de senha vazio para manter a senha atual. Preencha apenas se quiser definir uma nova.",
 		editAction: 'Clique em "Salvar" para aplicar as alterações.',
+		notificationsTitle: "Notificações por email",
+		notificationsDesc:
+			'Cada usuário tem duas opções de email, definidas no diálogo do usuário (ou em Configurações → Preferências para a sua conta). Use "Send test email" nas Configurações para confirmar que o servidor consegue enviar emails, e "Send report now" para visualizar o relatório semanal.',
+		notificationsItems: [
+			"Alertas - um backup falha: um email por tarefa, agrupado quando a tarefa falha repetidamente em uma hora.",
+			"Alertas - uma tarefa fica 5+ dias sem backup bem-sucedido: um aviso listando cada agente e tarefa, e depois um lembrete a cada 2 dias até a tarefa voltar a funcionar.",
+			"Relatório semanal - toda segunda de manhã: backups executados, taxa de sucesso, dados copiados, atividade diária, disponibilidade dos agentes, saúde das tarefas e armazenamento da semana anterior.",
+		],
 		deleteTitle: "Excluindo um usuário",
 		deleteDesc:
 			'Clique no ícone de exclusão em qualquer linha (na seção "Perigoso" do menu da linha). Um diálogo de confirmação será exibido antes que a conta seja removida permanentemente.',
@@ -314,6 +330,25 @@ export function ManagingUsersPage({ nextPage, onNext, lang }: Props) {
 					<em>{c.editPasswordNote}</em>
 				</p>
 				<p className="text-sm text-muted-foreground">{c.editAction}</p>
+			</div>
+
+			<hr />
+
+			{/* Notifications */}
+			<div className="flex flex-col gap-3">
+				<div>
+					<h3 className="text-sm font-semibold">{c.notificationsTitle}</h3>
+					<p className="text-sm text-muted-foreground mt-1">
+						{c.notificationsDesc}
+					</p>
+				</div>
+				<ul className="flex flex-col gap-1 list-disc list-inside">
+					{c.notificationsItems.map((item) => (
+						<li key={item} className="text-sm text-muted-foreground">
+							{item}
+						</li>
+					))}
+				</ul>
 			</div>
 
 			<hr />

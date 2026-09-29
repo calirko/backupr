@@ -13,9 +13,23 @@ export interface TokenPayload {
 	[key: string]: unknown;
 }
 
+const DEFAULT_SECRET = "your-secret-key-change-in-production";
+
+// A missing or default secret lets anyone forge tokens, so never run like that in production
+if (
+	process.env.NODE_ENV === "production" &&
+	(!process.env.JWT_SECRET || process.env.JWT_SECRET === DEFAULT_SECRET)
+) {
+	throw new Error("JWT_SECRET must be set to a random value in production");
+}
+if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+	console.warn(
+		"JWT_SECRET is shorter than 32 characters; use a long random value (e.g. `openssl rand -hex 32`).",
+	);
+}
+
 export class Token {
-	private static readonly SECRET_KEY =
-		process.env.JWT_SECRET || "your-secret-key-change-in-production";
+	private static readonly SECRET_KEY = process.env.JWT_SECRET || DEFAULT_SECRET;
 	private static readonly EXPIRATION_HOURS = Number(
 		process.env.JWT_EXPIRATION || "24",
 	);
@@ -36,10 +50,7 @@ export class Token {
 		if (!payload || typeof payload !== "object") {
 			throw new Error("Payload must be a non-empty object");
 		}
-		if (
-			!this.SECRET_KEY ||
-			this.SECRET_KEY === "your-secret-key-change-in-production"
-		) {
+		if (this.SECRET_KEY === DEFAULT_SECRET) {
 			console.warn(
 				"JWT_SECRET is not set or using default value. Please set JWT_SECRET environment variable in production.",
 			);

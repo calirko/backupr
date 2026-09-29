@@ -442,7 +442,16 @@ async fn stage_files(
         match tokio::fs::metadata(src_path).await {
             Ok(meta) => {
                 let result = if meta.is_dir() {
-                    copy_dir_all(src_path, &dest).await
+                    copy_dir_all(src_path, &dest).await.map(|skipped| {
+                        if skipped > 0 {
+                            eprintln!(
+                                "[Backup] {} entr{} under {} could not be read and were skipped",
+                                skipped,
+                                if skipped == 1 { "y" } else { "ies" },
+                                src
+                            );
+                        }
+                    })
                 } else {
                     tokio::fs::copy(src_path, &dest)
                         .await
@@ -481,22 +490,78 @@ async fn stage_files(
     Ok(staged)
 }
 
-async fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
+/// Copies the tree at `src` into `dst` and returns how many entries were
+/// skipped. Unreadable entries (locked files, permission errors) are logged and
+/// skipped rather than abandoning the whole tree: one locked file must not drop
+/// an entire directory from the backup. Symlinked directories are skipped too,
+/// since following them can loop forever or escape the selected folder.
+async fn copy_dir_all(src: &Path, dst: &Path) -> Result<u64> {
     tokio::fs::create_dir_all(dst).await?;
-    let mut entries = tokio::fs::read_dir(src).await?;
+    // The root must be readable; below it, failures are per entry.
+    let mut pending = vec![(tokio::fs::read_dir(src).await?, dst.to_path_buf())];
+    let mut skipped = 0u64;
 
-    while let Some(entry) = entries.next_entry().await? {
-        let file_type = entry.file_type().await?;
-        let dest_path = dst.join(entry.file_name());
+    while let Some((mut entries, dst_dir)) = pending.pop() {
+        loop {
+            let entry = match entries.next_entry().await {
+                Ok(Some(entry)) => entry,
+                Ok(None) => break,
+                Err(e) => {
+                    eprintln!("[Backup] Skipping rest of a directory under {}: {}", dst_dir.display(), e);
+                    skipped += 1;
+                    break;
+                }
+            };
+            let src_path = entry.path();
+            let dest_path = dst_dir.join(entry.file_name());
 
-        if file_type.is_dir() {
-            Box::pin(copy_dir_all(&entry.path(), &dest_path)).await?;
-        } else {
-            tokio::fs::copy(entry.path(), &dest_path).await?;
+            let file_type = match entry.file_type().await {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("[Backup] Skipping {}: {}", src_path.display(), e);
+                    skipped += 1;
+                    continue;
+                }
+            };
+
+            if file_type.is_dir() {
+                let sub = match tokio::fs::create_dir_all(&dest_path).await {
+                    Ok(()) => tokio::fs::read_dir(&src_path).await,
+                    Err(e) => Err(e),
+                };
+                match sub {
+                    Ok(sub_entries) => pending.push((sub_entries, dest_path)),
+                    Err(e) => {
+                        eprintln!("[Backup] Skipping directory {}: {}", src_path.display(), e);
+                        skipped += 1;
+                    }
+                }
+                continue;
+            }
+
+            if file_type.is_symlink() {
+                let points_to_file = tokio::fs::metadata(&src_path)
+                    .await
+                    .map(|m| m.is_file())
+                    .unwrap_or(false);
+                if !points_to_file {
+                    eprintln!(
+                        "[Backup] Skipping symlink {} (not a regular file)",
+                        src_path.display()
+                    );
+                    skipped += 1;
+                    continue;
+                }
+            }
+
+            if let Err(e) = tokio::fs::copy(&src_path, &dest_path).await {
+                eprintln!("[Backup] Skipping {}: {}", src_path.display(), e);
+                skipped += 1;
+            }
         }
     }
 
-    Ok(())
+    Ok(skipped)
 }
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
@@ -523,11 +588,19 @@ async fn upload_backup_archive(
         format_bytes(file_size)
     );
 
-    let client = reqwest::Client::new();
+    // No overall timeout (a large upload can legitimately take hours), but a
+    // dead server or network must not hang the job - and with it the whole
+    // queue - forever.
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .tcp_keepalive(std::time::Duration::from_secs(60))
+        .build()?;
+    let api_timeout = std::time::Duration::from_secs(60);
 
     // Step 1: get presigned PUT URL from the server
     let prepare_resp = client
         .post(format!("{}/api/agent/upload/prepare", server_url))
+        .timeout(api_timeout)
         .header("Authorization", format!("Bearer {}", agent_token))
         .json(&serde_json::json!({
             "backup_job_id": job_id,
@@ -653,6 +726,7 @@ async fn upload_backup_archive(
     // Step 3: tell the server the upload is done so it records it as COMPLETED
     let complete_resp = client
         .post(format!("{}/api/agent/upload/complete", server_url))
+        .timeout(api_timeout)
         .header("Authorization", format!("Bearer {}", agent_token))
         .json(&serde_json::json!({
             "backup_id": confirmed_backup_id,
@@ -677,10 +751,6 @@ async fn upload_backup_archive(
 }
 
 // ─── Cleanup ──────────────────────────────────────────────────────────────────
-
-fn safe_delete_file(path: &Path) {
-    std::fs::remove_file(path).ok();
-}
 
 fn safe_delete_dir(path: &Path) {
     std::fs::remove_dir_all(path).ok();
@@ -796,6 +866,45 @@ pub fn read_stale_lockfile() -> Option<LockfileData> {
     serde_json::from_str(&raw).ok()
 }
 
+// ─── Work directory ───────────────────────────────────────────────────────────
+
+/// Creates a fresh, randomly named directory for one backup's staged copies
+/// and archive. The temp dir is shared (e.g. /tmp), and the agent usually runs
+/// as root/SYSTEM: a predictable path would let another local user pre-create
+/// it to read the staged files, or plant a symlink where the archive is
+/// written. `create_dir` (not `_all`) fails if the path already exists.
+fn create_private_work_dir(backup_id: &str) -> Result<PathBuf> {
+    // The id comes from the server; keep it to a safe, short file name part.
+    let safe_id: String = backup_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+        .take(64)
+        .collect();
+    let base = std::env::temp_dir();
+
+    for _ in 0..8 {
+        let dir = base.join(format!("backupr_{}_{:016x}", safe_id, rand::random::<u64>()));
+        let mut builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        match builder.create(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "Cannot create work directory in {}: {}",
+                    base.display(),
+                    e
+                ));
+            }
+        }
+    }
+    Err(anyhow::anyhow!("Cannot create a unique work directory in {}", base.display()))
+}
+
 // ─── Public Entry Point ───────────────────────────────────────────────────────
 
 /// Returns the compressed archive size in bytes on success.
@@ -803,23 +912,9 @@ pub async fn run_backup_job(
     job: &crate::BackupJobState,
     progress_tx: tokio::sync::mpsc::Sender<String>,
 ) -> Result<u64> {
-    let tmp_base = std::env::temp_dir().join(format!(
-        "backupr_{}_{}",
-        job.id,
-        chrono::Utc::now().timestamp_millis()
-    ));
-
-    let stage_dir = {
-        let mut p = tmp_base.clone();
-        p.set_extension("stage");
-        p
-    };
-
-    let archive_path = {
-        let mut p = tmp_base.clone();
-        p.set_extension("7z");
-        p
-    };
+    let work_dir = create_private_work_dir(&job.id)?;
+    let stage_dir = work_dir.join("stage");
+    let archive_path = work_dir.join("backup.7z");
 
     write_lockfile(&job.id, &job.job_id);
     println!("[Backup] Lockfile written for backup {}", job.id);
@@ -888,9 +983,55 @@ pub async fn run_backup_job(
     .await;
 
     // Always clean up
-    safe_delete_dir(&stage_dir);
-    safe_delete_file(&archive_path);
+    safe_delete_dir(&work_dir);
     remove_lockfile();
 
     result
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[tokio::test]
+    async fn copy_skips_unreadable_files_and_symlink_loops() {
+        let root = create_private_work_dir("test").unwrap();
+        let src = root.join("src");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        std::fs::write(src.join("ok.txt"), "ok").unwrap();
+        std::fs::write(src.join("sub/nested.txt"), "nested").unwrap();
+        std::fs::write(src.join("locked.txt"), "secret").unwrap();
+        std::fs::set_permissions(src.join("locked.txt"), std::fs::Permissions::from_mode(0o000))
+            .unwrap();
+        std::os::unix::fs::symlink(&src, src.join("sub/loop")).unwrap();
+        std::os::unix::fs::symlink(src.join("ok.txt"), src.join("link.txt")).unwrap();
+
+        let dst = root.join("dst");
+        let skipped = copy_dir_all(&src, &dst).await.unwrap();
+
+        assert_eq!(std::fs::read_to_string(dst.join("ok.txt")).unwrap(), "ok");
+        assert_eq!(std::fs::read_to_string(dst.join("sub/nested.txt")).unwrap(), "nested");
+        assert_eq!(std::fs::read_to_string(dst.join("link.txt")).unwrap(), "ok");
+        assert!(!dst.join("sub/loop").exists(), "directory symlink must not be followed");
+        // loop symlink always skipped; the locked file too unless running as root
+        let running_as_root = std::fs::read(src.join("locked.txt")).is_ok();
+        assert_eq!(skipped, if running_as_root { 1 } else { 2 });
+
+        std::fs::set_permissions(src.join("locked.txt"), std::fs::Permissions::from_mode(0o600))
+            .unwrap();
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn work_dir_is_private_and_unique() {
+        let a = create_private_work_dir("../../etc/evil").unwrap();
+        let b = create_private_work_dir("../../etc/evil").unwrap();
+        assert_ne!(a, b);
+        assert_eq!(a.parent().unwrap(), std::env::temp_dir());
+        let mode = std::fs::metadata(&a).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
+        std::fs::remove_dir(&a).unwrap();
+        std::fs::remove_dir(&b).unwrap();
+    }
 }

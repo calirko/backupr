@@ -40,6 +40,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useDialog } from "@/hooks/use-dialog";
 import type { AgentStatus } from "@/hooks/use-socket";
 import { useSocket } from "@/hooks/use-socket";
+import { AgentVersion, Count, Hint, LastSeen } from "@/lib/health";
 import {
 	BACKUP_STATUS_LABEL,
 	BACKUP_STATUS_STYLE,
@@ -52,7 +53,11 @@ interface Agent {
 	is_active: boolean;
 	total_size_bytes: number;
 	last_backup_at: string | null;
-	created_by: { name: string } | null;
+	active_jobs: number;
+	stale_jobs: number;
+	failed_7d: number;
+	agent_version: string | null;
+	update_available: boolean;
 }
 
 interface BackupRecord {
@@ -98,17 +103,6 @@ function getAgentStatus(
 	if (status.jobQueue && status.jobQueue.length > 0) return "queued";
 	if (status.status === "connected") return "connected";
 	return "unknown";
-}
-
-function formatRelative(dateStr: string | null | undefined): string {
-	if (!dateStr) return "Never";
-	const diff = Date.now() - new Date(dateStr).getTime();
-	const mins = Math.floor(diff / 60000);
-	if (mins < 1) return "Just now";
-	if (mins < 60) return `${mins}m ago`;
-	const hours = Math.floor(mins / 60);
-	if (hours < 24) return `${hours}h ago`;
-	return `${Math.floor(hours / 24)}d ago`;
 }
 
 function formatBytes(bytes: number): string {
@@ -174,22 +168,48 @@ function AgentCard({ agent, status, onNavigate }: AgentCardProps) {
 					</div>
 					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
 						<span className="text-xs text-muted-foreground shrink-0">
-							Last Backup
+							Last Success
 						</span>
 						<span className="text-xs text-right">
-							{formatRelative(agent.last_backup_at)}
+							<LastSeen
+								at={agent.last_backup_at}
+								overdue={agent.stale_jobs > 0}
+							/>
 						</span>
 					</div>
-					{agent.created_by && (
-						<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
-							<span className="text-xs text-muted-foreground shrink-0">
-								Created By
-							</span>
-							<span className="text-xs text-right truncate max-w-32">
-								{agent.created_by.name}
-							</span>
-						</div>
-					)}
+					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+						<span className="text-xs text-muted-foreground shrink-0">
+							Failed (7d)
+						</span>
+						<span className="text-xs text-right">
+							<Count value={agent.failed_7d} />
+						</span>
+					</div>
+					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+						<span className="text-xs text-muted-foreground shrink-0">
+							Version
+						</span>
+						<span className="text-xs text-right">
+							<AgentVersion
+								version={agent.agent_version}
+								updateAvailable={agent.update_available}
+							/>
+						</span>
+					</div>
+					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
+						<span className="text-xs text-muted-foreground shrink-0">
+							Active Jobs
+						</span>
+						<span className="text-xs text-right">
+							{agent.active_jobs}
+							{agent.stale_jobs > 0 && (
+								<span className="text-destructive">
+									{" "}
+									· {agent.stale_jobs} stale
+								</span>
+							)}
+						</span>
+					</div>
 				</div>
 			</CardContent>
 			<CardFooter>
@@ -233,13 +253,35 @@ function AgentRow({ agent, status, onNavigate }: AgentRowProps) {
 				{formatBytes(agent.total_size_bytes)}
 			</span>
 			<span className="text-xs shrink-0 w-16 text-right text-muted-foreground">
-				{formatRelative(agent.last_backup_at)}
+				<AgentVersion
+					version={agent.agent_version}
+					updateAvailable={agent.update_available}
+				/>
 			</span>
-			{agent.created_by && (
-				<span className="text-xs shrink-0 w-28 text-right text-muted-foreground truncate">
-					{agent.created_by.name}
+			<Hint content="Failed backups in the last 7 days">
+				<span className="text-xs shrink-0 w-24 text-right text-muted-foreground">
+					<Count value={agent.failed_7d} label="failed" />
+					{!agent.failed_7d && " failed"}
 				</span>
-			)}
+			</Hint>
+			<Hint content="Active jobs">
+				<span className="text-xs shrink-0 w-20 text-right text-muted-foreground">
+					{agent.stale_jobs > 0 ? (
+						<span className="text-destructive">
+							{agent.stale_jobs}/{agent.active_jobs} stale
+						</span>
+					) : (
+						`${agent.active_jobs} jobs`
+					)}
+				</span>
+			</Hint>
+			<span className="text-xs shrink-0 w-16 text-right text-muted-foreground">
+				<LastSeen
+					label="Last successful backup"
+					at={agent.last_backup_at}
+					overdue={agent.stale_jobs > 0}
+				/>
+			</span>
 			<Button
 				variant="outline"
 				size="sm"

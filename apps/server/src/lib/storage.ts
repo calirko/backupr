@@ -126,7 +126,6 @@ export async function getMinIOFreeBytes(): Promise<bigint | null> {
 			Disks?: Array<{ availspace?: number }>;
 		};
 
-		console.log(data);
 
 		const disks = data.Disks;
 		if (!disks?.length) return null;
@@ -135,10 +134,9 @@ export async function getMinIOFreeBytes(): Promise<bigint | null> {
 		for (const disk of disks) {
 			totalAvail += BigInt(disk.availspace ?? 0);
 		}
-		console.log(totalAvail);
 		return totalAvail > 0n ? totalAvail : null;
 	} catch (e) {
-		console.log(e);
+		console.error("[storage] Failed to read MinIO storage info:", e);
 		return null;
 	}
 }

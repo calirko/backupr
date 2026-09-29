@@ -1,6 +1,7 @@
 import { BackupStatus } from "../prisma/generated/prisma/enums";
 import { prisma } from "./lib/prisma";
 import { presignedDownloadUrl } from "./lib/storage";
+import { clearStaleNotice, notifyBackupsFailed } from "./notifications";
 import { agentRegistry } from "./ws.agent";
 
 const db = prisma;
@@ -82,6 +83,7 @@ export async function sendStartBackupCommand(jobId: string): Promise<void> {
 				completed_at: new Date(),
 			},
 		});
+		notifyBackupsFailed([backup.id]);
 		throw error;
 	}
 }
@@ -99,6 +101,8 @@ export async function handleBackupStatusUpdate(
 		blob_key?: string;
 		url?: string;
 	},
+	/** When set, the update is rejected unless the backup belongs to this agent. */
+	agentId?: string,
 ): Promise<void> {
 	const backup = await db.backup.findUnique({
 		where: { id: backupId },
@@ -108,6 +112,23 @@ export async function handleBackupStatusUpdate(
 	if (!backup) {
 		console.warn(`[Backup] Backup record ${backupId} not found`);
 		return;
+	}
+
+	if (agentId !== undefined && backup.backup_job.agent_id !== agentId) {
+		console.warn(
+			`[Backup] Agent ${agentId} tried to update backup ${backupId} it doesn't own`,
+		);
+		return;
+	}
+
+	// Object keys are always <agent>/<job>/<backup>; reject anything else so an
+	// agent can't point a backup at someone else's blob.
+	const expectedKey = `${backup.backup_job.agent_id}/${backup.backup_job_id}/${backup.id}`;
+	if (metadata?.blob_key !== undefined && metadata.blob_key !== expectedKey) {
+		console.warn(
+			`[Backup] Ignoring unexpected blob_key for backup ${backupId}: ${metadata.blob_key}`,
+		);
+		metadata = { ...metadata, blob_key: undefined };
 	}
 
 	// Build update data, only including non-undefined values
@@ -133,12 +154,22 @@ export async function handleBackupStatusUpdate(
 	// Generate a proper presigned URL server-side so the filename is set correctly
 	if (status === BackupStatus.COMPLETED && metadata?.blob_key) {
 		const dateStr = new Date().toISOString().slice(0, 16).replace(/:/g, "-");
-		const safeName = backup.backup_job.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+		const safeName = backup.backup_job.name
+			.toLowerCase()
+			.replace(/\s+/g, "_")
+			.replace(/[^a-z0-9_]/g, "");
 		const filename = `${safeName}_${dateStr}.7z`;
 		try {
-			updateData.url = await presignedDownloadUrl(metadata.blob_key, undefined, filename);
+			updateData.url = await presignedDownloadUrl(
+				metadata.blob_key,
+				undefined,
+				filename,
+			);
 		} catch (err) {
-			console.error(`[Backup] Failed to generate presigned URL for ${backupId}:`, err);
+			console.error(
+				`[Backup] Failed to generate presigned URL for ${backupId}:`,
+				err,
+			);
 		}
 	}
 
@@ -148,6 +179,18 @@ export async function handleBackupStatusUpdate(
 	});
 
 	console.log(`[Backup] Updated backup ${backupId} status to ${status}`);
+
+	if (status === BackupStatus.FAILED) {
+		notifyBackupsFailed([backupId]);
+	}
+	if (status === BackupStatus.COMPLETED) {
+		clearStaleNotice(backup.backup_job_id).catch((err) =>
+			console.error(
+				`[Backup] Failed to clear stale notice for job ${backup.backup_job_id}:`,
+				err,
+			),
+		);
+	}
 
 	// If completed, run the retention policy
 	if (status === BackupStatus.COMPLETED) {
@@ -346,6 +389,7 @@ export async function initBackup(
 				completed_at: new Date(),
 			},
 		});
+		notifyBackupsFailed([backup.id]);
 
 		throw new Error(
 			`Failed to send backup command: ${error instanceof Error ? error.message : String(error)}`,

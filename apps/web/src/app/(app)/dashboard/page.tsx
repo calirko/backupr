@@ -9,7 +9,15 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
+import {
+	Bar,
+	BarChart,
+	CartesianGrid,
+	Label,
+	Pie,
+	PieChart,
+	XAxis,
+} from "recharts";
 import { toast } from "sonner";
 import FailedBackupsDialog from "@/components/dialog/failed-backups";
 import WikiDialog from "@/components/dialog/wiki/wiki";
@@ -61,6 +69,8 @@ interface DashboardData {
 	backups_by_day: Array<{
 		day: string;
 		count: number;
+		completed: number;
+		failed: number;
 		size_bytes: number;
 	}>;
 	storage_by_job: Array<{
@@ -106,33 +116,27 @@ function getLast7Days(): string[] {
 }
 
 const backupDayChartConfig = {
-	count: {
-		label: "Backups",
-		color: "var(--primary)",
+	completed: {
+		label: "Completed",
+		color: "var(--greenish)",
+	},
+	failed: {
+		label: "Failed",
+		color: "var(--destructive)",
 	},
 } satisfies ChartConfig;
 
-function BackupDayChart({ data }: { data: { day: string; count: number }[] }) {
+function BackupDayChart({
+	data,
+}: {
+	data: { day: string; completed: number; failed: number }[];
+}) {
 	return (
 		<ChartContainer
 			config={backupDayChartConfig}
 			className="h-full w-full min-h-[200px]"
 		>
-			<AreaChart accessibilityLayer data={data}>
-				<defs>
-					<linearGradient id="fillCount" x1="0" y1="0" x2="0" y2="1">
-						<stop
-							offset="5%"
-							stopColor="var(--color-count)"
-							stopOpacity={0.4}
-						/>
-						<stop
-							offset="95%"
-							stopColor="var(--color-count)"
-							stopOpacity={0.05}
-						/>
-					</linearGradient>
-				</defs>
+			<BarChart accessibilityLayer data={data}>
 				<CartesianGrid vertical={false} />
 				<XAxis
 					dataKey="day"
@@ -162,14 +166,105 @@ function BackupDayChart({ data }: { data: { day: string; count: number }[] }) {
 						/>
 					}
 				/>
-				<Area
-					dataKey="count"
-					type="natural"
-					fill="url(#fillCount)"
-					stroke="var(--color-count)"
-					strokeWidth={2}
+				<Bar
+					dataKey="completed"
+					stackId="a"
+					fill="var(--color-completed)"
+					radius={[0, 0, 2, 2]}
 				/>
-			</AreaChart>
+				<Bar
+					dataKey="failed"
+					stackId="a"
+					fill="var(--color-failed)"
+					radius={[2, 2, 0, 0]}
+				/>
+			</BarChart>
+		</ChartContainer>
+	);
+}
+
+const backupHealthChartConfig = {
+	COMPLETED: { label: "Completed", color: "var(--greenish)" },
+	FAILED: { label: "Failed", color: "var(--destructive)" },
+	IN_PROGRESS: { label: "In Progress", color: "var(--blueish)" },
+	PENDING: { label: "Pending", color: "var(--muted-foreground)" },
+} satisfies ChartConfig;
+
+function BackupHealthChart({
+	data,
+	successRate,
+}: {
+	data: { status: keyof typeof backupHealthChartConfig; count: number }[];
+	successRate: number | null;
+}) {
+	const chartData = data.map((d) => ({
+		...d,
+		fill: `var(--color-${d.status})`,
+	}));
+	const rateColor =
+		successRate !== null && successRate >= 80
+			? "var(--greenish)"
+			: successRate !== null && successRate >= 50
+				? "var(--yellowish)"
+				: successRate !== null
+					? "var(--destructive)"
+					: "var(--muted-foreground)";
+
+	return (
+		<ChartContainer
+			config={backupHealthChartConfig}
+			className="aspect-square h-[140px] shrink-0"
+		>
+			<PieChart>
+				<ChartTooltip
+					cursor={false}
+					content={<ChartTooltipContent nameKey="status" hideLabel />}
+				/>
+				<Pie
+					data={
+						chartData.length > 0
+							? chartData
+							: [{ status: "PENDING", count: 1, fill: "var(--muted)" }]
+					}
+					dataKey="count"
+					nameKey="status"
+					innerRadius={46}
+					outerRadius={66}
+					paddingAngle={chartData.length > 1 ? 3 : 0}
+					strokeWidth={0}
+				>
+					<Label
+						content={({ viewBox }) => {
+							if (!viewBox || !("cx" in viewBox) || !("cy" in viewBox))
+								return null;
+							return (
+								<text
+									x={viewBox.cx}
+									y={viewBox.cy}
+									textAnchor="middle"
+									dominantBaseline="middle"
+								>
+									<tspan
+										x={viewBox.cx}
+										y={viewBox.cy}
+										className="text-2xl font-heading"
+										style={{ fill: rateColor }}
+									>
+										{successRate !== null ? `${successRate}%` : "-"}
+									</tspan>
+									<tspan
+										x={viewBox.cx}
+										y={(viewBox.cy ?? 0) + 18}
+										className="fill-muted-foreground text-[10px]"
+									>
+										success
+									</tspan>
+								</text>
+							);
+						}}
+					/>
+				</Pie>
+			</PieChart>
 		</ChartContainer>
 	);
 }
@@ -270,7 +365,11 @@ export default function DashboardPage() {
 		const days = getLast7Days();
 		return days.map((day) => {
 			const found = data?.backups_by_day.find((d) => d.day === day);
-			return { day, count: found?.count ?? 0 };
+			return {
+				day,
+				completed: found?.completed ?? 0,
+				failed: found?.failed ?? 0,
+			};
 		});
 	}, [data?.backups_by_day]);
 
@@ -406,7 +505,7 @@ export default function DashboardPage() {
 						<CardHeader>
 							<CardTitle>Backup Activity</CardTitle>
 							<CardDescription>
-								Daily backup count · last 7 days
+								Completed vs failed per day · last 7 days
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="h-full">
@@ -472,41 +571,23 @@ export default function DashboardPage() {
 							<CardDescription>Based on the last 10 backups</CardDescription>
 						</CardHeader>
 						<CardContent className="flex items-center gap-8">
-							<div className="shrink-0">
-								<h2
-									style={{
-										color:
-											successRate !== null && successRate >= 80
-												? "var(--greenish)"
-												: successRate !== null && successRate >= 50
-													? "var(--yellowish)"
-													: undefined,
-									}}
-									className={`text-4xl font-heading ${
-										successRate === null && "text-muted-foreground"
-									}`}
-								>
-									{successRate !== null ? `${successRate}%` : "-"}
-								</h2>
-								<p className="text-xs text-muted-foreground">success rate</p>
-							</div>
-							<div className="flex flex-col gap-1.5">
+							<BackupHealthChart
+								data={statusBreakdown}
+								successRate={successRate}
+							/>
+							<div className="flex flex-col gap-2">
 								{statusBreakdown.map(({ status, count }) => (
 									<div key={status} className="flex items-center gap-2 text-xs">
-										<Badge
-											variant={
-												BACKUP_STATUS_BADGE_VARIANT[
-													status as keyof typeof BACKUP_STATUS_BADGE_VARIANT
-												]
-											}
-										>
-											{
-												BACKUP_STATUS_LABEL[
-													status as keyof typeof BACKUP_STATUS_LABEL
-												]
-											}
-										</Badge>
-										<span className="font-medium">{count}</span>
+										<span
+											className="size-2.5 rounded-full shrink-0"
+											style={{
+												background: backupHealthChartConfig[status].color,
+											}}
+										/>
+										<span className="text-muted-foreground">
+											{BACKUP_STATUS_LABEL[status]}
+										</span>
+										<span className="font-medium tabular-nums">{count}</span>
 									</div>
 								))}
 								{statusBreakdown.length === 0 && (

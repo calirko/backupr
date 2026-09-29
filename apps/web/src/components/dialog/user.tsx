@@ -1,8 +1,10 @@
 import { FloppyDiskIcon, PlusIcon, XSquareIcon } from "@phosphor-icons/react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NoticeCard } from "../notice-card";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import {
 	Dialog,
 	DialogClose,
@@ -38,6 +40,8 @@ export default function UserDialog({
 		name: string;
 		username: string;
 		email: string;
+		receive_emails?: boolean;
+		receive_weekly_report?: boolean;
 	};
 	userId?: string;
 	readonly?: boolean;
@@ -45,6 +49,12 @@ export default function UserDialog({
 	onConfirm: () => void;
 }): React.JSX.Element {
 	const isMobile = useIsMobile();
+	const [receiveEmails, setReceiveEmails] = useState(
+		defaultData?.receive_emails === true,
+	);
+	const [receiveWeeklyReport, setReceiveWeeklyReport] = useState(
+		defaultData?.receive_weekly_report === true,
+	);
 
 	async function updateUser({
 		name,
@@ -56,8 +66,18 @@ export default function UserDialog({
 		password?: string;
 	}) {
 		try {
-			const updateData: { name: string; username: string; password?: string } =
-				{ name, username };
+			const updateData: {
+				name: string;
+				username: string;
+				password?: string;
+				receive_emails: boolean;
+				receive_weekly_report: boolean;
+			} = {
+				name,
+				username,
+				receive_emails: receiveEmails,
+				receive_weekly_report: receiveWeeklyReport,
+			};
 			if (password) {
 				updateData.password = password;
 			}
@@ -105,7 +125,14 @@ export default function UserDialog({
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${localStorage.getItem("token")}`,
 				},
-				body: JSON.stringify({ name, username, email, password }),
+				body: JSON.stringify({
+					name,
+					username,
+					email,
+					password,
+					receive_emails: receiveEmails,
+					receive_weekly_report: receiveWeeklyReport,
+				}),
 			});
 			if (!response.ok) {
 				const error = await response.json();
@@ -190,13 +217,51 @@ export default function UserDialog({
 					disabled={readonly}
 				/>
 			</div>
+			<div className="space-y-2">
+				<Label>Emails</Label>
+				<div className="space-y-1">
+					<div className="flex items-center gap-2">
+						<Checkbox
+							id="receive_emails"
+							checked={receiveEmails}
+							onCheckedChange={(v) => setReceiveEmails(v === true)}
+							disabled={readonly}
+							className="mb-0"
+						/>
+						<Label htmlFor="receive_emails" className="cursor-pointer">
+							Alerts
+						</Label>
+					</div>
+					<p className="text-xs text-muted-foreground">
+						Failed backups and jobs without a successful backup in 5+ days.
+					</p>
+				</div>
+				<div className="space-y-1">
+					<div className="flex items-center gap-2">
+						<Checkbox
+							id="receive_weekly_report"
+							checked={receiveWeeklyReport}
+							onCheckedChange={(v) => setReceiveWeeklyReport(v === true)}
+							disabled={readonly}
+							className="mb-0"
+						/>
+						<Label htmlFor="receive_weekly_report" className="cursor-pointer">
+							Weekly report
+						</Label>
+					</div>
+					<p className="text-xs text-muted-foreground">
+						A summary of the week's backups, agents and storage every Monday.
+					</p>
+				</div>
+			</div>
 			{!readonly && !userId && (
 				<div className="space-y-1.5">
 					<Label required>Password</Label>
 					<InputPassword
-						placeholder="Password"
+						placeholder="Password (min. 8 characters)"
 						name="password"
 						type="password"
+						minLength={8}
 						required={!userId}
 					/>
 				</div>
@@ -209,6 +274,7 @@ export default function UserDialog({
 							placeholder="Leave empty to keep current password"
 							name="password"
 							type="password"
+							minLength={8}
 						/>
 					</div>
 					<NoticeCard>
