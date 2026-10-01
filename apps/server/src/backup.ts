@@ -1,7 +1,11 @@
 import { BackupStatus } from "../prisma/generated/prisma/enums";
 import { prisma } from "./lib/prisma";
 import { presignedDownloadUrl } from "./lib/storage";
-import { clearStaleNotice, notifyBackupsFailed } from "./notifications";
+import {
+	clearStaleNotice,
+	notifyBackupResults,
+	notifyBackupsFailed,
+} from "./notifications";
 import { agentRegistry } from "./ws.agent";
 
 const db = prisma;
@@ -20,7 +24,11 @@ interface BackupJobPayload {
  * Sends a backup command to the specified agent via WebSocket.
  * The agent must be online for this to succeed.
  */
-export async function sendStartBackupCommand(jobId: string): Promise<void> {
+export async function sendStartBackupCommand(
+	jobId: string,
+	/** User who started it on demand; they get notified of the result. */
+	triggeredById?: string,
+): Promise<void> {
 	// 1. Fetch the job details
 	const job = await db.backupJob.findFirst({
 		where: { id: jobId, deleted_at: null },
@@ -46,6 +54,7 @@ export async function sendStartBackupCommand(jobId: string): Promise<void> {
 			status: BackupStatus.PENDING,
 			requires_password: job.use_password,
 			started_at: new Date(),
+			triggered_by_id: triggeredById,
 		},
 	});
 
@@ -184,6 +193,7 @@ export async function handleBackupStatusUpdate(
 		notifyBackupsFailed([backupId]);
 	}
 	if (status === BackupStatus.COMPLETED) {
+		notifyBackupResults([backupId]);
 		clearStaleNotice(backup.backup_job_id).catch((err) =>
 			console.error(
 				`[Backup] Failed to clear stale notice for job ${backup.backup_job_id}:`,
@@ -313,6 +323,7 @@ export async function initBackup(
 	options?: {
 		force?: boolean; // If true, allow backup even if job is inactive
 	},
+	triggeredById?: string,
 ): Promise<{ backupId: string; jobId: string }> {
 	// Validate the job exists
 	const job = await db.backupJob.findFirst({
@@ -347,6 +358,7 @@ export async function initBackup(
 			status: BackupStatus.PENDING,
 			requires_password: job.use_password,
 			started_at: new Date(),
+			triggered_by_id: triggeredById,
 		},
 	});
 

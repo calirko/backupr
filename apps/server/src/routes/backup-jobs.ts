@@ -315,7 +315,7 @@ export default async function backupJobRoutes(app: Hono) {
 		const id = param(c, "id");
 
 		try {
-			const result = await initBackup(id);
+			const result = await initBackup(id, undefined, c.get("user").id);
 			return c.json(
 				{
 					message: "Backup initiated",

@@ -605,10 +605,20 @@ impl BackuprAgent {
             }
             ServerMessage::Error { message } => {
                 if message == "Invalid token" {
-                    eprintln!(
-                        "[Agent] The token was invalidated. Clearing config and shutting down."
-                    );
-                    ConfigManager::clear().await?;
+                    // Re-running `agent setup` while the service is up revokes the
+                    // token we hold in memory, but the file already has the new one.
+                    // Leave it alone and exit so the service restarts with it.
+                    let on_disk = ConfigManager::load().await.ok().and_then(|c| c.agent_token);
+                    if on_disk.is_some() && on_disk != config.agent_token {
+                        eprintln!(
+                            "[Agent] The token was replaced by a new pairing. Restarting with the new config."
+                        );
+                    } else {
+                        eprintln!(
+                            "[Agent] The token was invalidated. Clearing config and shutting down."
+                        );
+                        ConfigManager::clear().await?;
+                    }
                     std::process::exit(1);
                 } else {
                     eprintln!("[Agent] Unknown error message: {}", message);

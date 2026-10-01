@@ -1,3 +1,8 @@
+import { ClipboardIcon, KeyIcon, XSquareIcon } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { NoticeCard } from "../notice-card";
 import { Button } from "../ui/button";
 import {
 	Dialog,
@@ -8,7 +13,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "../ui/dialog";
-import { useIsMobile } from "@/hooks/use-mobile";
 import {
 	Drawer,
 	DrawerClose,
@@ -18,11 +22,14 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "../ui/drawer";
-import { ClipboardIcon, XSquareIcon } from "@phosphor-icons/react";
-import { Textarea } from "../ui/textarea";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Spinner } from "../ui/spinner";
+import { Textarea } from "../ui/textarea";
+
+interface PairedSession {
+	id: string;
+	last_seen_at: string;
+	info: { hostname?: string } | null;
+}
 
 export default function AgentCodeDialog({
 	open,
@@ -39,7 +46,37 @@ export default function AgentCodeDialog({
 		expiresAt: new Date(),
 	});
 	const [loading, setLoading] = useState(true);
+	// Machines already paired with this agent. Pairing a new one revokes them,
+	// so the code is only fetched after the user acknowledges that.
+	const [sessions, setSessions] = useState<PairedSession[]>([]);
 	const isMobile = useIsMobile();
+
+	async function fetchSessions() {
+		setLoading(true);
+
+		try {
+			const response = await fetch(`/api/agents/${agentId}`, {
+				headers: {
+					Authorization: `Bearer ${localStorage.getItem("token")}`,
+				},
+			});
+			const result = await response.json();
+			if (!response.ok) throw new Error(result.error ?? response.statusText);
+
+			const paired: PairedSession[] = result.agentSessions ?? [];
+			setSessions(paired);
+			if (paired.length === 0) {
+				await fetchAgentCode();
+				return;
+			}
+		} catch (error) {
+			console.error("Failed to fetch agent sessions", error);
+			toast.error("Failed to fetch agent", {
+				description: error instanceof Error ? error.message : String(error),
+			});
+		}
+		setLoading(false);
+	}
 
 	async function fetchAgentCode() {
 		setLoading(true);
@@ -76,15 +113,56 @@ export default function AgentCodeDialog({
 	}
 
 	useEffect(() => {
-		fetchAgentCode();
+		fetchSessions();
 	}, [agentId]);
+
+	const needsConfirm = !data.agentCode && sessions.length > 0;
+
+	const warning = sessions.length > 0 && (
+		<NoticeCard variant="warning">
+			<strong>This agent is already paired.</strong> Pairing with a new code
+			disconnects and revokes the current session, so only the new machine will
+			run this agent's jobs:
+			<ul className="mt-1.5 list-disc pl-4">
+				{sessions.map((session) => (
+					<li key={session.id}>
+						{session.info?.hostname ?? "Unknown host"} (last seen{" "}
+						{new Date(session.last_seen_at).toLocaleString()})
+					</li>
+				))}
+			</ul>
+		</NoticeCard>
+	);
+
+	const primaryAction = needsConfirm ? (
+		<Button disabled={loading} onClick={fetchAgentCode}>
+			<KeyIcon />
+			Generate Code
+		</Button>
+	) : (
+		<Button
+			disabled={loading || !data.agentCode}
+			onClick={() => {
+				navigator.clipboard.writeText(data.agentCode);
+				toast("Copied to clipboard", {
+					description: data.agentCode,
+				});
+			}}
+		>
+			<ClipboardIcon />
+			Copy to Clipboard
+		</Button>
+	);
 
 	const content = loading ? (
 		<div className="flex items-center justify-center h-40">
 			<Spinner />
 		</div>
+	) : needsConfirm ? (
+		warning
 	) : (
 		<div className="space-y-2">
+			{warning}
 			<div className="space-y-1.5">
 				<Textarea
 					readOnly
@@ -117,18 +195,7 @@ export default function AgentCodeDialog({
 								Close
 							</Button>
 						</DrawerClose>
-						<Button
-							disabled={loading || !data.agentCode}
-							onClick={() => {
-								navigator.clipboard.writeText(data.agentCode);
-								toast("Copied to clipboard", {
-									description: data.agentCode,
-								});
-							}}
-						>
-							<ClipboardIcon />
-							Copy to Clipboard
-						</Button>
+						{primaryAction}
 					</DrawerFooter>
 				</DrawerContent>
 			</Drawer>
@@ -150,18 +217,7 @@ export default function AgentCodeDialog({
 							Close
 						</Button>
 					</DialogClose>
-					<Button
-						disabled={loading || !data.agentCode}
-						onClick={() => {
-							navigator.clipboard.writeText(data.agentCode);
-							toast("Copied to clipboard", {
-								description: data.agentCode,
-							});
-						}}
-					>
-						<ClipboardIcon />
-						Copy to Clipboard
-					</Button>
+					{primaryAction}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

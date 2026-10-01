@@ -73,23 +73,35 @@ export default function DataHeader({
 	const [localFilters, setLocalFilters] = useState<Record<string, any>>(() =>
 		filterFields.reduce(
 			(acc, field) => {
-				const filterValue = filters[field.name];
+				const filterValue = field.name
+					.split(".")
+					.reduce<any>((obj, key) => obj?.[key], filters);
 
-				// For date fields with between matching, extract the original date from the query object
-				if (
-					field.type === "date" &&
-					field.matching === "between" &&
-					filterValue &&
-					typeof filterValue === "object" &&
-					"gte" in filterValue &&
-					typeof filterValue.gte === "string"
-				) {
-					// Convert the ISO string back to a date string that can be used in the date input
-					const date = new Date(filterValue.gte);
-					acc[field.name] = date.toISOString().split("T")[0];
-				} else {
-					acc[field.name] = filterValue || "";
+				// Unwrap the query object built by buildQueryObject back into the raw input value
+				let raw: any = filterValue;
+				if (raw && typeof raw === "object") {
+					switch (field.matching || "equals") {
+						case "contains":
+							raw = raw.contains;
+							break;
+						case "between":
+						case "gte":
+							raw = raw.gte;
+							break;
+						case "lte":
+							raw = raw.lte;
+							break;
+					}
 				}
+
+				if (field.type === "date" && typeof raw === "string" && raw.includes("T")) {
+					// Convert the ISO string back to a local date string for the date input
+					const date = new Date(raw);
+					const pad = (n: number) => String(n).padStart(2, "0");
+					raw = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+				}
+
+				acc[field.name] = raw === undefined || raw === null ? "" : raw;
 
 				return acc;
 			},

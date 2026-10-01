@@ -18,6 +18,7 @@ import {
 } from "@phosphor-icons/react";
 import SettingsDialog from "./dialog/settings/settings";
 import WikiDialog from "./dialog/wiki/wiki";
+import { unsubscribePush } from "@/lib/push";
 
 export default function UserDropdown() {
 	const [payload, setPayload] = useState({
@@ -105,6 +106,7 @@ export default function UserDropdown() {
 							variant="destructive"
 							onClick={async () => {
 								try {
+									await unsubscribePush().catch(() => {});
 									await fetch("/api/users/me/logout", {
 										method: "POST",
 										headers: {

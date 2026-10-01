@@ -15,16 +15,19 @@ model User {
   password              String
   receive_emails        Boolean   @default(false)
   receive_weekly_report Boolean   @default(false)
+  receive_push_alerts   Boolean   @default(false)
   weekly_report_sent_at DateTime? // last weekly report delivered to this user
   created_at            DateTime  @default(now())
   updated_at            DateTime  @updatedAt
   deleted_at            DateTime?
 
-  agents         Agent[]
-  backupJobs     BackupJob[]
-  backupPolicies BackupPolicy[]
-  userSessions   UserSession[]
-  agentCodes     AgentCode[]
+  agents            Agent[]
+  backupJobs        BackupJob[]
+  backupPolicies    BackupPolicy[]
+  userSessions      UserSession[]
+  agentCodes        AgentCode[]
+  triggeredBackups  Backup[]
+  pushSubscriptions PushSubscription[]
 
   @@map("users")
 }
@@ -40,6 +43,21 @@ model UserSession {
   updated_at DateTime @updatedAt
 
   @@map("user_sessions")
+}
+
+// a browser's Web Push subscription, one per browser profile
+model PushSubscription {
+  id           String    @id @default(uuid())
+  user_id      String
+  user         User      @relation(fields: [user_id], references: [id])
+  endpoint     String    @unique
+  p256dh       String
+  auth         String
+  user_agent   String?
+  created_at   DateTime  @default(now())
+  last_used_at DateTime?
+
+  @@map("push_subscriptions")
 }
 
 model Agent {
@@ -136,6 +154,9 @@ model Backup {
   backup_job        BackupJob    @relation(fields: [backup_job_id], references: [id])
   started_at        DateTime?    @default(now())
   completed_at      DateTime?    @updatedAt
+  triggered_by_id   String? // user who started it on demand; null for scheduled runs
+  triggered_by      User?        @relation(fields: [triggered_by_id], references: [id])
+  notified_at       DateTime? // result notification sent; claimed once so it isn't sent twice
 
   @@map("backups")
 }

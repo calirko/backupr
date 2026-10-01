@@ -87,6 +87,24 @@ export function pushBackupUpdate() {
 	}
 }
 
+/** Sends a notification (shown as a toast) to every open tab of the given users. */
+export function pushNotification(
+	userIds: string[],
+	notification: object,
+) {
+	if (webRegistry.size === 0) return;
+	const recipients = new Set(userIds);
+	const payload = JSON.stringify({ type: "notification", notification });
+	for (const client of webRegistry.values()) {
+		if (!recipients.has(client.userId)) continue;
+		try {
+			client.websocket.send(payload);
+		} catch {
+			// ignore closed clients
+		}
+	}
+}
+
 const AUTH_TIMEOUT_MS = 10000;
 
 export default upgradeWebSocket(() => {
@@ -213,7 +231,7 @@ export default upgradeWebSocket(() => {
 					if (!jobId) break;
 					try {
 						const { sendStartBackupCommand } = await import("./backup");
-						await sendStartBackupCommand(jobId);
+						await sendStartBackupCommand(jobId, webRegistry.get(clientId)?.userId);
 					} catch (error) {
 						const msg = error instanceof Error ? error.message : String(error);
 						console.error(`[ws web] Failed to trigger backup for job ${jobId}:`, msg);

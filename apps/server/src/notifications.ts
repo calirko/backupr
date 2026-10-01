@@ -7,10 +7,17 @@ import {
 	sendToRecipients,
 } from "./mail/mail";
 import { renderBackupFailedEmail } from "./mail/templates/backup-failed";
+import { formatBytes } from "./mail/templates/weekly-report";
 import {
 	renderStaleJobsEmail,
 	type StaleAgentGroup,
 } from "./mail/templates/stale-jobs";
+import {
+	logPushConfig,
+	notifyUsers,
+	pushAlertRecipients,
+	pushEnabled,
+} from "./push";
 import { scheduler } from "./scheduler";
 import { sendDueWeeklyReports } from "./weekly-report";
 import { agentRegistry } from "./ws.agent";
@@ -108,7 +115,7 @@ export async function checkStaleJobs(): Promise<void> {
 		});
 	}
 
-	if (stale.length === 0 || !mailEnabled()) return;
+	if (stale.length === 0 || !(mailEnabled() || pushEnabled())) return;
 
 	const due = stale.filter(
 		(job) => !job.stale_notified_at || job.stale_notified_at < reminderCutoff,
@@ -151,22 +158,36 @@ export async function checkStaleJobs(): Promise<void> {
 		});
 	}
 
-	const mail = renderStaleJobsEmail({
-		groups: [...groups.values()],
-		staleAfterDays: STALE_AFTER_DAYS,
-		isReminder,
-		appUrl: appUrl(),
+	let sent = 0;
+	if (mailEnabled()) {
+		const mail = renderStaleJobsEmail({
+			groups: [...groups.values()],
+			staleAfterDays: STALE_AFTER_DAYS,
+			isReminder,
+			appUrl: appUrl(),
+		});
+		sent += await sendToRecipients(mail);
+	}
+	sent += await notifyUsers(await pushAlertRecipients(), {
+		title: `${stale.length} backup job${stale.length === 1 ? "" : "s"} without a successful backup`,
+		body: `${stale
+			.slice(0, 3)
+			.map((job) => job.name)
+			.join(
+				", ",
+			)}${stale.length > 3 ? ` and ${stale.length - 3} more` : ""}: no successful backup in ${STALE_AFTER_DAYS}+ days.`,
+		level: "warning",
+		url: "/backups",
+		tag: "stale-jobs",
 	});
-
-	const sent = await sendToRecipients(mail);
-	if (sent === 0) return; // no recipients or SMTP down: retry next run
+	if (sent === 0) return; // no recipients or nothing delivered: retry next run
 
 	await db.backupJob.updateMany({
 		where: { id: { in: stale.map((job) => job.id) } },
 		data: { stale_notified_at: now },
 	});
 	console.log(
-		`[Notifications] Sent stale-jobs ${isReminder ? "reminder" : "warning"} for ${stale.length} job(s) to ${sent} user(s)`,
+		`[Notifications] Sent stale-jobs ${isReminder ? "reminder" : "warning"} for ${stale.length} job(s) to ${sent} recipient(s)`,
 	);
 }
 
@@ -275,12 +296,81 @@ export function notifyBackupsFailed(backupIds: string[]): void {
 	sendFailureEmails(backupIds).catch((err) =>
 		console.error("[Notifications] Failed to send failure emails:", err),
 	);
+	notifyBackupResults(backupIds);
+}
+
+// ─── Backup results (toast + push) ───────────────────────────────────────────
+
+/**
+ * Tells the user who started a backup on demand how it went, and the users
+ * with push alerts on about failures. Each backup is claimed once, since a
+ * successful backup is reported both by the upload endpoint and the socket.
+ */
+async function sendBackupResults(backupIds: string[]): Promise<void> {
+	const now = new Date();
+	let alertRecipients: string[] | null = null;
+
+	for (const id of backupIds) {
+		const claimed = await db.backup.updateMany({
+			where: {
+				id,
+				notified_at: null,
+				status: { in: [BackupStatus.COMPLETED, BackupStatus.FAILED] },
+			},
+			data: { notified_at: now },
+		});
+		if (claimed.count === 0) continue;
+
+		const backup = await db.backup.findUnique({
+			where: { id },
+			select: {
+				status: true,
+				error: true,
+				size_bytes: true,
+				triggered_by_id: true,
+				backup_job: {
+					select: { name: true, agent: { select: { name: true } } },
+				},
+			},
+		});
+		if (!backup) continue;
+
+		const failed = backup.status === BackupStatus.FAILED;
+		const recipients = backup.triggered_by_id ? [backup.triggered_by_id] : [];
+		if (failed) {
+			alertRecipients ??= await pushAlertRecipients();
+			recipients.push(...alertRecipients);
+		}
+		if (recipients.length === 0) continue;
+
+		const { name: jobName, agent } = backup.backup_job;
+		await notifyUsers(recipients, {
+			title: failed
+				? `Backup failed: ${jobName}`
+				: `Backup completed: ${jobName}`,
+			body: failed
+				? `${agent.name}: ${backup.error ?? "Unknown error"}`
+				: `${agent.name}${backup.size_bytes != null ? ` · ${formatBytes(Number(backup.size_bytes))}` : ""}`,
+			level: failed ? "error" : "success",
+			url: "/backups",
+			tag: `backup-${id}`,
+		});
+	}
+}
+
+/** Fire-and-forget: never throws and never blocks the caller. */
+export function notifyBackupResults(backupIds: string[]): void {
+	if (backupIds.length === 0) return;
+	sendBackupResults(backupIds).catch((err) =>
+		console.error("[Notifications] Failed to send backup results:", err),
+	);
 }
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
 export function registerNotificationTasks(): void {
 	logMailConfig();
+	logPushConfig();
 
 	scheduler.register({
 		name: "check-stale-jobs",

@@ -1,6 +1,7 @@
 import {
 	AppleLogoIcon,
 	ArrowClockwiseIcon,
+	BellRingingIcon,
 	ChartBarIcon,
 	DeviceMobileIcon,
 	EnvelopeSimpleIcon,
@@ -31,6 +32,12 @@ import { Label } from "@/components/ui/label";
 import { getGravatarImageUrl } from "@/lib/gravatar";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogTitle } from "../../ui/dialog";
+import {
+	getPushState,
+	type PushState,
+	subscribePush,
+	unsubscribePush,
+} from "@/lib/push";
 
 const tabs = [
 	{ id: "account", label: "Account", icon: UserIcon },
@@ -211,6 +218,7 @@ function AccountPanel() {
 							className="shrink-0"
 							onClick={async () => {
 								try {
+									await unsubscribePush().catch(() => {});
 									await fetch("/api/users/me/logout", {
 										method: "POST",
 										headers: {
@@ -260,14 +268,198 @@ const EMAIL_PREFERENCES: {
 	},
 ];
 
+type NotificationStatus = {
+	enabled: boolean;
+	missing: string[];
+	receive_push_alerts: boolean;
+	push: { enabled: boolean; missing: string[]; public_key: string | null };
+} & Record<EmailPreference, boolean>;
+
+function DesktopNotificationsCard({
+	status,
+	userId,
+	onStatusChange,
+}: {
+	status: NotificationStatus | null;
+	userId: string;
+	onStatusChange: (status: NotificationStatus) => void;
+}) {
+	const [pushState, setPushState] = useState<PushState | null>(null);
+	const [busy, setBusy] = useState<"browser" | "alerts" | "test" | null>(null);
+
+	useEffect(() => {
+		getPushState()
+			.then(setPushState)
+			.catch(() => setPushState("unsupported"));
+	}, []);
+
+	const serverReady = status?.push.enabled && status.push.public_key;
+
+	async function handleBrowserToggle(value: boolean) {
+		if (!status?.push.public_key) return;
+		setBusy("browser");
+		try {
+			if (value) {
+				await subscribePush(status.push.public_key);
+				toast.success("Desktop notifications enabled on this browser");
+			} else {
+				await unsubscribePush();
+				toast.success("Desktop notifications disabled on this browser");
+			}
+		} catch (err) {
+			toast.error("Failed to update desktop notifications", {
+				description: err instanceof Error ? err.message : String(err),
+			});
+		} finally {
+			setPushState(await getPushState().catch(() => null));
+			setBusy(null);
+		}
+	}
+
+	async function handleAlertsToggle(value: boolean) {
+		if (!status) return;
+		setBusy("alerts");
+		try {
+			const res = await fetch(`/api/users/${userId}`, {
+				method: "PATCH",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${localStorage.getItem("token")}`,
+				},
+				body: JSON.stringify({ receive_push_alerts: value }),
+			});
+			if (!res.ok) {
+				const err = await res.json();
+				toast.error("Failed to update notification preferences", {
+					description: err.error,
+				});
+			} else {
+				onStatusChange({ ...status, receive_push_alerts: value });
+				toast.success(
+					value ? "Notification alerts enabled" : "Notification alerts disabled",
+				);
+			}
+		} catch (err) {
+			toast.error("Failed to update notification preferences", {
+				description: err instanceof Error ? err.message : String(err),
+			});
+		} finally {
+			setBusy(null);
+		}
+	}
+
+	async function handleTest() {
+		setBusy("test");
+		try {
+			const res = await fetch("/api/notifications/push/test", {
+				method: "POST",
+				headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+			});
+			const body = await res.json();
+			if (!res.ok) {
+				toast.error("Failed to send test notification", {
+					description: body.error,
+				});
+			}
+			// On success the server's socket message shows the toast; switch to
+			// another tab to see the desktop notification instead.
+		} catch (err) {
+			toast.error("Failed to send test notification", {
+				description: err instanceof Error ? err.message : String(err),
+			});
+		} finally {
+			setBusy(null);
+		}
+	}
+
+	return (
+		<Card size="sm">
+			<CardHeader className="border-b">
+				<CardTitle>Desktop notifications</CardTitle>
+			</CardHeader>
+			<CardContent className="flex flex-col gap-3">
+				<div className="flex items-start gap-2">
+					<Checkbox
+						id="settings_push_browser"
+						checked={pushState === "subscribed"}
+						onCheckedChange={(v) => handleBrowserToggle(v === true)}
+						disabled={
+							!serverReady ||
+							pushState === null ||
+							pushState === "unsupported" ||
+							pushState === "denied" ||
+							busy !== null
+						}
+						className="mb-0 mt-0.5"
+					/>
+					<div className="min-w-0">
+						<Label htmlFor="settings_push_browser" className="cursor-pointer">
+							Enable on this browser
+						</Label>
+						<p className="text-xs text-muted-foreground mt-0.5">
+							Show a system notification when something happens while Backupr
+							isn't on screen. Backups you start manually always notify you when
+							they finish.
+						</p>
+					</div>
+				</div>
+				<div className="flex items-start gap-2">
+					<Checkbox
+						id="settings_receive_push_alerts"
+						checked={status?.receive_push_alerts ?? false}
+						onCheckedChange={(v) => handleAlertsToggle(v === true)}
+						disabled={!status || busy !== null}
+						className="mb-0 mt-0.5"
+					/>
+					<div className="min-w-0">
+						<Label
+							htmlFor="settings_receive_push_alerts"
+							className="cursor-pointer"
+						>
+							Alerts
+						</Label>
+						<p className="text-xs text-muted-foreground mt-0.5">
+							Also notify me when any backup fails, and while a job goes 5+
+							days without a successful backup.
+						</p>
+					</div>
+				</div>
+				{status && !status.push.enabled && (
+					<p className="text-xs text-muted-foreground">
+						Push isn't configured on the server:{" "}
+						<code>{status.push.missing?.join(", ")}</code> not set in the
+						server's environment. You'll still see in-app toasts.
+					</p>
+				)}
+				{pushState === "unsupported" && (
+					<p className="text-xs text-muted-foreground">
+						This browser doesn't support push notifications.
+					</p>
+				)}
+				{pushState === "denied" && (
+					<p className="text-xs text-muted-foreground">
+						Notifications are blocked for this site. Allow them in your
+						browser's site settings, then reopen this dialog.
+					</p>
+				)}
+			</CardContent>
+			<CardFooter className="justify-end">
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={handleTest}
+					disabled={pushState !== "subscribed" || busy !== null}
+				>
+					<BellRingingIcon />
+					{busy === "test" ? "Sending..." : "Send test notification"}
+				</Button>
+			</CardFooter>
+		</Card>
+	);
+}
+
 function PreferencesPanel() {
-	const [status, setStatus] = useState<
-		| ({ enabled: boolean; missing: string[] } & Record<
-				EmailPreference,
-				boolean
-		  >)
-		| null
-	>(null);
+	const [status, setStatus] = useState<NotificationStatus | null>(null);
 	const [userId, setUserId] = useState("");
 	const [saving, setSaving] = useState<EmailPreference | null>(null);
 	const [sending, setSending] = useState<"test" | "weekly-report" | null>(null);
@@ -403,6 +595,11 @@ function PreferencesPanel() {
 					</Button>
 				</CardFooter>
 			</Card>
+			<DesktopNotificationsCard
+				status={status}
+				userId={userId}
+				onStatusChange={setStatus}
+			/>
 		</div>
 	);
 }

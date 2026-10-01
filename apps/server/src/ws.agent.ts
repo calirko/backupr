@@ -304,6 +304,11 @@ export default upgradeWebSocket((c) => {
 			// ensures the superseded socket won't clobber the new registry entry.
 			const previous = agentRegistry.get(agentId);
 			if (previous && previous.websocket !== (ws as unknown as WebSocket)) {
+				if (previous.sessionId !== sessionId) {
+					console.warn(
+						`[ws agent] Agent ${agentId} connected from session ${sessionId} while session ${previous.sessionId} was online - two machines share this agent`,
+					);
+				}
 				console.log(
 					`[ws agent] Agent ${agentId} reconnected; closing previous socket`,
 				);

@@ -509,7 +509,9 @@ export default function AgentJobsPage() {
 
 	function triggerBackup(jobId: string) {
 		send({ type: "trigger_backup", jobId });
-		toast.info("Backup queued");
+		toast.info("Backup queued", {
+			description: "You'll be notified when it finishes.",
+		});
 		setTimeout(() => fetchData(), 500);
 	}
 

@@ -166,6 +166,7 @@ export default async function userRoutes(app: Hono) {
 			password: password ? await Password.encrypt(password) : undefined,
 			receive_emails: field.boolean(json, "receive_emails"),
 			receive_weekly_report: field.boolean(json, "receive_weekly_report"),
+			receive_push_alerts: field.boolean(json, "receive_push_alerts"),
 		});
 
 		const user = await db.user.update({

@@ -7,6 +7,8 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { type NavigateFunction, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const RECONNECT_TIMEOUT_MS = 5000;
 const MAX_RECONNECT_TIMEOUT_MS = 30000;
@@ -34,6 +36,25 @@ export interface AgentStatus {
 	jobQueue?: AgentJobState[];
 	/** True when the server-side scheduler queue holds a job for this agent but hasn't dispatched it yet. */
 	schedulerQueued?: boolean;
+}
+
+interface SocketNotification {
+	title: string;
+	body: string;
+	level: "success" | "error" | "warning" | "info";
+	url?: string;
+	tag?: string;
+}
+
+function showToast(n: SocketNotification, navigate: NavigateFunction) {
+	const show = toast[n.level] ?? toast.info;
+	show(n.title, {
+		id: n.tag,
+		description: n.body,
+		action: n.url
+			? { label: "View", onClick: () => navigate(n.url!) }
+			: undefined,
+	});
 }
 
 interface SocketContextValue {
@@ -64,6 +85,9 @@ export function SocketProvider({
 	const [isConnected, setIsConnected] = useState(false);
 	const [agentStatuses, setAgentStatuses] = useState<AgentStatus[]>([]);
 	const [backupUpdateCount, setBackupUpdateCount] = useState(0);
+	const navigate = useNavigate();
+	const navigateRef = useRef(navigate);
+	navigateRef.current = navigate;
 
 	const connect = useCallback(() => {
 		if (!shouldReconnectRef.current) return;
@@ -140,6 +164,12 @@ export function SocketProvider({
 						break;
 					case "backup_updated":
 						setBackupUpdateCount((c) => c + 1);
+						break;
+					case "notification":
+						showToast(
+							message.notification as SocketNotification,
+							navigateRef.current,
+						);
 						break;
 					case "pong":
 					case "connected":

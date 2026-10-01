@@ -8,7 +8,7 @@ import { agentRateLimit, rateLimit } from "../lib/rate-limit";
 import { computeUptimePct } from "../lib/uptime";
 import { presignedDownloadUrl, presignedPutUrl } from "../lib/storage";
 import { defined, field, HttpError, param, readJson } from "../lib/validate";
-import { STALE_AFTER_DAYS } from "../notifications";
+import { notifyBackupResults, STALE_AFTER_DAYS } from "../notifications";
 import { enforceRetentionForJob } from "../scheduler";
 import { agentRegistry, sendToAgent } from "../ws.agent";
 import { pushBackupUpdate } from "../ws.web";
@@ -156,6 +156,7 @@ export default async function agentRoutes(app: Hono) {
 		);
 
 		pushBackupUpdate();
+		notifyBackupResults([backupId]);
 
 		// Fire-and-forget: prune this job immediately rather than waiting for the hourly sweep
 		enforceRetentionForJob(backupJobId).catch((err) =>
@@ -265,6 +266,12 @@ export default async function agentRoutes(app: Hono) {
 				throw new HttpError(404, "Associated agent not found");
 			}
 
+			// An agent is one machine: its jobs point at that machine's paths.
+			// Pairing again (e.g. moving to a new server) replaces the old
+			// session, otherwise both machines connect as the same agent, kick
+			// each other off, and jobs land on whichever one is connected.
+			await tx.agentSession.deleteMany({ where: { agent_id: agent.id } });
+
 			// Create the session first (without token)
 			const session = await tx.agentSession.create({
 				data: {
@@ -290,6 +297,13 @@ export default async function agentRoutes(app: Hono) {
 
 			return { agent, token, sessionId: session.id };
 		});
+
+		// Drop the old machine's live socket; its reconnect then fails with
+		// "Invalid token" and it unpairs itself.
+		const state = agentRegistry.get(result.agent.id);
+		if (state && state.sessionId !== result.sessionId) {
+			state.websocket.close();
+		}
 
 		return c.json({
 			message: "Pairing successful",
