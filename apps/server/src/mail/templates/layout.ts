@@ -22,6 +22,16 @@ export const COLORS = {
 const FONT =
 	"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const HEADING_FONT = `'Archivo Black', 'Arial Black', ${FONT}`;
+/**
+ * Archivo Black only ships a 400 face; 900 makes the fallbacks render black too,
+ * and font-synthesis:none stops browsers from faux-bolding Archivo itself.
+ */
+const HEADING_STYLE = `font-family:${HEADING_FONT};font-weight:900;font-synthesis:none;`;
+
+/** Same grid as the app's GridBackground: 37px cells, rgba(40,40,40,.5) lines. */
+const GRID_CELL = 37;
+const GRID_LINE = "rgba(40,40,40,0.5)";
+const GRID_BACKGROUND = `background-image:linear-gradient(${GRID_LINE} 1px, transparent 1px),linear-gradient(90deg, ${GRID_LINE} 1px, transparent 1px);background-size:${GRID_CELL}px ${GRID_CELL}px;background-position:center top;`;
 const MONO =
 	"ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
 
@@ -61,11 +71,11 @@ export function formatAgo(date: Date, now = new Date()): string {
 }
 
 export function heading(text: string): string {
-	return `<h1 style="margin:0 0 16px 0;font-family:${HEADING_FONT};font-size:22px;line-height:28px;font-weight:400;color:${COLORS.foreground};">${escapeHtml(text)}</h1>`;
+	return `<h1 style="margin:0 0 16px 0;${HEADING_STYLE}font-size:22px;line-height:28px;color:${COLORS.foreground};">${escapeHtml(text)}</h1>`;
 }
 
 export function subheading(html: string): string {
-	return `<h2 style="margin:28px 0 10px 0;font-family:${HEADING_FONT};font-size:15px;line-height:20px;font-weight:400;color:${COLORS.foreground};">${html}</h2>`;
+	return `<h2 style="margin:28px 0 10px 0;${HEADING_STYLE}font-size:15px;line-height:20px;color:${COLORS.foreground};">${html}</h2>`;
 }
 
 export function paragraph(html: string): string {
@@ -180,19 +190,19 @@ export function renderLayout({
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background-color:${c.background};font-family:${FONT};color:${c.foreground};">
+<body style="margin:0;padding:0;background-color:${c.background};${GRID_BACKGROUND}font-family:${FONT};color:${c.foreground};">
 ${preheader ? `<div style="display:none;font-size:1px;color:${c.background};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(preheader)}</div>` : ""}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${c.background}" class="outer" style="background-color:${c.background};padding:32px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${c.background}" class="outer" style="background-color:${c.background};${GRID_BACKGROUND}padding:32px 16px;">
   <tr><td align="center">
     <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
       <!-- Brand -->
-      <tr><td align="left" style="padding:0 4px 20px 4px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-          <td valign="middle" style="padding-right:10px;">
-            <img src="cid:${LOGO_CID}" width="32" height="32" alt="Backupr" style="display:block;width:32px;height:32px;border:0;border-radius:4px;" />
+      <tr><td align="center" style="padding:0 4px 24px 4px;">
+        <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr>
+          <td valign="middle" style="padding-right:12px;">
+            <img src="cid:${LOGO_CID}" width="48" height="48" alt="Backupr" style="display:block;width:48px;height:48px;border:0;" />
           </td>
           <td valign="middle">
-            <span style="font-family:${HEADING_FONT};font-size:22px;line-height:32px;color:${c.foreground};">Backupr</span>
+            <span style="${HEADING_STYLE}font-size:28px;line-height:48px;color:${c.foreground};">Backupr</span>
           </td>
         </tr></table>
       </td></tr>

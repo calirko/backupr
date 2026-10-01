@@ -10,6 +10,8 @@ COPY apps/web/package.json ./apps/web/package.json
 RUN bun install --frozen-lockfile
 
 COPY apps/server ./apps/server
+# Email logo is inlined from the web app's icon at bundle time (logo.macro.ts).
+COPY apps/web/public/icon.png ./apps/web/public/icon.png
 
 RUN cd apps/server && bunx prisma generate
 
