@@ -262,7 +262,11 @@ const EMAIL_PREFERENCES: {
 
 function PreferencesPanel() {
 	const [status, setStatus] = useState<
-		({ enabled: boolean } & Record<EmailPreference, boolean>) | null
+		| ({ enabled: boolean; missing: string[] } & Record<
+				EmailPreference,
+				boolean
+		  >)
+		| null
 	>(null);
 	const [userId, setUserId] = useState("");
 	const [saving, setSaving] = useState<EmailPreference | null>(null);
@@ -372,8 +376,9 @@ function PreferencesPanel() {
 					))}
 					{status && !status.enabled && (
 						<p className="text-xs text-muted-foreground">
-							Email isn't configured on the server yet, so no emails will be
-							sent until the MAIL_* settings are set.
+							Email isn't configured on the server:{" "}
+							<code>{status.missing?.join(", ")}</code> not set in the server's
+							environment. No emails will be sent until they are.
 						</p>
 					)}
 				</CardContent>
@@ -391,7 +396,7 @@ function PreferencesPanel() {
 						variant="outline"
 						size="sm"
 						onClick={() => handleSend("test")}
-						disabled={!status?.enabled || sending !== null}
+						disabled={!status || sending !== null}
 					>
 						<EnvelopeSimpleIcon />
 						{sending === "test" ? "Sending..." : "Send test email"}

@@ -2,7 +2,7 @@ import type { Hono } from "hono";
 import { auth } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import { rateLimit } from "../lib/rate-limit";
-import { appUrl, mailEnabled, sendMail } from "../mail/mail";
+import { appUrl, mailEnabled, missingMailVars, sendMail } from "../mail/mail";
 import { renderTestEmail } from "../mail/templates/test";
 import { sendWeeklyReportNow } from "../weekly-report";
 
@@ -18,6 +18,7 @@ export default async function notificationRoutes(app: Hono) {
 		});
 		return c.json({
 			enabled: mailEnabled(),
+			missing: missingMailVars(),
 			receive_emails: user?.receive_emails ?? false,
 			receive_weekly_report: user?.receive_weekly_report ?? false,
 		});
@@ -28,8 +29,7 @@ export default async function notificationRoutes(app: Hono) {
 		if (!mailEnabled()) {
 			return c.json(
 				{
-					error:
-						"Email is not configured on the server (MAIL_HOST/MAIL_USER/MAIL_PASS)",
+					error: `Email is not configured on the server: ${missingMailVars().join(", ")} not set`,
 				},
 				503,
 			);
@@ -65,8 +65,7 @@ export default async function notificationRoutes(app: Hono) {
 		if (!mailEnabled()) {
 			return c.json(
 				{
-					error:
-						"Email is not configured on the server (MAIL_HOST/MAIL_USER/MAIL_PASS)",
+					error: `Email is not configured on the server: ${missingMailVars().join(", ")} not set`,
 				},
 				503,
 			);

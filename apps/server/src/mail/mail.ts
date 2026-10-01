@@ -15,10 +15,15 @@ export function appUrl(): string | null {
 	return url ? url.replace(/\/+$/, "") : null;
 }
 
+const REQUIRED_MAIL_VARS = ["MAIL_HOST", "MAIL_USER", "MAIL_PASS"] as const;
+
+/** Required MAIL_* variables that are unset or blank in the server's environment. */
+export function missingMailVars(): string[] {
+	return REQUIRED_MAIL_VARS.filter((name) => !process.env[name]?.trim());
+}
+
 export function mailEnabled(): boolean {
-	return Boolean(
-		process.env.MAIL_HOST && process.env.MAIL_USER && process.env.MAIL_PASS,
-	);
+	return missingMailVars().length === 0;
 }
 
 let transport: Transporter | null = null;
@@ -35,6 +40,10 @@ function getTransport(): Transporter {
 			? process.env.MAIL_SECURE === "true"
 			: port === 465,
 		auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
+		// Fail fast on unreachable hosts instead of nodemailer's 2 minute default.
+		connectionTimeout: 15_000,
+		greetingTimeout: 15_000,
+		socketTimeout: 30_000,
 	});
 	return transport;
 }
@@ -52,7 +61,9 @@ function logoAttachment() {
 /** Sends one email. Throws on SMTP errors; callers decide how to handle them. */
 export async function sendMail(mail: Mail): Promise<void> {
 	if (!mailEnabled()) {
-		throw new Error("Email is not configured (MAIL_HOST/MAIL_USER/MAIL_PASS).");
+		throw new Error(
+			`Email is not configured: ${missingMailVars().join(", ")} not set.`,
+		);
 	}
 
 	const fromAddress = process.env.MAIL_FROM || process.env.MAIL_USER;
@@ -113,7 +124,7 @@ export async function sendToRecipients(mail: RenderedMail): Promise<number> {
 export function logMailConfig(): void {
 	if (!mailEnabled()) {
 		console.warn(
-			"[Mail] MAIL_HOST/MAIL_USER/MAIL_PASS not set; email notifications are disabled.",
+			`[Mail] ${missingMailVars().join(", ")} not set; email notifications are disabled.`,
 		);
 		return;
 	}
@@ -121,6 +132,6 @@ export function logMailConfig(): void {
 		console.warn("[Mail] APP_URL not set; emails will not include links.");
 	}
 	console.log(
-		`[Mail] Email notifications enabled via ${process.env.MAIL_HOST}`,
+		`[Mail] Email notifications enabled via ${process.env.MAIL_HOST}:${process.env.MAIL_PORT || 587} as ${process.env.MAIL_USER}`,
 	);
 }

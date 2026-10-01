@@ -564,7 +564,290 @@ async fn copy_dir_all(src: &Path, dst: &Path) -> Result<u64> {
     Ok(skipped)
 }
 
+// ─── Retry ────────────────────────────────────────────────────────────────────
+// Agents run on flaky office networks: router DNS that drops lookups, links
+// that reset mid-upload, a server restarting behind the proxy. Every upload
+// step is idempotent server-side (prepare reuses the backup_id, the PUT
+// overwrites the same key, complete just updates the record), so retrying
+// is always safe - the only question is whether it can help.
+
+/// Why a request failed, which decides how (and whether) to retry it.
+enum Failure {
+    /// The hostname did not resolve: the network or the DNS server is down.
+    /// Waiting for DNS to come back beats burning attempts on backoff.
+    Offline(anyhow::Error),
+    /// Timeouts, resets, refused connections, 408/429/5xx: worth another try,
+    /// optionally after the delay the server asked for (Retry-After).
+    Transient(anyhow::Error, Option<std::time::Duration>),
+    /// Anything retrying cannot fix (auth, validation, missing job).
+    Permanent(anyhow::Error),
+}
+
+struct RetryPolicy {
+    max_attempts: u32,
+    base_delay: std::time::Duration,
+    max_delay: std::time::Duration,
+    /// How long one step may wait for DNS to recover before giving up. Time
+    /// spent offline does not use up attempts.
+    offline_budget: std::time::Duration,
+}
+
+/// Small JSON calls to our own API: cheap to repeat, so retry often.
+const API_RETRY: RetryPolicy = RetryPolicy {
+    max_attempts: 8,
+    base_delay: std::time::Duration::from_secs(2),
+    max_delay: std::time::Duration::from_secs(60),
+    offline_budget: std::time::Duration::from_secs(15 * 60),
+};
+
+/// The archive PUT restarts from byte 0 each time, so space attempts out more.
+const UPLOAD_RETRY: RetryPolicy = RetryPolicy {
+    max_attempts: 5,
+    base_delay: std::time::Duration::from_secs(10),
+    max_delay: std::time::Duration::from_secs(120),
+    offline_budget: std::time::Duration::from_secs(15 * 60),
+};
+
+impl RetryPolicy {
+    /// Exponential backoff with "equal jitter": half fixed, half random, so a
+    /// fleet of agents knocked offline together doesn't come back in lockstep.
+    fn backoff(&self, attempt: u32) -> std::time::Duration {
+        let exp = self.base_delay.saturating_mul(1u32 << attempt.min(16));
+        let capped = exp.min(self.max_delay).as_millis() as u64;
+        let half = capped / 2;
+        std::time::Duration::from_millis(half + rand::random::<u64>() % (half + 1))
+    }
+}
+
+/// Windows reports DNS failures as WSAHOST_NOT_FOUND (11001) / WSATRY_AGAIN
+/// (11002); elsewhere they only show up in the message text.
+fn is_dns_error(err: &(dyn std::error::Error + 'static)) -> bool {
+    let mut cur = Some(err);
+    while let Some(e) = cur {
+        if let Some(io) = e.downcast_ref::<std::io::Error>()
+            && matches!(io.raw_os_error(), Some(11001) | Some(11002))
+        {
+            return true;
+        }
+        let msg = e.to_string();
+        if msg.contains("dns error") || msg.contains("failed to lookup address") {
+            return true;
+        }
+        cur = e.source();
+    }
+    false
+}
+
+fn classify_send_error(context: &str, e: reqwest::Error) -> Failure {
+    // Presigned URLs carry credentials in the query string; keep them out of logs.
+    let e = e.without_url();
+    if is_dns_error(&e) {
+        Failure::Offline(anyhow::anyhow!("{}: {}", context, e))
+    } else if e.is_builder() {
+        Failure::Permanent(anyhow::anyhow!("{}: {}", context, e))
+    } else {
+        Failure::Transient(anyhow::anyhow!("{}: {}", context, e), None)
+    }
+}
+
+/// Turns a non-success response into a Failure. `expired_url_ok` marks 403 as
+/// retryable for presigned PUTs, where it means the URL expired and the next
+/// attempt will fetch a fresh one.
+async fn classify_status(
+    context: &str,
+    resp: reqwest::Response,
+    expired_url_ok: bool,
+) -> Failure {
+    let status = resp.status();
+    let retry_after = resp
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map(|s| std::time::Duration::from_secs(s.min(300)));
+    let text = resp.text().await.unwrap_or_default();
+    let err = anyhow::anyhow!("{} ({}): {}", context, status, text.trim());
+    let retryable = status.is_server_error()
+        || matches!(status.as_u16(), 408 | 425 | 429)
+        || (expired_url_ok && status.as_u16() == 403);
+    if retryable {
+        Failure::Transient(err, retry_after)
+    } else {
+        Failure::Permanent(err)
+    }
+}
+
+/// Polls the system resolver until `host` resolves or `budget` runs out.
+/// Returns how long it waited and whether DNS came back.
+async fn wait_for_dns(
+    host: &str,
+    budget: std::time::Duration,
+    progress_tx: &tokio::sync::mpsc::Sender<String>,
+) -> (std::time::Duration, bool) {
+    let start = std::time::Instant::now();
+    let target = format!("{}:443", host);
+    loop {
+        let probe = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            tokio::net::lookup_host(target.as_str()),
+        )
+        .await;
+        if matches!(probe, Ok(Ok(_))) {
+            return (start.elapsed(), true);
+        }
+        if start.elapsed() >= budget {
+            return (start.elapsed(), false);
+        }
+        let _ = progress_tx.try_send(format!(
+            "Network unavailable (cannot resolve {}), waiting {}s...",
+            host,
+            start.elapsed().as_secs()
+        ));
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+}
+
+/// Retry state for one step. Call sites loop on the request and hand every
+/// failure to `wait`, which sleeps as appropriate or returns the final error.
+struct Retry<'a> {
+    what: &'a str,
+    host: &'a str,
+    policy: &'a RetryPolicy,
+    progress_tx: &'a tokio::sync::mpsc::Sender<String>,
+    attempt: u32,
+    offline_left: std::time::Duration,
+}
+
+impl<'a> Retry<'a> {
+    fn new(
+        what: &'a str,
+        host: &'a str,
+        policy: &'a RetryPolicy,
+        progress_tx: &'a tokio::sync::mpsc::Sender<String>,
+    ) -> Self {
+        Self {
+            what,
+            host,
+            policy,
+            progress_tx,
+            attempt: 0,
+            offline_left: policy.offline_budget,
+        }
+    }
+
+    /// True once this step has failed at least once (e.g. to refresh state).
+    fn is_retry(&self) -> bool {
+        self.attempt > 0 || self.offline_left < self.policy.offline_budget
+    }
+
+    async fn wait(&mut self, failure: Failure) -> Result<()> {
+        match failure {
+            Failure::Permanent(e) => Err(e),
+            Failure::Offline(e) => {
+                eprintln!("[Backup] {} failed, network looks down: {}", self.what, e);
+                let (waited, back) =
+                    wait_for_dns(self.host, self.offline_left, self.progress_tx).await;
+                // Always shrink the budget so is_retry() sees this, even if the
+                // resolver answered on the first probe.
+                self.offline_left = self
+                    .offline_left
+                    .saturating_sub(waited.max(std::time::Duration::from_millis(1)));
+                if !back {
+                    return Err(e.context(format!(
+                        "{} gave up: {} did not resolve for {} min",
+                        self.what,
+                        self.host,
+                        self.policy.offline_budget.as_secs() / 60
+                    )));
+                }
+                println!(
+                    "[Backup] DNS for {} answered after {}s, retrying {}",
+                    self.host,
+                    waited.as_secs(),
+                    self.what
+                );
+                // DNS outages don't use up attempts: the request never left.
+                Ok(())
+            }
+            Failure::Transient(e, retry_after) => {
+                self.attempt += 1;
+                let max = self.policy.max_attempts;
+                if self.attempt >= max {
+                    return Err(e.context(format!("{} failed after {} attempts", self.what, max)));
+                }
+                let delay = retry_after.unwrap_or_else(|| self.policy.backoff(self.attempt - 1));
+                eprintln!(
+                    "[Backup] {} attempt {}/{} failed: {}, retrying in {}s...",
+                    self.what,
+                    self.attempt,
+                    max,
+                    e,
+                    delay.as_secs()
+                );
+                let _ = self.progress_tx.try_send(format!(
+                    "{} failed, retrying in {}s (attempt {}/{})",
+                    self.what,
+                    delay.as_secs(),
+                    self.attempt + 1,
+                    max
+                ));
+                tokio::time::sleep(delay).await;
+                Ok(())
+            }
+        }
+    }
+}
+
 // ─── Upload ───────────────────────────────────────────────────────────────────
+
+struct PreparedUpload {
+    upload_url: String,
+    blob_key: String,
+    backup_id: String,
+}
+
+async fn prepare_upload(
+    client: &reqwest::Client,
+    server_url: &str,
+    agent_token: &str,
+    job_id: &str,
+    backup_id: &str,
+) -> std::result::Result<PreparedUpload, Failure> {
+    let resp = client
+        .post(format!("{}/api/agent/upload/prepare", server_url))
+        .timeout(std::time::Duration::from_secs(60))
+        .header("Authorization", format!("Bearer {}", agent_token))
+        .json(&serde_json::json!({
+            "backup_job_id": job_id,
+            "backup_id": backup_id,
+            "requires_password": false,
+        }))
+        .send()
+        .await
+        .map_err(|e| classify_send_error("Upload prepare request failed", e))?;
+
+    if !resp.status().is_success() {
+        return Err(classify_status("Upload prepare failed", resp, false).await);
+    }
+
+    let prepare: serde_json::Value = resp.json().await.map_err(|e| {
+        Failure::Transient(
+            anyhow::anyhow!("Failed to parse prepare response: {}", e),
+            None,
+        )
+    })?;
+
+    let field = |name: &str| {
+        prepare[name].as_str().map(str::to_string).ok_or_else(|| {
+            Failure::Permanent(anyhow::anyhow!("No {} in prepare response", name))
+        })
+    };
+    Ok(PreparedUpload {
+        upload_url: field("upload_url")?,
+        blob_key: field("blob_key")?,
+        backup_id: field("backup_id")?,
+    })
+}
 
 async fn upload_backup_archive(
     archive_path: &Path,
@@ -580,6 +863,10 @@ async fn upload_backup_archive(
     let agent_token = config
         .agent_token
         .ok_or_else(|| anyhow::anyhow!("Agent not configured (missing agentToken)"))?;
+    let host = reqwest::Url::parse(&server_url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .ok_or_else(|| anyhow::anyhow!("Invalid serverUrl: {}", server_url))?;
 
     let file_size = tokio::fs::metadata(archive_path).await?.len();
     println!(
@@ -595,158 +882,135 @@ async fn upload_backup_archive(
         .connect_timeout(std::time::Duration::from_secs(30))
         .tcp_keepalive(std::time::Duration::from_secs(60))
         .build()?;
-    let api_timeout = std::time::Duration::from_secs(60);
 
     // Step 1: get presigned PUT URL from the server
-    let prepare_resp = client
-        .post(format!("{}/api/agent/upload/prepare", server_url))
-        .timeout(api_timeout)
-        .header("Authorization", format!("Bearer {}", agent_token))
-        .json(&serde_json::json!({
-            "backup_job_id": job_id,
-            "backup_id": backup_id,
-            "requires_password": false,
-        }))
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("Upload prepare request failed: {}", e))?;
-
-    if !prepare_resp.status().is_success() {
-        let text = prepare_resp.text().await.unwrap_or_default();
-        return Err(anyhow::anyhow!("Upload prepare failed: {}", text));
-    }
-
-    let prepare: serde_json::Value = prepare_resp
-        .json()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to parse prepare response: {}", e))?;
-
-    let upload_url = prepare["upload_url"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("No upload_url in prepare response"))?
-        .to_string();
-    let blob_key = prepare["blob_key"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("No blob_key in prepare response"))?
-        .to_string();
-    let confirmed_backup_id = prepare["backup_id"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("No backup_id in prepare response"))?
-        .to_string();
-
-    // Step 2: PUT file directly to MinIO (streaming, no server memory used)
-    // Retry logic: immediate, 5s delay, 15s delay
-    let retry_delays = [0u64, 5, 15];
-    let mut upload_err: Option<anyhow::Error> = None;
-
-    for (attempt, &delay_secs) in retry_delays.iter().enumerate() {
-        if delay_secs > 0 {
-            println!(
-                "[Backup] Retry attempt {}/3: waiting {} seconds...",
-                attempt + 1,
-                delay_secs
-            );
-            tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
+    let mut retry = Retry::new("Upload prepare", &host, &API_RETRY, &progress_tx);
+    let mut prepared = loop {
+        match prepare_upload(&client, &server_url, &agent_token, job_id, backup_id).await {
+            Ok(p) => break p,
+            Err(f) => retry.wait(f).await?,
         }
+    };
 
-        let file = tokio::fs::File::open(archive_path).await?;
-        let raw_stream = tokio_util::io::ReaderStream::new(file);
-        let tx = progress_tx.clone();
-        let total = file_size;
-        let uploaded = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let last_pct = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(-1));
-        let uploaded_clone = uploaded.clone();
-        let last_pct_clone = last_pct.clone();
-        let start = std::time::Instant::now();
-        let progress_stream = raw_stream.inspect(move |chunk| {
-            if let Ok(bytes) = chunk {
-                let done = uploaded_clone
-                    .fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed)
-                    + bytes.len() as u64;
-                let pct = (done * 100).checked_div(total).unwrap_or(0).min(99) as i32;
-                if pct > last_pct_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                    last_pct_clone.store(pct, std::sync::atomic::Ordering::Relaxed);
-                    let elapsed = start.elapsed().as_secs_f64().max(0.001);
-                    let speed = format_bytes((done as f64 / elapsed) as u64);
-                    let _ = tx.try_send(format!("Uploading {}% ({}/s)", pct, speed));
+    // Step 2: PUT file directly to MinIO (streaming, no server memory used).
+    // The presigned URL lives for an hour, so every retry fetches a fresh one
+    // (prepare is idempotent) rather than risk a 403 on an expired URL.
+    let storage_host = reqwest::Url::parse(&prepared.upload_url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .unwrap_or_else(|| host.clone());
+
+    let mut retry = Retry::new("Upload", &storage_host, &UPLOAD_RETRY, &progress_tx);
+    loop {
+        if retry.is_retry() {
+            // Refresh the URL; a failure here counts against this step's retries.
+            match prepare_upload(&client, &server_url, &agent_token, job_id, backup_id).await {
+                Ok(p) => prepared = p,
+                Err(f) => {
+                    retry.wait(f).await?;
+                    continue;
                 }
             }
-        });
-        let body = reqwest::Body::wrap_stream(progress_stream);
-
-        match client
-            .put(&upload_url)
-            .header("Content-Length", file_size.to_string())
-            .header("Content-Type", "application/octet-stream")
-            .body(body)
-            .send()
+        }
+        match put_archive(&client, &prepared.upload_url, archive_path, file_size, &progress_tx)
             .await
         {
-            Ok(response) => {
-                let status = response.status();
-                if status.is_success() {
-                    let _ = progress_tx.try_send("Uploading 100%".to_string());
-                    println!(
-                        "[Backup] Direct upload successful on attempt {}/3",
-                        attempt + 1
-                    );
-                    upload_err = None;
-                    break;
-                } else {
-                    let text = response.text().await.unwrap_or_default();
-                    let err = anyhow::anyhow!("Upload failed ({}): {}", status, text);
-                    if attempt < retry_delays.len() - 1 {
-                        eprintln!(
-                            "[Backup] Upload attempt {}/3 failed: {}, retrying...",
-                            attempt + 1,
-                            err
-                        );
-                    }
-                    upload_err = Some(err);
-                }
-            }
-            Err(e) => {
-                let err = anyhow::anyhow!("Upload request failed: {}", e);
-                if attempt < retry_delays.len() - 1 {
-                    eprintln!(
-                        "[Backup] Upload attempt {}/3 failed: {}, retrying...",
-                        attempt + 1,
-                        err
-                    );
-                }
-                upload_err = Some(err);
-            }
+            Ok(()) => break,
+            Err(f) => retry.wait(f).await?,
         }
     }
-
-    if let Some(err) = upload_err {
-        return Err(err);
-    }
+    println!("[Backup] Direct upload successful");
 
     // Step 3: tell the server the upload is done so it records it as COMPLETED
-    let complete_resp = client
-        .post(format!("{}/api/agent/upload/complete", server_url))
-        .timeout(api_timeout)
-        .header("Authorization", format!("Bearer {}", agent_token))
-        .json(&serde_json::json!({
-            "backup_id": confirmed_backup_id,
-            "backup_job_id": job_id,
-            "blob_key": blob_key,
-            "size_bytes": file_size,
-        }))
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("Upload complete request failed: {}", e))?;
-
-    if !complete_resp.status().is_success() {
-        let text = complete_resp.text().await.unwrap_or_default();
-        return Err(anyhow::anyhow!("Upload complete failed: {}", text));
+    let mut retry = Retry::new("Upload complete", &host, &API_RETRY, &progress_tx);
+    loop {
+        match complete_upload(&client, &server_url, &agent_token, job_id, &prepared, file_size)
+            .await
+        {
+            Ok(()) => break,
+            Err(f) => retry.wait(f).await?,
+        }
     }
 
     println!(
         "[Backup] Backup {} recorded as completed",
-        confirmed_backup_id
+        prepared.backup_id
     );
+    Ok(())
+}
+
+/// One streaming PUT of the archive to the presigned storage URL.
+async fn put_archive(
+    client: &reqwest::Client,
+    upload_url: &str,
+    archive_path: &Path,
+    file_size: u64,
+    progress_tx: &tokio::sync::mpsc::Sender<String>,
+) -> std::result::Result<(), Failure> {
+    let file = tokio::fs::File::open(archive_path)
+        .await
+        .map_err(|e| Failure::Permanent(anyhow::anyhow!("Cannot open archive: {}", e)))?;
+    let raw_stream = tokio_util::io::ReaderStream::new(file);
+    let tx = progress_tx.clone();
+    let uploaded = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let last_pct = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(-1));
+    let start = std::time::Instant::now();
+    let progress_stream = raw_stream.inspect(move |chunk| {
+        if let Ok(bytes) = chunk {
+            let done = uploaded
+                .fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed)
+                + bytes.len() as u64;
+            let pct = (done * 100).checked_div(file_size).unwrap_or(0).min(99) as i32;
+            if pct > last_pct.load(std::sync::atomic::Ordering::Relaxed) {
+                last_pct.store(pct, std::sync::atomic::Ordering::Relaxed);
+                let elapsed = start.elapsed().as_secs_f64().max(0.001);
+                let speed = format_bytes((done as f64 / elapsed) as u64);
+                let _ = tx.try_send(format!("Uploading {}% ({}/s)", pct, speed));
+            }
+        }
+    });
+    let body = reqwest::Body::wrap_stream(progress_stream);
+
+    let response = client
+        .put(upload_url)
+        .header("Content-Length", file_size.to_string())
+        .header("Content-Type", "application/octet-stream")
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| classify_send_error("Upload request failed", e))?;
+
+    if !response.status().is_success() {
+        return Err(classify_status("Upload failed", response, true).await);
+    }
+    let _ = progress_tx.try_send("Uploading 100%".to_string());
+    Ok(())
+}
+
+async fn complete_upload(
+    client: &reqwest::Client,
+    server_url: &str,
+    agent_token: &str,
+    job_id: &str,
+    prepared: &PreparedUpload,
+    file_size: u64,
+) -> std::result::Result<(), Failure> {
+    let resp = client
+        .post(format!("{}/api/agent/upload/complete", server_url))
+        .timeout(std::time::Duration::from_secs(60))
+        .header("Authorization", format!("Bearer {}", agent_token))
+        .json(&serde_json::json!({
+            "backup_id": prepared.backup_id,
+            "backup_job_id": job_id,
+            "blob_key": prepared.blob_key,
+            "size_bytes": file_size,
+        }))
+        .send()
+        .await
+        .map_err(|e| classify_send_error("Upload complete request failed", e))?;
+    if !resp.status().is_success() {
+        return Err(classify_status("Upload complete failed", resp, false).await);
+    }
     Ok(())
 }
 
@@ -988,6 +1252,34 @@ pub async fn run_backup_job(
     remove_lockfile();
 
     result
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::*;
+
+    #[test]
+    fn backoff_grows_and_stays_capped() {
+        for attempt in 0..20 {
+            let d = API_RETRY.backoff(attempt);
+            let ceiling = API_RETRY
+                .base_delay
+                .saturating_mul(1u32 << attempt.min(16))
+                .min(API_RETRY.max_delay);
+            assert!(d <= ceiling, "attempt {attempt}: {d:?} > {ceiling:?}");
+            assert!(d >= ceiling / 2, "attempt {attempt}: {d:?} < half of {ceiling:?}");
+        }
+    }
+
+    #[test]
+    fn detects_windows_dns_errors() {
+        let wsa = std::io::Error::from_raw_os_error(11001);
+        assert!(is_dns_error(&wsa));
+        let hyper_style = std::io::Error::other("dns error: failed to lookup address information");
+        assert!(is_dns_error(&hyper_style));
+        let reset = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
+        assert!(!is_dns_error(&reset));
+    }
 }
 
 #[cfg(all(test, unix))]

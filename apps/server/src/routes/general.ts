@@ -158,6 +158,12 @@ export default async function generalRoutes(app: Hono) {
 
 	// gets dashboard data
 	app.get("/api/dashboard", rateLimit, auth, async (c) => {
+		// Activity only counts backups of jobs (and agents) that still exist; storage
+		// totals below keep every backup since their files remain in the bucket.
+		const liveJob = {
+			backup_job: { deleted_at: null, agent: { deleted_at: null } },
+		};
+
 		const [
 			totalAgents,
 			activeAgents,
@@ -176,7 +182,7 @@ export default async function generalRoutes(app: Hono) {
 			db.agent.count({ where: { deleted_at: null } }),
 			db.agent.count({ where: { is_active: true, deleted_at: null } }),
 			db.backupJob.count({ where: { is_active: true, deleted_at: null } }),
-			db.backup.count(),
+			db.backup.count({ where: liveJob }),
 
 			db.backup.aggregate({
 				_sum: { size_bytes: true },
@@ -184,6 +190,7 @@ export default async function generalRoutes(app: Hono) {
 			}),
 
 			db.backup.findMany({
+				where: liveJob,
 				take: 10,
 				orderBy: { started_at: "desc" },
 				include: {
@@ -208,19 +215,22 @@ export default async function generalRoutes(app: Hono) {
 				}[]
 			>`
          SELECT
-           DATE_TRUNC('day', started_at)::date::text AS day,
+           DATE_TRUNC('day', b.started_at)::date::text AS day,
            COUNT(*)::bigint AS count,
-           COUNT(*) FILTER (WHERE status = 'COMPLETED')::bigint AS completed,
-           COUNT(*) FILTER (WHERE status = 'FAILED')::bigint AS failed,
-           COALESCE(SUM(size_bytes), 0)::bigint AS size
-         FROM backups
-         WHERE started_at >= NOW() - INTERVAL '7 days'
+           COUNT(*) FILTER (WHERE b.status = 'COMPLETED')::bigint AS completed,
+           COUNT(*) FILTER (WHERE b.status = 'FAILED')::bigint AS failed,
+           COALESCE(SUM(b.size_bytes), 0)::bigint AS size
+         FROM backups b
+         JOIN backup_jobs bj ON bj.id = b.backup_job_id AND bj.deleted_at IS NULL
+         JOIN agents a ON a.id = bj.agent_id AND a.deleted_at IS NULL
+         WHERE b.started_at >= NOW() - INTERVAL '7 days'
          GROUP BY 1
          ORDER BY 1 ASC
        `,
 
 			db.backup.count({
 				where: {
+					...liveJob,
 					status: "FAILED",
 					started_at: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
 				},
