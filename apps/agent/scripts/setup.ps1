@@ -9,7 +9,7 @@
     The service runs as LocalSystem (no interactive login required) and starts automatically.
 
 .PARAMETER Action
-    Action to perform: install | setup | start | stop | restart | remove | status | logs | update
+    Action to perform: install | setup | start | stop | restart | remove | status | logs | update | vss | diagnose
     If omitted, an interactive menu is shown.
 
 .EXAMPLE
@@ -21,7 +21,7 @@
 #>
 
 param(
-    [ValidateSet("install", "setup", "start", "stop", "restart", "remove", "status", "logs", "update", "vss", "")]
+    [ValidateSet("install", "setup", "start", "stop", "restart", "remove", "status", "logs", "update", "vss", "diagnose", "")]
     [string]$Action = ""
 )
 
@@ -589,6 +589,798 @@ function Action-Update {
     Write-Host "  Update complete. Config files were not modified." -ForegroundColor Green
 }
 
+# --- Diagnostics (read-only) --------------------------------------------------
+# Everything in this section only reads state - no settings, files, caches or
+# services are touched. Every probe is isolated so that one failing check (old
+# Windows, missing cmdlet, blocked protocol) never aborts the whole report.
+
+$script:DiagFindings = New-Object System.Collections.ArrayList
+
+function Add-Diag {
+    param(
+        [ValidateSet("OK", "INFO", "WARN", "FAIL", "SKIP")]
+        [string]$Level,
+        [string]$Text,
+        [string]$Fix = ""
+    )
+    $color = switch ($Level) {
+        "OK"    { "Green" }
+        "WARN"  { "Yellow" }
+        "FAIL"  { "Red" }
+        default { "DarkGray" }
+    }
+    Write-Host ("  [{0,-4}] {1}" -f $Level, $Text) -ForegroundColor $color
+    if ($Level -eq "WARN" -or $Level -eq "FAIL") {
+        $null = $script:DiagFindings.Add((New-Object PSObject -Property @{ Level = $Level; Text = $Text; Fix = $Fix }))
+    }
+}
+
+function Write-DiagSection {
+    param([string]$Text)
+    Write-Host ""
+    Write-Host "  ${Brand}${Text}${Reset}"
+}
+
+function Format-DiagDuration {
+    param([TimeSpan]$Span)
+    if ($Span.TotalDays -ge 2)    { return "{0:N1} days" -f $Span.TotalDays }
+    if ($Span.TotalHours -ge 1)   { return "{0:N1} h" -f $Span.TotalHours }
+    if ($Span.TotalMinutes -ge 1) { return "{0:N0} min" -f $Span.TotalMinutes }
+    return "{0:N0} s" -f $Span.TotalSeconds
+}
+
+function Get-DiagErrorLine {
+    # First line of an error message - some are several lines long.
+    param($ErrorRecord)
+    return ("$($ErrorRecord.Exception.Message)" -split "`r?`n")[0]
+}
+
+function Get-DiagPowerCaps {
+    # Asks the kernel which sleep states exist. `powercfg /a` has the same data
+    # but its output is localized, so it can't be parsed reliably.
+    if (-not ("BackuprDiag.Power" -as [type])) {
+        Add-Type -Namespace BackuprDiag -Name Power -ErrorAction Stop -MemberDefinition '
+            [DllImport("powrprof.dll")]
+            public static extern uint CallNtPowerInformation(int level, IntPtr inBuf, uint inLen, byte[] outBuf, uint outLen);
+        '
+    }
+    $buf = New-Object byte[] 128
+    # 4 = SystemPowerCapabilities; the buffer is a SYSTEM_POWER_CAPABILITIES
+    # struct of one-byte flags, read here by offset.
+    if ([BackuprDiag.Power]::CallNtPowerInformation(4, [IntPtr]::Zero, 0, $buf, 128) -ne 0) { return $null }
+    return @{
+        Lid           = [bool]$buf[2]
+        ModernStandby = [bool]$buf[20]
+    }
+}
+
+function Get-DiagPowerSetting {
+    # Returns @{ AC; DC } for a powercfg setting alias, or $null when the
+    # setting does not exist on this machine. The labels are localized, so rely
+    # on position: the last two hex values are the current AC and DC indexes.
+    param([string]$SubGroup, [string]$Setting)
+    $out = & powercfg.exe /query SCHEME_CURRENT $SubGroup $Setting 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $out) { return $null }
+    $hex = @([regex]::Matches(($out -join "`n"), '0x[0-9a-fA-F]{8}') | ForEach-Object { $_.Value })
+    if ($hex.Count -lt 2) { return $null }
+    return @{
+        AC = [Convert]::ToInt64($hex[$hex.Count - 2], 16)
+        DC = [Convert]::ToInt64($hex[$hex.Count - 1], 16)
+    }
+}
+
+function Get-DiagEventCount {
+    # Number of matching events in the last $Days days, or -1 if the log or
+    # provider can't be queried.
+    param([string]$LogName, [string]$Provider, [int[]]$Ids, [int]$Days)
+    try {
+        $filter = @{ LogName = $LogName; Id = $Ids; StartTime = (Get-Date).AddDays(-$Days) }
+        if ($Provider) { $filter.ProviderName = $Provider }
+        return @(Get-WinEvent -FilterHashtable $filter -ErrorAction Stop).Count
+    } catch {
+        # "No events were found" is reported as an error - it just means zero.
+        if ("$($_.FullyQualifiedErrorId)" -like "NoMatchingEventsFound*") { return 0 }
+        return -1
+    }
+}
+
+function Test-DiagTcp {
+    param([string]$HostName, [int]$Port, [int]$Attempts = 3, [int]$TimeoutMs = 5000)
+    $ok = 0
+    $totalMs = 0
+    $lastError = ""
+    for ($i = 0; $i -lt $Attempts; $i++) {
+        $client = New-Object System.Net.Sockets.TcpClient
+        try {
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $async = $client.BeginConnect($HostName, $Port, $null, $null)
+            if ($async.AsyncWaitHandle.WaitOne($TimeoutMs)) {
+                $client.EndConnect($async)
+                $ok++
+                $totalMs += $sw.ElapsedMilliseconds
+            } else {
+                $lastError = "no answer within $($TimeoutMs / 1000)s"
+            }
+        } catch {
+            $lastError = $_.Exception.GetBaseException().Message
+        } finally {
+            $client.Close()
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    $avg = if ($ok -gt 0) { [int]($totalMs / $ok) } else { 0 }
+    return @{ Ok = $ok; Attempts = $Attempts; AvgMs = $avg; Error = $lastError }
+}
+
+function Test-DiagPing {
+    param([string]$Address, [int]$Count = 20)
+    $ping = New-Object System.Net.NetworkInformation.Ping
+    $ok = 0
+    $totalMs = 0
+    $maxMs = 0
+    for ($i = 0; $i -lt $Count; $i++) {
+        try {
+            $reply = $ping.Send($Address, 1000)
+            if ($reply.Status -eq [System.Net.NetworkInformation.IPStatus]::Success) {
+                $ok++
+                $totalMs += $reply.RoundtripTime
+                if ($reply.RoundtripTime -gt $maxMs) { $maxMs = $reply.RoundtripTime }
+            }
+        } catch {}
+        Start-Sleep -Milliseconds 100
+    }
+    $ping.Dispose()
+    $avg = if ($ok -gt 0) { [int]($totalMs / $ok) } else { 0 }
+    return @{ LossPct = [int](100 * ($Count - $ok) / $Count); AvgMs = $avg; MaxMs = $maxMs }
+}
+
+function Read-DiagLogTail {
+    # Last $MaxBytes of a log file as lines. Opened with full sharing because
+    # the running service keeps these files open for writing.
+    param([string]$Path, [int]$MaxBytes)
+    $share = [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
+    $fs = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, $share)
+    try {
+        if ($fs.Length -gt $MaxBytes) { $null = $fs.Seek(-$MaxBytes, [IO.SeekOrigin]::End) }
+        $reader = New-Object IO.StreamReader($fs, [Text.Encoding]::UTF8)
+        return @($reader.ReadToEnd() -split "`r?`n")
+    } finally {
+        $fs.Dispose()
+    }
+}
+
+function Action-Diagnose {
+    Write-Header "Backupr diagnostics (read-only)"
+    Write-Host "  ${Gray}Nothing on this computer is changed. Takes a minute or two.${Reset}"
+
+    # Probes are expected to fail on some machines; report that, don't abort.
+    $ErrorActionPreference = "Continue"
+    $ProgressPreference    = "SilentlyContinue"
+    $script:DiagFindings   = New-Object System.Collections.ArrayList
+    $days = 7
+
+    # --- System ---------------------------------------------------------------
+    Write-DiagSection "System"
+
+    $isLaptop = $false
+    try {
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+        $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
+        Add-Diag INFO "$($env:COMPUTERNAME): $($os.Caption) ($($os.Version)), $($cs.Manufacturer) $($cs.Model)"
+        $uptime = (Get-Date) - $os.LastBootUpTime
+        Add-Diag INFO ("Running for {0} (last boot {1:yyyy-MM-dd HH:mm})" -f (Format-DiagDuration $uptime), $os.LastBootUpTime)
+        # 2 = Mobile
+        if ($cs.PCSystemType -eq 2) { $isLaptop = $true }
+    } catch {
+        Add-Diag SKIP "System information unavailable: $(Get-DiagErrorLine $_)"
+    }
+
+    $caps = $null
+    try { $caps = Get-DiagPowerCaps } catch {}
+    if ($caps -and $caps.Lid) { $isLaptop = $true }
+
+    if ($isLaptop) {
+        Add-Diag WARN "This is a laptop. Laptops sleep, get their lid closed and usually sit on Wi-Fi." `
+            -Fix "Keep it plugged in, wired, and review the power findings below."
+    } else {
+        Add-Diag OK "Desktop or server hardware (no lid)"
+    }
+
+    # --- Power ----------------------------------------------------------------
+    Write-DiagSection "Power and sleep"
+
+    try {
+        $sleep = Get-DiagPowerSetting SUB_SLEEP STANDBYIDLE
+        if (-not $sleep) {
+            Add-Diag SKIP "Sleep timeout could not be read"
+        } elseif ($sleep.AC -gt 0) {
+            Add-Diag WARN "Sleeps after $(Format-DiagDuration ([TimeSpan]::FromSeconds($sleep.AC))) idle on AC power - the agent goes offline" `
+                -Fix "powercfg /change standby-timeout-ac 0"
+        } else {
+            Add-Diag OK "Never sleeps on AC power"
+        }
+        if ($sleep -and $isLaptop -and $sleep.DC -gt 0) {
+            Add-Diag INFO "On battery it sleeps after $(Format-DiagDuration ([TimeSpan]::FromSeconds($sleep.DC)))"
+        }
+
+        $hibernate = Get-DiagPowerSetting SUB_SLEEP HIBERNATEIDLE
+        if ($hibernate -and $hibernate.AC -gt 0) {
+            Add-Diag WARN "Hibernates after $(Format-DiagDuration ([TimeSpan]::FromSeconds($hibernate.AC))) idle on AC power" `
+                -Fix "powercfg /change hibernate-timeout-ac 0"
+        }
+
+        if ($isLaptop) {
+            $lid = Get-DiagPowerSetting SUB_BUTTONS LIDACTION
+            if ($lid) {
+                $lidNames = @("does nothing", "sleeps", "hibernates", "shuts down")
+                $lidText  = if ($lid.AC -ge 0 -and $lid.AC -lt $lidNames.Count) { $lidNames[[int]$lid.AC] } else { "action $($lid.AC)" }
+                if ($lid.AC -ne 0) {
+                    Add-Diag WARN "Closing the lid on AC power: the machine $lidText" `
+                        -Fix "Control Panel > Power Options > 'Choose what closing the lid does' > Do nothing"
+                } else {
+                    Add-Diag OK "Closing the lid on AC power does nothing"
+                }
+            }
+        }
+    } catch {
+        Add-Diag SKIP "Power plan could not be read: $(Get-DiagErrorLine $_)"
+    }
+
+    if ($caps -and $caps.ModernStandby) {
+        $fix = "Keep the screen from turning the machine idle: plugged in, sleep set to never."
+        $msText = "Modern Standby (S0) machine: when the screen turns off, Windows may cut the network while services keep running"
+        try {
+            # 0 = network off in standby, 1 = on, 2 = managed by Windows
+            $conn = Get-DiagPowerSetting SUB_NONE CONNECTIVITYINSTANDBY
+            if ($conn -and $conn.AC -eq 1) {
+                Add-Diag INFO "Modern Standby (S0) machine, network stays connected in standby on AC power"
+            } else {
+                Add-Diag WARN $msText -Fix $fix
+            }
+        } catch {
+            Add-Diag WARN $msText -Fix $fix
+        }
+    } elseif ($caps) {
+        Add-Diag OK "No Modern Standby"
+    } else {
+        Add-Diag SKIP "Sleep capabilities could not be read"
+    }
+
+    $sleeps = Get-DiagEventCount -LogName System -Provider "Microsoft-Windows-Kernel-Power" -Ids 42 -Days $days
+    if ($sleeps -gt 0) {
+        Add-Diag WARN "Went to sleep $sleeps time(s) in the last $days days" -Fix "Disable sleep (see above)."
+    } elseif ($sleeps -eq 0) {
+        Add-Diag OK "Did not sleep in the last $days days"
+    }
+
+    $standbys = Get-DiagEventCount -LogName System -Provider "Microsoft-Windows-Kernel-Power" -Ids 506 -Days $days
+    if ($standbys -gt 0) {
+        Add-Diag WARN "Entered Modern Standby $standbys time(s) in the last $days days" `
+            -Fix "Compare these times with the offline periods in the agent log below."
+    }
+
+    $crashes = Get-DiagEventCount -LogName System -Provider "Microsoft-Windows-Kernel-Power" -Ids 41 -Days $days
+    if ($crashes -gt 0) {
+        Add-Diag WARN "$crashes unexpected shutdown(s) or power loss(es) in the last $days days" `
+            -Fix "Check power supply / UPS; a backup running at that moment is lost."
+    }
+
+    # --- Network --------------------------------------------------------------
+    Write-DiagSection "Network adapter"
+
+    $gateway    = $null
+    $dnsServers = @()
+    $route = $null
+    $haveNetCmdlets = [bool](Get-Command Get-NetRoute -ErrorAction SilentlyContinue)
+    if ($haveNetCmdlets) {
+        $route = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+                 Sort-Object { $_.RouteMetric + $_.InterfaceMetric } | Select-Object -First 1
+    }
+    if (-not $haveNetCmdlets) {
+        Add-Diag SKIP "Network adapter checks need Windows 8 / Server 2012 or newer"
+    } elseif (-not $route) {
+        Add-Diag FAIL "No default route - this machine has no internet connection right now" -Fix "Check cable / Wi-Fi / router."
+    } else {
+        try {
+            $gateway = "$($route.NextHop)"
+            $ifIndex = $route.InterfaceIndex
+            $adapter = Get-NetAdapter -InterfaceIndex $ifIndex -ErrorAction Stop
+
+            Add-Diag INFO "Internet goes through '$($adapter.Name)' ($($adapter.InterfaceDescription)), $($adapter.LinkSpeed), gateway $gateway"
+
+            # NdisPhysicalMedium: 1 = wireless LAN, 9 = native 802.11
+            $isWifi = ($adapter.NdisPhysicalMedium -eq 9) -or ($adapter.NdisPhysicalMedium -eq 1)
+            if ($adapter.Virtual) {
+                Add-Diag WARN "The default route is a virtual adapter (VPN or similar) - the agent depends on it staying up" `
+                    -Fix "Check whether backups should really go through this tunnel."
+            } elseif ($isWifi) {
+                $signalText = ""
+                $signal = -1
+                try {
+                    # Only the signal line carries a percentage, whatever the language.
+                    $m = [regex]::Match(((& netsh.exe wlan show interfaces 2>$null) -join "`n"), ':\s*(\d{1,3})%')
+                    if ($m.Success) { $signal = [int]$m.Groups[1].Value; $signalText = ", signal $signal%" }
+                } catch {}
+                Add-Diag WARN "Connected over Wi-Fi$signalText - the usual cause of dropped agent connections" `
+                    -Fix "Use a network cable."
+                if ($signal -ge 0 -and $signal -lt 60) {
+                    Add-Diag FAIL "Wi-Fi signal is weak ($signal%)" -Fix "Use a cable or move the machine / access point."
+                }
+            } else {
+                Add-Diag OK "Wired connection"
+                if ($adapter.Speed -gt 0 -and $adapter.Speed -lt 100000000) {
+                    Add-Diag WARN "Link speed is only $($adapter.LinkSpeed) - bad cable or port?" -Fix "Replace the cable / try another switch port."
+                }
+            }
+
+            try {
+                $pm = Get-NetAdapterPowerManagement -Name $adapter.Name -ErrorAction Stop
+                if ("$($pm.AllowComputerToTurnOffDevice)" -eq "Enabled") {
+                    Add-Diag WARN "Windows is allowed to power down this network adapter to save energy" `
+                        -Fix "Device Manager > adapter > Power Management > untick 'Allow the computer to turn off this device'."
+                } else {
+                    Add-Diag OK "Adapter power saving is off"
+                }
+            } catch {
+                Add-Diag SKIP "Adapter power management could not be read"
+            }
+
+            try {
+                $dnsServers = @((Get-DnsClientServerAddress -InterfaceIndex $ifIndex -AddressFamily IPv4 -ErrorAction Stop).ServerAddresses)
+                if ($dnsServers.Count -eq 0) {
+                    Add-Diag WARN "No IPv4 DNS server configured on this adapter" -Fix "Set DNS to 1.1.1.1 and 8.8.8.8."
+                } else {
+                    Add-Diag INFO "DNS servers: $($dnsServers -join ', ')"
+                    $onlyRouter = @($dnsServers | Where-Object { $_ -ne $gateway }).Count -eq 0
+                    if ($onlyRouter) {
+                        Add-Diag WARN "The router is the only DNS server - consumer routers are a common source of 'host not known' errors" `
+                            -Fix "Set DNS to 1.1.1.1 and 8.8.8.8 on this adapter."
+                    } elseif ($dnsServers.Count -eq 1) {
+                        Add-Diag WARN "Only one DNS server configured (no fallback)" -Fix "Add a second DNS server."
+                    }
+                }
+            } catch {
+                Add-Diag SKIP "DNS configuration could not be read"
+            }
+        } catch {
+            Add-Diag SKIP "Network adapter details could not be read: $(Get-DiagErrorLine $_)"
+        }
+    }
+
+    $drops = Get-DiagEventCount -LogName "Microsoft-Windows-NetworkProfile/Operational" -Ids 10001 -Days $days
+    if ($drops -gt $days) {
+        Add-Diag WARN "Network disconnected $drops time(s) in the last $days days" -Fix "Check cable, Wi-Fi, router and sleep settings."
+    } elseif ($drops -ge 0) {
+        Add-Diag OK "Network disconnected $drops time(s) in the last $days days"
+    }
+
+    $dnsTimeouts = Get-DiagEventCount -LogName System -Provider "Microsoft-Windows-DNS-Client" -Ids 1014 -Days $days
+    if ($dnsTimeouts -gt 10) {
+        Add-Diag WARN "Windows logged $dnsTimeouts DNS timeouts in the last $days days" -Fix "Change the DNS servers (1.1.1.1 / 8.8.8.8)."
+    } elseif ($dnsTimeouts -ge 0) {
+        Add-Diag OK "Windows logged $dnsTimeouts DNS timeout(s) in the last $days days"
+    }
+
+    # --- Targets --------------------------------------------------------------
+    # The hosts the agent needs: its server, and GitHub for self-updates.
+    $serverUri = $null
+    $wsUri     = $null
+    $vssConfig = $true
+    if (Test-Path $ConfigFile) {
+        try {
+            $cfg = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+            $serverProp = $cfg.PSObject.Properties["server_url"]
+            $wsProp     = $cfg.PSObject.Properties["ws_url"]
+            $vssProp    = $cfg.PSObject.Properties["vssEnabled"]
+            if ($serverProp -and $serverProp.Value) { $serverUri = [uri]"$($serverProp.Value)" }
+            $wsBase = if ($wsProp -and $wsProp.Value) { "$($wsProp.Value)" } elseif ($serverUri) { "$($serverProp.Value)" } else { "" }
+            if ($wsBase) {
+                $wsUri = [uri](($wsBase.TrimEnd("/") -replace '^http://', 'ws://' -replace '^https://', 'wss://') + "/api/agent/ws")
+            }
+            if ($vssProp -and $vssProp.Value -eq $false) { $vssConfig = $false }
+        } catch {
+            Add-Diag WARN "Config file $ConfigFile could not be parsed: $($_.Exception.Message)" -Fix "Run 'setup' again."
+        }
+    }
+
+    $targets = @()
+    if ($serverUri) { $targets += @{ Name = "Backupr server"; Host = $serverUri.Host; Port = $serverUri.Port } }
+    if ($wsUri -and (-not $serverUri -or $wsUri.Host -ne $serverUri.Host -or $wsUri.Port -ne $serverUri.Port)) {
+        $targets += @{ Name = "Backupr WebSocket"; Host = $wsUri.Host; Port = $wsUri.Port }
+    }
+    $targets += @{ Name = "GitHub";                  Host = "github.com";                           Port = 443 }
+    $targets += @{ Name = "GitHub API";              Host = "api.github.com";                       Port = 443 }
+    $targets += @{ Name = "GitHub release download"; Host = "release-assets.githubusercontent.com"; Port = 443 }
+
+    # --- DNS ------------------------------------------------------------------
+    Write-DiagSection "DNS resolution"
+
+    if (-not $serverUri) {
+        Add-Diag INFO "Agent is not configured yet - testing GitHub only"
+    }
+
+    foreach ($t in $targets) {
+        # Same lookup path the agent uses; a failure here is its "os error 11001".
+        try {
+            $null = [System.Net.Dns]::GetHostAddresses($t.Host)
+            Add-Diag OK "Windows resolves $($t.Host)"
+        } catch {
+            Add-Diag FAIL "Windows cannot resolve $($t.Host) ($($t.Name)) right now" -Fix "Check internet connection and DNS servers."
+        }
+    }
+
+    if (Get-Command Resolve-DnsName -ErrorAction SilentlyContinue) {
+        # Query each resolver directly (bypasses the local cache) a few times.
+        $resolvers = @()
+        foreach ($ip in $dnsServers) { $resolvers += @{ Ip = "$ip"; Configured = $true } }
+        foreach ($ip in @("1.1.1.1", "8.8.8.8")) {
+            if ($dnsServers -notcontains $ip) { $resolvers += @{ Ip = $ip; Configured = $false } }
+        }
+
+        $configuredBad = $false
+        $publicGood    = $false
+        foreach ($r in $resolvers) {
+            $ok = 0
+            $total = 0
+            $totalMs = 0
+            foreach ($t in $targets) {
+                for ($i = 0; $i -lt 3; $i++) {
+                    $total++
+                    $sw = [Diagnostics.Stopwatch]::StartNew()
+                    try {
+                        $null = Resolve-DnsName -Name $t.Host -Type A -Server $r.Ip -DnsOnly -QuickTimeout -ErrorAction Stop
+                        $ok++
+                        $totalMs += $sw.ElapsedMilliseconds
+                    } catch {}
+                }
+                # A resolver that is blocked or dead: don't wait out every timeout.
+                if ($ok -eq 0) { break }
+            }
+            $avg   = if ($ok -gt 0) { [int]($totalMs / $ok) } else { 0 }
+            $label = if ($r.Configured) { "DNS server $($r.Ip)" } else { "Public DNS $($r.Ip) (reference)" }
+            $stats = "$ok/$total lookups answered, avg ${avg} ms"
+
+            if ($r.Configured) {
+                if ($ok -eq 0) {
+                    $configuredBad = $true
+                    Add-Diag FAIL "${label}: no answers" -Fix "Replace this DNS server (1.1.1.1 / 8.8.8.8)."
+                } elseif ($ok -lt $total) {
+                    $configuredBad = $true
+                    Add-Diag WARN "${label}: $stats - drops queries" -Fix "Replace this DNS server (1.1.1.1 / 8.8.8.8)."
+                } elseif ($avg -gt 300) {
+                    Add-Diag WARN "${label}: $stats - slow" -Fix "Use a faster DNS server (1.1.1.1 / 8.8.8.8)."
+                } else {
+                    Add-Diag OK "${label}: $stats"
+                }
+            } else {
+                if ($ok -eq $total) { $publicGood = $true }
+                Add-Diag INFO "${label}: $stats"
+            }
+        }
+        if ($configuredBad -and $publicGood) {
+            Add-Diag INFO "Public DNS answers fine from here, so the configured DNS server is the weak point"
+        }
+    } else {
+        Add-Diag SKIP "Per-server DNS test needs Windows 8 / Server 2012 or newer"
+    }
+
+    # --- Reachability ---------------------------------------------------------
+    Write-DiagSection "Connection quality"
+
+    if ($gateway -and $gateway -ne "0.0.0.0") {
+        $p = Test-DiagPing $gateway
+        $stats = "$($p.LossPct)% loss, avg $($p.AvgMs) ms, max $($p.MaxMs) ms"
+        if ($p.LossPct -eq 100) {
+            Add-Diag INFO "Router $gateway does not answer ping (cannot judge the local link)"
+        } elseif ($p.LossPct -ge 10) {
+            Add-Diag FAIL "Ping to router ${gateway}: $stats - the local network itself is losing packets" -Fix "Fix Wi-Fi / cable / switch before anything else."
+        } elseif ($p.LossPct -gt 0 -or $p.AvgMs -gt 20) {
+            Add-Diag WARN "Ping to router ${gateway}: $stats - unstable local link" -Fix "Check Wi-Fi signal or cable."
+        } else {
+            Add-Diag OK "Ping to router ${gateway}: $stats"
+        }
+    }
+
+    $p = Test-DiagPing "1.1.1.1"
+    $stats = "$($p.LossPct)% loss, avg $($p.AvgMs) ms, max $($p.MaxMs) ms"
+    if ($p.LossPct -eq 100) {
+        Add-Diag INFO "Internet ping (1.1.1.1) gets no answer - blocked here, or offline (see TCP tests)"
+    } elseif ($p.LossPct -ge 10) {
+        Add-Diag FAIL "Ping to internet (1.1.1.1): $stats" -Fix "If the router ping is clean this is the ISP line."
+    } elseif ($p.LossPct -gt 0 -or $p.AvgMs -gt 150) {
+        Add-Diag WARN "Ping to internet (1.1.1.1): $stats" -Fix "If the router ping is clean this is the ISP line."
+    } else {
+        Add-Diag OK "Ping to internet (1.1.1.1): $stats"
+    }
+
+    foreach ($t in $targets) {
+        $r = Test-DiagTcp $t.Host $t.Port
+        $label = "$($t.Name) ($($t.Host):$($t.Port))"
+        if ($r.Ok -eq 0) {
+            Add-Diag FAIL "${label}: cannot connect - $($r.Error)" -Fix "Check firewall / antivirus / ISP filtering for this host."
+        } elseif ($r.Ok -lt $r.Attempts) {
+            Add-Diag WARN "${label}: only $($r.Ok)/$($r.Attempts) connections succeeded - $($r.Error)" -Fix "Intermittent link or filtering; rerun to confirm."
+        } elseif ($r.AvgMs -gt 1500) {
+            Add-Diag WARN "${label}: connects but slowly (avg $($r.AvgMs) ms)" -Fix "Slow or congested line."
+        } else {
+            Add-Diag OK "${label}: $($r.Ok)/$($r.Attempts) connections, avg $($r.AvgMs) ms"
+        }
+    }
+
+    if ($serverUri) {
+        $pingUrl = "$($serverUri.GetLeftPart([UriPartial]::Authority))/api/ping"
+        try {
+            $sw   = [Diagnostics.Stopwatch]::StartNew()
+            $resp = Invoke-WebRequest -Uri $pingUrl -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+            Add-Diag OK "Server API answers ($pingUrl, HTTP $($resp.StatusCode), $($sw.ElapsedMilliseconds) ms)"
+
+            # A wrong clock breaks TLS and signed upload URLs.
+            try {
+                if ($resp.Headers.ContainsKey("Date")) {
+                    $style      = [Globalization.DateTimeStyles]::AdjustToUniversal
+                    $serverTime = [datetime]::Parse("$($resp.Headers['Date'])", [Globalization.CultureInfo]::InvariantCulture, $style)
+                    $skew       = [Math]::Abs(([datetime]::UtcNow - $serverTime).TotalSeconds)
+                    if ($skew -gt 300) {
+                        Add-Diag WARN ("System clock is off by {0}" -f (Format-DiagDuration ([TimeSpan]::FromSeconds($skew)))) `
+                            -Fix "Fix date/time and enable automatic time sync."
+                    } else {
+                        Add-Diag OK "System clock matches the server"
+                    }
+                }
+            } catch {}
+        } catch {
+            Add-Diag FAIL "Server API does not answer at ${pingUrl}: $($_.Exception.Message)" -Fix "If the TCP test above passed, the server itself is down."
+        }
+    }
+
+    if ($wsUri) {
+        # No token is sent, so the server rejects this right after the upgrade -
+        # it never touches the running agent's session. It only proves that
+        # proxies / antivirus let a WebSocket upgrade through.
+        $ws = $null
+        try {
+            $ws   = New-Object System.Net.WebSockets.ClientWebSocket
+            $cts  = New-Object System.Threading.CancellationTokenSource
+            $task = $ws.ConnectAsync($wsUri, $cts.Token)
+            if ($task.Wait(10000)) {
+                Add-Diag OK "WebSocket upgrade to the server works"
+            } else {
+                $cts.Cancel()
+                Add-Diag FAIL "WebSocket upgrade to the server timed out" -Fix "Something between this PC and the server blocks WebSockets (proxy / antivirus web shield)."
+            }
+        } catch [System.PlatformNotSupportedException] {
+            Add-Diag SKIP "WebSocket test needs Windows 8 / Server 2012 or newer"
+        } catch {
+            $inner = $_.Exception.GetBaseException()
+            if ($inner -is [System.PlatformNotSupportedException]) {
+                Add-Diag SKIP "WebSocket test needs Windows 8 / Server 2012 or newer"
+            } else {
+                Add-Diag FAIL "WebSocket upgrade to the server failed: $($inner.Message)" -Fix "Something between this PC and the server blocks WebSockets (proxy / antivirus web shield)."
+            }
+        } finally {
+            if ($ws) { $ws.Dispose() }
+        }
+    }
+
+    try {
+        $probe = [uri]"https://github.com/"
+        $via   = [System.Net.WebRequest]::GetSystemWebProxy().GetProxy($probe)
+        if ($via -and $via.AbsoluteUri -ne $probe.AbsoluteUri) {
+            Add-Diag WARN "This user browses through a proxy ($($via.Authority)). The service runs as LocalSystem and may not use it" `
+                -Fix "Allow direct access for this machine, or configure a machine-wide proxy."
+        } else {
+            Add-Diag OK "No web proxy in use"
+        }
+    } catch {}
+
+    try {
+        $blocking = @(Get-NetFirewallProfile -ErrorAction Stop |
+            Where-Object { "$($_.Enabled)" -eq "True" -and "$($_.DefaultOutboundAction)" -eq "Block" })
+        if ($blocking.Count -gt 0) {
+            Add-Diag WARN "Windows Firewall blocks outbound traffic by default ($(@($blocking | ForEach-Object { $_.Name }) -join ', ') profile)" `
+                -Fix "Add an outbound allow rule for $AgentExe."
+        }
+    } catch {}
+
+    try {
+        $av = @(Get-CimInstance -Namespace "root/SecurityCenter2" -ClassName AntiVirusProduct -ErrorAction Stop |
+            ForEach-Object { $_.displayName } | Sort-Object -Unique)
+        if ($av.Count -gt 0) {
+            Add-Diag INFO "Antivirus: $($av -join ', ') - if only the agent has trouble, check its web / network shield"
+        }
+    } catch {}
+
+    # --- Agent ----------------------------------------------------------------
+    Write-DiagSection "Agent"
+
+    $serviceRunning = $false
+    if (Get-ServiceExists) {
+        $svc = Get-Service -Name $ServiceName
+        $serviceRunning = ("$($svc.Status)" -eq "Running")
+        if ($serviceRunning) {
+            Add-Diag OK "Service is running"
+        } else {
+            Add-Diag FAIL "Service is $($svc.Status)" -Fix "Start it (menu option 3)."
+        }
+        try {
+            $startType = "$($svc.StartType)"
+            if ($startType -ne "Automatic") {
+                Add-Diag WARN "Service start type is $startType - it will not come back after a reboot" -Fix "Start it from this script (sets it to automatic)."
+            }
+        } catch {}
+    } else {
+        Add-Diag INFO "Service is not installed (pre-install check)"
+    }
+
+    if ((Get-ServiceExists) -and -not (Test-Path $SevenZipExe)) {
+        Add-Diag WARN "7-Zip not found at $SevenZipExe" -Fix "Reinstall the agent."
+    }
+
+    try {
+        $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction Stop
+        $freeGb = [Math]::Round($disk.FreeSpace / 1GB, 1)
+        $text = "$freeGb GB free on $($env:SystemDrive) (backups are staged and compressed in the temp folder there)"
+        if ($freeGb -lt 2) {
+            Add-Diag FAIL $text -Fix "Free up disk space."
+        } elseif ($freeGb -lt 10) {
+            Add-Diag WARN $text -Fix "Free up disk space; it must hold a copy of the data plus the archive."
+        } else {
+            Add-Diag OK $text
+        }
+    } catch {}
+
+    if (-not $vssConfig) {
+        Add-Diag INFO "VSS is disabled in the agent config (live file copy)"
+    } else {
+        try {
+            $vss = Get-Service -Name VSS -ErrorAction Stop
+            if ("$($vss.StartType)" -eq "Disabled") {
+                Add-Diag WARN "Volume Shadow Copy service is disabled - open files are copied live" -Fix "Set the VSS service to Manual."
+            } else {
+                Add-Diag OK "Volume Shadow Copy service is available"
+            }
+        } catch {}
+    }
+
+    # --- Agent logs -----------------------------------------------------------
+    Write-DiagSection "Agent log history"
+
+    $errLog = Get-ChildItem -Path $InstallDir -Filter "*.err.log" -ErrorAction SilentlyContinue | Select-Object -First 1
+    $outLog = Get-ChildItem -Path $InstallDir -Filter "*.out.log" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+    if ($outLog) {
+        try {
+            # Every connect / reconnect line carries a UTC timestamp, which turns
+            # the log into a record of when and for how long the agent was offline.
+            $lines  = Read-DiagLogTail $outLog.FullName 8MB
+            $cutoff = [datetime]::UtcNow.AddDays(-$days)
+            $style  = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
+            $rx     = [regex]'^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\] .*?(Connected and authenticated|Reconnecting in)'
+
+            $connects   = 0
+            $offline    = [TimeSpan]::Zero
+            $longest    = [TimeSpan]::Zero
+            $longestAt  = $null
+            $downSince  = $null
+            $firstStamp = $null
+            foreach ($line in $lines) {
+                $m = $rx.Match($line)
+                if (-not $m.Success) { continue }
+                $ts = [datetime]::ParseExact($m.Groups[1].Value, "yyyy-MM-dd HH:mm:ss", [Globalization.CultureInfo]::InvariantCulture, $style)
+                if ($ts -lt $cutoff) { continue }
+                if (-not $firstStamp) { $firstStamp = $ts }
+                if ($m.Groups[2].Value -eq "Reconnecting in") {
+                    if (-not $downSince) { $downSince = $ts }
+                } else {
+                    $connects++
+                    if ($downSince) {
+                        $gap = $ts - $downSince
+                        $offline += $gap
+                        if ($gap -gt $longest) { $longest = $gap; $longestAt = $downSince }
+                        $downSince = $null
+                    }
+                }
+            }
+
+            if (-not $firstStamp) {
+                Add-Diag INFO "No connection activity in $($outLog.Name) for the last $days days"
+            } else {
+                $span = [datetime]::UtcNow - $firstStamp
+                $text = "Agent log, last $(Format-DiagDuration $span): connected $connects time(s), offline for $(Format-DiagDuration $offline) in total"
+                if ($longestAt) {
+                    $text += ", longest outage $(Format-DiagDuration $longest) starting $($longestAt.ToLocalTime().ToString('yyyy-MM-dd HH:mm'))"
+                }
+                $offlinePct = if ($span.TotalSeconds -gt 0) { 100 * $offline.TotalSeconds / $span.TotalSeconds } else { 0 }
+                if ($offlinePct -ge 10) {
+                    Add-Diag FAIL $text -Fix "Backups scheduled during these outages do not run. See the network and power findings."
+                } elseif ($offline.TotalMinutes -ge 30 -or $connects -gt (3 * $days)) {
+                    Add-Diag WARN $text -Fix "Check whether the outages line up with nights, sleep events or router restarts."
+                } else {
+                    Add-Diag OK $text
+                }
+                if ($downSince -and $serviceRunning) {
+                    Add-Diag WARN "Agent has been disconnected since $($downSince.ToLocalTime().ToString('yyyy-MM-dd HH:mm')) and is still retrying" `
+                        -Fix "See the connection tests above."
+                }
+            }
+        } catch {
+            Add-Diag SKIP "Could not read $($outLog.Name): $(Get-DiagErrorLine $_)"
+        }
+    } else {
+        Add-Diag INFO "No agent output log yet"
+    }
+
+    if ($errLog) {
+        try {
+            $lines = Read-DiagLogTail $errLog.FullName 4MB
+            $patterns = @(
+                @{ Name = "DNS lookup failures";            Rx = 'os error 11001' },
+                @{ Name = "connection timeouts";            Rx = 'os error 10060' },
+                @{ Name = "connections reset mid-session";  Rx = 'WebSocket error: .*(os error 10054|Connection reset)' },
+                @{ Name = "server-side errors (502/refused)"; Rx = '502 Bad Gateway|os error 10061' },
+                @{ Name = "killed / failed compressions";   Rx = '7z exited with code' },
+                @{ Name = "backups with nothing to stage";  Rx = 'No files could be staged' },
+                @{ Name = "VSS failures";                   Rx = 'VSS failed' },
+                @{ Name = "failed updates";                 Rx = '\[Update\] Update failed' }
+            )
+            $parts = @()
+            $netErrors = 0
+            foreach ($pat in $patterns) {
+                $n = @($lines | Where-Object { $_ -match $pat.Rx }).Count
+                if ($n -gt 0) { $parts += "$($pat.Name): $n" }
+                if ($pat.Rx -match '11001|10060|10054') { $netErrors += $n }
+            }
+            # This log has no timestamps, so it can only be read as a total.
+            if ($parts.Count -eq 0) {
+                Add-Diag OK "Error log is clean"
+            } elseif ($netErrors -gt 50) {
+                Add-Diag WARN "Error log (undated): $($parts -join ', ')" -Fix "Frequent network errors - see the network findings."
+            } else {
+                Add-Diag INFO "Error log (undated): $($parts -join ', ')"
+            }
+
+            # Backup sources the agent could not find - check whether they exist now.
+            $missing = @($lines |
+                ForEach-Object { $m = [regex]::Match($_, 'Could not stat (.+?): [^:]*\(os error [23]\)'); if ($m.Success) { $m.Groups[1].Value } } |
+                Sort-Object -Unique)
+            foreach ($path in $missing) {
+                if (-not (Test-Path -LiteralPath $path)) {
+                    Add-Diag FAIL "Backup source does not exist: $path" -Fix "Fix the path in the backup job, or whatever is supposed to create this file."
+                }
+            }
+        } catch {
+            Add-Diag SKIP "Could not read $($errLog.Name): $(Get-DiagErrorLine $_)"
+        }
+    }
+
+    # --- Summary --------------------------------------------------------------
+    $fails = @($script:DiagFindings | Where-Object { $_.Level -eq "FAIL" })
+    $warns = @($script:DiagFindings | Where-Object { $_.Level -eq "WARN" })
+
+    Write-Header "Summary for $($env:COMPUTERNAME)"
+    if ($fails.Count -gt 0) {
+        Write-Host "  Verdict: PROBLEMS FOUND - backups on this machine will fail or be unreliable." -ForegroundColor Red
+    } elseif ($warns.Count -ge 3) {
+        Write-Host "  Verdict: AT RISK - this machine is likely to struggle." -ForegroundColor Yellow
+    } elseif ($warns.Count -gt 0) {
+        Write-Host "  Verdict: MOSTLY FINE - a few things worth fixing." -ForegroundColor Yellow
+    } else {
+        Write-Host "  Verdict: HEALTHY - nothing found that would disturb the agent." -ForegroundColor Green
+    }
+    Write-Host "  $($fails.Count) problem(s), $($warns.Count) warning(s)"
+
+    foreach ($f in ($fails + $warns)) {
+        $color = if ($f.Level -eq "FAIL") { "Red" } else { "Yellow" }
+        Write-Host ""
+        Write-Host "  [$($f.Level)] $($f.Text)" -ForegroundColor $color
+        if ($f.Fix) { Write-Host "         -> $($f.Fix)" -ForegroundColor DarkGray }
+    }
+
+    Write-Host ""
+    Write-Host "  ${Gray}The live tests are a snapshot taken as the current user; the service runs as${Reset}"
+    Write-Host "  ${Gray}LocalSystem. Intermittent faults show up in the $days-day history lines, not in one run.${Reset}"
+}
+
 # --- Interactive menu ---------------------------------------------------------
 
 function Show-Menu {
@@ -605,6 +1397,7 @@ function Show-Menu {
         Write-Host "  ${Gray}|${Reset}  8)  View logs                ${Gray}|${Reset}"
         Write-Host "  ${Gray}|${Reset}  9)  Update agent             ${Gray}|${Reset}"
         Write-Host "  ${Gray}|${Reset}  10) Toggle VSS               ${Gray}|${Reset}"
+        Write-Host "  ${Gray}|${Reset}  11) Diagnose (read-only)     ${Gray}|${Reset}"
         Write-Host "  ${Gray}|${Reset}  Q)  Quit                     ${Gray}|${Reset}"
         Write-Host "  ${Gray}+-------------------------------+${Reset}"
         Write-Host ""
@@ -621,6 +1414,7 @@ function Show-Menu {
             "8" { Action-Logs    }
             "9"  { Action-Update }
             "10" { Action-Vss    }
+            "11" { Action-Diagnose }
             "Q"  { Write-Host "  Bye." -ForegroundColor DarkGray; return }
             default { Write-Warning "Unknown option: $choice" }
         }
@@ -645,6 +1439,7 @@ switch ($Action.ToLower()) {
     "logs"    { Action-Logs    }
     "update"  { Action-Update }
     "vss"     { Action-Vss    }
+    "diagnose" { Action-Diagnose }
     ""        { Show-Menu     }
 }
 
