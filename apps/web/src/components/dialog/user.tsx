@@ -59,22 +59,26 @@ export default function UserDialog({
 	async function updateUser({
 		name,
 		username,
+		email,
 		password,
 	}: {
 		name: string;
 		username: string;
+		email: string;
 		password?: string;
 	}) {
 		try {
 			const updateData: {
 				name: string;
 				username: string;
+				email: string;
 				password?: string;
 				receive_emails: boolean;
 				receive_weekly_report: boolean;
 			} = {
 				name,
 				username,
+				email,
 				receive_emails: receiveEmails,
 				receive_weekly_report: receiveWeeklyReport,
 			};
@@ -175,7 +179,18 @@ export default function UserDialog({
 		}
 
 		if (userId) {
-			await updateUser({ name, username, password: password || undefined });
+			if (!email) {
+				toast.warning("Email is required", {
+					description: "Please enter an email for the user.",
+				});
+				return;
+			}
+			await updateUser({
+				name,
+				username,
+				email,
+				password: password || undefined,
+			});
 		} else {
 			if (!email || !password) {
 				toast.warning("Email and password required", {
