@@ -1,3 +1,4 @@
+import { BlockList, isIP } from "node:net";
 import type { Context, Next } from "hono";
 import { getConnInfo } from "hono/bun";
 import { rateLimiter } from "hono-rate-limiter";
@@ -33,6 +34,33 @@ export const getClientIp = (c: Context): string => {
 	);
 };
 
+/**
+ * Comma-separated IPs or CIDR ranges (e.g. the office) that bypass rate
+ * limiting entirely: RATE_LIMIT_ALLOWLIST=203.0.113.7,198.51.100.0/24
+ */
+const allowlist = new BlockList();
+for (const raw of (process.env.RATE_LIMIT_ALLOWLIST ?? "").split(",")) {
+	const entry = raw.trim();
+	if (!entry) continue;
+	const [address = "", prefix] = entry.split("/");
+	const version = isIP(address);
+	if (!version) {
+		console.warn(`Ignoring invalid RATE_LIMIT_ALLOWLIST entry: ${entry}`);
+		continue;
+	}
+	const type = version === 6 ? "ipv6" : "ipv4";
+	if (prefix === undefined) allowlist.addAddress(address, type);
+	else allowlist.addSubnet(address, Number.parseInt(prefix, 10), type);
+}
+
+const isAllowlisted = (c: Context): boolean => {
+	// IPv4 clients can show up as IPv4-mapped IPv6 (::ffff:1.2.3.4)
+	const ip = getClientIp(c).replace(/^::ffff:(?=\d+\.)/, "");
+	const type = isIP(ip);
+	if (!type) return false;
+	return allowlist.check(ip, type === 6 ? "ipv6" : "ipv4");
+};
+
 const tooMany = (c: Context) =>
 	c.json({ error: "Too many attempts. Please try again later." }, 429);
 
@@ -48,6 +76,7 @@ export const rateLimit =
 				standardHeaders: "draft-6",
 				keyGenerator: getClientIp,
 				handler: tooMany,
+				skip: isAllowlisted,
 			})
 		: passthrough;
 
@@ -59,6 +88,7 @@ export const authRateLimit =
 				standardHeaders: "draft-6",
 				keyGenerator: getClientIp,
 				handler: tooMany,
+				skip: isAllowlisted,
 			})
 		: passthrough;
 
@@ -71,5 +101,6 @@ export const agentRateLimit =
 				standardHeaders: "draft-6",
 				keyGenerator: getClientIp,
 				handler: tooMany,
+				skip: isAllowlisted,
 			})
 		: passthrough;
