@@ -420,31 +420,31 @@ export function ManagingAgentsPage({ nextPage, onNext, lang }: Props) {
 						<span className="font-medium text-foreground mr-2">WIN-SRV01</span>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border px-2 py-1 pointer-events-none"
 						>
 							<CodeSimpleIcon size={12} />
 						</button>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border px-2 py-1 pointer-events-none"
 						>
 							<PackageIcon size={12} />
 						</button>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border px-2 py-1 pointer-events-none"
 						>
 							<EyeIcon size={12} />
 						</button>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border px-2 py-1 pointer-events-none"
 						>
 							<PencilIcon size={12} />
 						</button>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border border-destructive text-destructive px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border border-destructive text-destructive px-2 py-1 pointer-events-none"
 						>
 							<XSquareIcon size={12} />
 						</button>

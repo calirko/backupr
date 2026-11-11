@@ -18,6 +18,7 @@ import AgentDetailDialog from "@/components/dialog/agent-detail";
 import AgentStatusHistoryDialog from "@/components/dialog/agent-status-history";
 import ConfirmDialog from "@/components/dialog/confirm";
 import ErrorDialog from "@/components/dialog/error";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	type AgentConnectionStatus,
@@ -26,7 +27,14 @@ import {
 import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
 import { useSocket } from "@/hooks/use-socket";
-import { AgentVersion, Count, formatBytes, LastSeen } from "@/lib/health";
+import {
+	ActiveBadge,
+	AgentVersion,
+	Count,
+	formatBytes,
+	LastSeen,
+	PctBadge,
+} from "@/lib/health";
 
 export default function AgentsPage() {
 	const { filters, orderBy } = useData("agents");
@@ -90,8 +98,7 @@ export default function AgentsPage() {
 			key: "is_active",
 			label: "Active",
 			orderable: true,
-			format: (value) =>
-				value ? "Active" : <span className="text-destructive">Inactive</span>,
+			format: (value) => <ActiveBadge active={value} />,
 		},
 		{
 			key: "id",
@@ -106,22 +113,7 @@ export default function AgentsPage() {
 			label: "Uptime (7d)",
 			orderable: false,
 			format: (value) =>
-				value == null ? (
-					"-"
-				) : (
-					<span
-						className={value < 90 ? "text-destructive" : undefined}
-						style={
-							value >= 90 && value < 99
-								? { color: "var(--yellowish)" }
-								: value >= 99
-									? { color: "var(--greenish)" }
-									: undefined
-						}
-					>
-						{value.toFixed(1)}%
-					</span>
-				),
+				value == null ? "-" : <PctBadge pct={value} digits={1} />,
 		},
 		{
 			key: "jobs",
@@ -137,7 +129,9 @@ export default function AgentsPage() {
 						</span>
 					)}
 					{value.stale > 0 && (
-						<span className="text-destructive"> · {value.stale} stale</span>
+						<Badge variant="destructive" className="ml-1.5">
+							{value.stale} stale
+						</Badge>
 					)}
 				</span>
 			),

@@ -308,7 +308,7 @@ function StorageByJobChart({
 						<div className="w-full h-1.5 bg-muted overflow-hidden">
 							<div
 								className="h-full bg-primary transition-all duration-500"
-								style={{ width: `${Math.max(pct, 0.5)}%`, borderRadius: "2px" }}
+								style={{ width: `${Math.max(pct, 0.5)}%` }}
 							/>
 						</div>
 					</div>
@@ -579,7 +579,7 @@ export default function DashboardPage() {
 								{statusBreakdown.map(({ status, count }) => (
 									<div key={status} className="flex items-center gap-2 text-xs">
 										<span
-											className="size-2.5 rounded-full shrink-0"
+											className="size-2.5 rounded-none shrink-0"
 											style={{
 												background: backupHealthChartConfig[status].color,
 											}}

@@ -387,7 +387,7 @@ function StatPill({
 		<div className="flex items-center gap-2 text-sm">
 			<span
 				className="inline-block w-2.5 h-2.5 shrink-0"
-				style={{ backgroundColor: color, borderRadius: "3px" }}
+				style={{ backgroundColor: color }}
 			/>
 			<span className="text-muted-foreground">{label}</span>
 			<span className="font-medium ml-auto">{value}</span>
@@ -422,7 +422,7 @@ function CronSuggestions({ records }: { records: StatusRecord[] }) {
 					. Try scheduling backups around these times to reduce the chance of
 					a missed run:
 				</p>
-				<code className="block mt-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded text-[11px]">
+				<code className="block mt-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded-none text-[11px]">
 					{cronExpr}
 				</code>
 			</div>
@@ -489,7 +489,7 @@ function Content({
 					<div key={s} className="flex items-center gap-1.5 text-xs">
 						<span
 							className="inline-block w-2.5 h-2.5"
-							style={{ backgroundColor: STATUS_COLORS[s], borderRadius: "3px" }}
+							style={{ backgroundColor: STATUS_COLORS[s] }}
 						/>
 						<span className="text-muted-foreground">{STATUS_LABELS[s]}</span>
 					</div>
@@ -497,7 +497,7 @@ function Content({
 				<div className="flex items-center gap-1.5 text-xs">
 					<span
 						className="inline-block w-2.5 h-2.5"
-						style={{ backgroundColor: "oklch(0.13 0 0)", borderRadius: "3px" }}
+						style={{ backgroundColor: "oklch(0.13 0 0)" }}
 					/>
 					<span className="text-muted-foreground">No data</span>
 				</div>

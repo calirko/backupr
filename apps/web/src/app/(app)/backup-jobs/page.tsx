@@ -21,11 +21,13 @@ import { Button } from "@/components/ui/button";
 import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
 import {
-	BACKUP_STATUS_LABEL,
-	BACKUP_STATUS_STYLE,
-	type BackupStatus,
-} from "@/lib/backup-status";
-import { formatRelative, Hint, LastSeen, Rate } from "@/lib/health";
+	ActiveBadge,
+	BackupStatusBadge,
+	formatRelative,
+	Hint,
+	LastSeen,
+	Rate,
+} from "@/lib/health";
 
 export default function BackupJobsPage() {
 	const { filters, orderBy } = useData("backup-jobs");
@@ -75,8 +77,7 @@ export default function BackupJobsPage() {
 			key: "is_active",
 			label: "Status",
 			orderable: true,
-			format: (value) =>
-				value ? "Active" : <span className="text-destructive">Inactive</span>,
+			format: (value) => <ActiveBadge active={value} />,
 		},
 		{ key: "cron", label: "Schedule", orderable: true },
 		{
@@ -97,13 +98,9 @@ export default function BackupJobsPage() {
 			format: (value) =>
 				value ? (
 					<Hint content={new Date(value.started_at).toLocaleString()}>
-						<span>
+						<span className="inline-flex items-center gap-2">
 							{formatRelative(value.started_at)}
-							<span className="text-muted-foreground"> · </span>
-							<span style={BACKUP_STATUS_STYLE[value.status as BackupStatus]}>
-								{BACKUP_STATUS_LABEL[value.status as BackupStatus] ??
-									value.status}
-							</span>
+							<BackupStatusBadge status={value.status} />
 						</span>
 					</Hint>
 				) : (

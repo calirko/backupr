@@ -39,10 +39,12 @@ export function ConnectionStatus({
 	const isActive = ACTIVE_STATUSES.has(status);
 
 	return (
-		<span className={`cs-wrap cs-${status}${isActive ? " cs-active" : ""}`}>
-			<span className="cs-dot ml-1" />
+		<span
+			className={`cs-wrap cs-${status}${isActive ? " cs-active" : ""}${type === "long" ? " cs-badge" : ""}`}
+		>
+			<span className={`cs-dot${type === "short" ? " ml-1" : ""}`} />
 			{type === "long" && (
-				<span className="cs-label text-xs font-sans font-semibold!">
+				<span className="cs-label text-xs font-sans font-medium">
 					{STATUS_LABEL[status]}
 				</span>
 			)}

@@ -1,3 +1,4 @@
+import type { BadgeVariant } from "@/components/ui/badge";
 export type BackupStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
 
 export const BACKUP_STATUS_LABEL: Record<BackupStatus, string> = {
@@ -14,12 +15,9 @@ export const BACKUP_STATUS_STYLE: Record<BackupStatus, React.CSSProperties> = {
 	PENDING: {},
 };
 
-export const BACKUP_STATUS_BADGE_VARIANT: Record<
-	BackupStatus,
-	"success" | "error" | "default"
-> = {
+export const BACKUP_STATUS_BADGE_VARIANT: Record<BackupStatus, BadgeVariant> = {
 	COMPLETED: "success",
-	FAILED: "error",
-	IN_PROGRESS: "default",
-	PENDING: "default",
+	FAILED: "destructive",
+	IN_PROGRESS: "info",
+	PENDING: "muted",
 };

@@ -1,6 +1,7 @@
 import { AddCard, AddRow } from "@/components/add-tile";
 import AgentDialog from "@/components/dialog/agent";
 import { BackupErrorDialog } from "@/components/dialog/backup-versions";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -27,11 +28,16 @@ import { useDialog } from "@/hooks/use-dialog";
 import type { AgentStatus } from "@/hooks/use-socket";
 import { useSocket } from "@/hooks/use-socket";
 import {
-    BACKUP_STATUS_LABEL,
-    BACKUP_STATUS_STYLE,
     type BackupStatus,
 } from "@/lib/backup-status";
-import { AgentVersion, Count, Hint, LastSeen } from "@/lib/health";
+import {
+    ActiveBadge,
+    AgentVersion,
+    BackupStatusBadge,
+    Count,
+    Hint,
+    LastSeen,
+} from "@/lib/health";
 import {
     ArrowRightIcon,
     ClipboardIcon,
@@ -147,16 +153,9 @@ function AgentCard({ agent, status, onNavigate }: AgentCardProps) {
 						<span className="text-xs text-muted-foreground shrink-0">
 							Status
 						</span>
-						<span
-							className="text-xs text-right"
-							style={agent.is_active ? { color: "var(--greenish)" } : undefined}
-						>
-							{agent.is_active ? (
-								"Active"
-							) : (
-								<span className="text-destructive">Inactive</span>
-							)}
-						</span>
+						<span className="text-xs text-right">
+				<ActiveBadge active={agent.is_active} />
+			</span>
 					</div>
 					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
 						<span className="text-xs text-muted-foreground shrink-0">
@@ -203,10 +202,9 @@ function AgentCard({ agent, status, onNavigate }: AgentCardProps) {
 						<span className="text-xs text-right">
 							{agent.active_jobs}
 							{agent.stale_jobs > 0 && (
-								<span className="text-destructive">
-									{" "}
-									· {agent.stale_jobs} stale
-								</span>
+								<Badge variant="destructive" className="ml-1.5">
+									{agent.stale_jobs} stale
+								</Badge>
 							)}
 						</span>
 					</div>
@@ -239,15 +237,8 @@ function AgentRow({ agent, status, onNavigate }: AgentRowProps) {
 				<span className="font-medium text-sm truncate">{agent.name}</span>
 				<ConnectionStatus status={status} />
 			</div>
-			<span
-				className="text-xs shrink-0 w-14 text-right"
-				style={agent.is_active ? { color: "var(--greenish)" } : undefined}
-			>
-				{agent.is_active ? (
-					"Active"
-				) : (
-					<span className="text-destructive">Inactive</span>
-				)}
+			<span className="text-xs shrink-0 w-14 text-right">
+				<ActiveBadge active={agent.is_active} />
 			</span>
 			<span className="text-xs font-mono shrink-0 w-20 text-right text-muted-foreground">
 				{formatBytes(agent.total_size_bytes)}
@@ -267,9 +258,9 @@ function AgentRow({ agent, status, onNavigate }: AgentRowProps) {
 			<Hint content="Active jobs">
 				<span className="text-xs shrink-0 w-20 text-right text-muted-foreground">
 					{agent.stale_jobs > 0 ? (
-						<span className="text-destructive">
+						<Badge variant="destructive">
 							{agent.stale_jobs}/{agent.active_jobs} stale
-						</span>
+						</Badge>
 					) : (
 						`${agent.active_jobs} jobs`
 					)}
@@ -319,11 +310,8 @@ function BackupRow({ backup, onError }: BackupRowProps) {
 			<span className="text-xs text-muted-foreground shrink-0 w-36 text-right">
 				{backup.started_at ? new Date(backup.started_at).toLocaleString() : "-"}
 			</span>
-			<span
-				className="text-xs shrink-0 w-20 text-right"
-				style={BACKUP_STATUS_STYLE[backup.status] ?? {}}
-			>
-				{BACKUP_STATUS_LABEL[backup.status] ?? backup.status}
+			<span className="text-xs shrink-0 w-20 text-right">
+				<BackupStatusBadge status={backup.status} />
 			</span>
 			<span className="text-xs font-mono shrink-0 w-20 text-right text-muted-foreground">
 				{formatBytesStr(backup.size_bytes)}

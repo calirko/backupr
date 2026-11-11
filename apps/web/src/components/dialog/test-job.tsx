@@ -6,6 +6,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConnectionStatus } from "@/components/ui/connection-status";
 import {
@@ -155,18 +156,15 @@ function TestJobContent({ jobId }: { jobId: string }) {
 						label="Files / Directories"
 						value={
 							result.files_found ? (
-								<span className="flex items-center gap-1 justify-end">
-									<CheckSquareIcon
-										className="size-3.5"
-										style={{ color: "var(--greenish)" }}
-									/>
+								<Badge variant="success">
+									<CheckSquareIcon data-icon="inline-start" />
 									{result.file_count} configured
-								</span>
+								</Badge>
 							) : (
-								<span className="flex items-center gap-1 justify-end text-destructive">
-									<XSquareIcon className="size-3.5" />
+								<Badge variant="destructive">
+									<XSquareIcon data-icon="inline-start" />
 									None configured
-								</span>
+								</Badge>
 							)
 						}
 					/>
@@ -224,7 +222,10 @@ function TestJobContent({ jobId }: { jobId: string }) {
 											</span>
 										)}
 										{(!pr.exists || !pr.readable) && (
-											<XSquareIcon className="size-3.5 text-destructive shrink-0" />
+											<Badge variant="destructive">
+												<XSquareIcon data-icon="inline-start" />
+												{pr.exists ? "Unreadable" : "Missing"}
+											</Badge>
 										)}
 									</div>
 									{pr.error && (

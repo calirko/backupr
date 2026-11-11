@@ -32,12 +32,8 @@ import {
 } from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSocket } from "@/hooks/use-socket";
-import {
-	BACKUP_STATUS_BADGE_VARIANT,
-	BACKUP_STATUS_LABEL,
-	type BackupStatus,
-} from "@/lib/backup-status";
-import Badge from "../ui/badge";
+import { type BackupStatus } from "@/lib/backup-status";
+import { BackupStatusBadge } from "@/lib/health";
 
 interface BackupVersion {
 	id: string;
@@ -57,14 +53,6 @@ function formatBytes(bytes: string | null | undefined): string {
 	const units = ["B", "KB", "MB", "GB", "TB"];
 	const i = Math.floor(Math.log(n) / Math.log(1024));
 	return `${(n / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
-
-function StatusBadge({ status }: { status: BackupStatus }) {
-	return (
-		<Badge variant={BACKUP_STATUS_BADGE_VARIANT[status]}>
-			{BACKUP_STATUS_LABEL[status]}
-		</Badge>
-	);
 }
 
 export function BackupErrorDialog({
@@ -219,7 +207,7 @@ function BackupVersionsTable({ backupJobId }: { backupJobId: string }) {
 								</TableCell>
 								<TableCell>
 									<div className="flex flex-col gap-0.5">
-										<StatusBadge status={b.status} />
+										<BackupStatusBadge status={b.status} />
 										{liveStatus && (
 											<span className="text-xs text-muted-foreground">
 												{liveStatus}

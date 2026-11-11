@@ -14,6 +14,7 @@ import DataHeader, { type SearchField } from "@/components/data/dataHeader";
 import BackupPolicyDialog from "@/components/dialog/backup-policy";
 import ConfirmDialog from "@/components/dialog/confirm";
 import ErrorDialog from "@/components/dialog/error";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useData } from "@/hooks/use-data";
 import { useDialog } from "@/hooks/use-dialog";
@@ -106,9 +107,9 @@ export default function BackupPoliciesPage() {
 			orderable: false,
 			format: (value) =>
 				value ? (
-					<span className="text-destructive">Not enforced</span>
+					<Badge variant="destructive">Not enforced</Badge>
 				) : (
-					<span style={{ color: "var(--greenish)" }}>OK</span>
+					<Badge variant="success">OK</Badge>
 				),
 		},
 	] as Column[];

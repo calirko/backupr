@@ -1,5 +1,12 @@
 // Shared formatting for the health columns on the list pages.
 
+import { ArrowUpIcon } from "@phosphor-icons/react";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import {
+	BACKUP_STATUS_BADGE_VARIANT,
+	BACKUP_STATUS_LABEL,
+	type BackupStatus,
+} from "@/lib/backup-status";
 import {
 	Tooltip,
 	TooltipContent,
@@ -48,10 +55,40 @@ export function formatBytes(bytes: number | string | null | undefined): string {
 }
 
 /** Same thresholds as agent uptime: <90 red, <99 yellow, otherwise green. */
-export function rateStyle(pct: number): React.CSSProperties {
-	if (pct < 90) return { color: "var(--destructive)" };
-	if (pct < 99) return { color: "var(--yellowish)" };
-	return { color: "var(--greenish)" };
+export function rateVariant(pct: number): BadgeVariant {
+	if (pct < 90) return "destructive";
+	if (pct < 99) return "warning";
+	return "success";
+}
+
+/** A percentage badge colored by `rateVariant`. */
+export function PctBadge({
+	pct,
+	digits = 0,
+}: {
+	pct: number | null | undefined;
+	digits?: number;
+}) {
+	if (pct == null) return <span className="text-muted-foreground">-</span>;
+	return <Badge variant={rateVariant(pct)}>{pct.toFixed(digits)}%</Badge>;
+}
+
+/** Colored badge for a backup's status (accepts unknown strings). */
+export function BackupStatusBadge({ status }: { status: string }) {
+	return (
+		<Badge variant={BACKUP_STATUS_BADGE_VARIANT[status as BackupStatus]}>
+			{BACKUP_STATUS_LABEL[status as BackupStatus] ?? status}
+		</Badge>
+	);
+}
+
+/** Active / Inactive flag. */
+export function ActiveBadge({ active }: { active: boolean }) {
+	return active ? (
+		<Badge variant="success">Active</Badge>
+	) : (
+		<Badge variant="destructive">Inactive</Badge>
+	);
 }
 
 /** A percentage with its raw counts, e.g. "86% (6/7)". */
@@ -66,8 +103,8 @@ export function Rate({
 }) {
 	if (pct == null) return <span className="text-muted-foreground">-</span>;
 	return (
-		<span style={rateStyle(pct)}>
-			{pct.toFixed(0)}%{" "}
+		<span className="inline-flex items-center gap-1.5">
+			<PctBadge pct={pct} />
 			<span className="text-muted-foreground text-xs">
 				({num}/{den})
 			</span>
@@ -90,9 +127,11 @@ export function LastSeen({
 	const content = label ? `${label}: ${date ?? "never"}` : date;
 	return (
 		<Hint content={content}>
-			<span className={overdue ? "text-destructive" : undefined}>
-				{formatRelative(at)}
-			</span>
+			{overdue ? (
+				<Badge variant="destructive">{formatRelative(at)}</Badge>
+			) : (
+				<span>{formatRelative(at)}</span>
+			)}
 		</Hint>
 	);
 }
@@ -100,10 +139,10 @@ export function LastSeen({
 export function Count({ value, label }: { value: number; label?: string }) {
 	if (!value) return <span className="text-muted-foreground">0</span>;
 	return (
-		<span className="text-destructive">
+		<Badge variant="destructive">
 			{value}
 			{label ? ` ${label}` : ""}
-		</span>
+		</Badge>
 	);
 }
 
@@ -119,13 +158,14 @@ export function AgentVersion({
 		<Hint
 			content={updateAvailable ? "A newer agent version is available" : null}
 		>
-			<span
-				className="font-mono"
-				style={updateAvailable ? { color: "var(--yellowish)" } : undefined}
-			>
-				v{version}
-				{updateAvailable && " ↑"}
-			</span>
+			{updateAvailable ? (
+				<Badge variant="warning" className="font-mono">
+					v{version}
+					<ArrowUpIcon weight="bold" data-icon="inline-end" />
+				</Badge>
+			) : (
+				<span className="font-mono">v{version}</span>
+			)}
 		</Hint>
 	);
 }

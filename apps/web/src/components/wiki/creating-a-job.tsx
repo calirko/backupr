@@ -388,31 +388,31 @@ export function CreatingAJobPage({ nextPage, onNext, lang }: Props) {
 						</span>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border px-2 py-1 pointer-events-none"
 						>
 							<TestTube size={12} />
 						</button>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border px-2 py-1 pointer-events-none"
 						>
 							<Eye size={12} />
 						</button>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border px-2 py-1 pointer-events-none"
 						>
 							<Pencil size={12} />
 						</button>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border px-2 py-1 pointer-events-none"
 						>
 							<Copy size={12} />
 						</button>
 						<button
 							type="button"
-							className="inline-flex items-center gap-1 rounded border border-destructive text-destructive px-2 py-1 pointer-events-none"
+							className="inline-flex items-center gap-1 rounded-none border border-destructive text-destructive px-2 py-1 pointer-events-none"
 						>
 							<XSquare size={12} />
 						</button>

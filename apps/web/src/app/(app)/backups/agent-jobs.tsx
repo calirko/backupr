@@ -1,6 +1,7 @@
 import { AddCard, AddRow } from "@/components/add-tile";
 import BackupJobDialog from "@/components/dialog/backup-job";
 import BackupVersionsDialog from "@/components/dialog/backup-versions";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -31,8 +32,13 @@ import {
 } from "@/components/ui/tooltip";
 import { useDialog } from "@/hooks/use-dialog";
 import { useSocket } from "@/hooks/use-socket";
-import { BACKUP_STATUS_LABEL, BACKUP_STATUS_STYLE } from "@/lib/backup-status";
-import { Hint, LastSeen, Rate } from "@/lib/health";
+import {
+    ActiveBadge,
+    BackupStatusBadge,
+    Hint,
+    LastSeen,
+    Rate,
+} from "@/lib/health";
 import {
     ArrowLeftIcon,
     CheckSquareIcon,
@@ -154,9 +160,15 @@ function JobCard({
 				<CardTitle className="truncate">{job.name}</CardTitle>
 				<CardAction>
 					{job.is_active ? (
-						<CheckSquareIcon size={16} style={{ color: "var(--greenish)" }} />
+						<Badge variant="success">
+							<CheckSquareIcon data-icon="inline-start" />
+							Enabled
+						</Badge>
 					) : (
-						<XSquareIcon size={16} className="text-destructive" />
+						<Badge variant="destructive">
+							<XSquareIcon data-icon="inline-start" />
+							Disabled
+						</Badge>
 					)}
 				</CardAction>
 				<CardDescription className="font-mono text-xs">
@@ -170,16 +182,9 @@ function JobCard({
 						<span className="text-xs text-muted-foreground shrink-0">
 							Status
 						</span>
-						<span
-							className="text-xs text-right"
-							style={job.is_active ? { color: "var(--greenish)" } : undefined}
-						>
-							{job.is_active ? (
-								"Active"
-							) : (
-								<span className="text-destructive">Inactive</span>
-							)}
-						</span>
+						<span className="text-xs text-right">
+				<ActiveBadge active={job.is_active} />
+			</span>
 					</div>
 					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
 						<span className="text-xs text-muted-foreground shrink-0">
@@ -248,18 +253,9 @@ function JobCard({
 							<span className="text-xs text-muted-foreground shrink-0">
 								Last Status
 							</span>
-							<span
-								className="text-xs text-right"
-								style={
-									BACKUP_STATUS_STYLE[
-										last.status as keyof typeof BACKUP_STATUS_STYLE
-									] ?? {}
-								}
-							>
-								{BACKUP_STATUS_LABEL[
-									last.status as keyof typeof BACKUP_STATUS_LABEL
-								] ?? last.status}
-							</span>
+							<span className="text-xs text-right">
+				<BackupStatusBadge status={last.status} />
+			</span>
 						</div>
 					)}
 					{job.use_password && (
@@ -267,11 +263,8 @@ function JobCard({
 							<span className="text-xs text-muted-foreground shrink-0">
 								Encrypted
 							</span>
-							<span
-								className="text-xs text-right"
-								style={{ color: "var(--greenish)" }}
-							>
-								Yes
+							<span className="text-xs text-right">
+								<Badge variant="success">Yes</Badge>
 							</span>
 						</div>
 					)}
@@ -354,9 +347,13 @@ function JobRow({
 				<div className="flex items-center gap-2">
 					<span className="font-medium text-sm truncate">{job.name}</span>
 					{job.is_active ? (
-						<CheckSquareIcon size={13} style={{ color: "var(--greenish)" }} />
+						<Badge variant="success" aria-label="Enabled">
+							<CheckSquareIcon />
+						</Badge>
 					) : (
-						<XSquareIcon size={13} className="text-destructive" />
+						<Badge variant="destructive" aria-label="Disabled">
+							<XSquareIcon />
+						</Badge>
 					)}
 				</div>
 				<span className="font-mono text-xs text-muted-foreground">
@@ -392,18 +389,9 @@ function JobRow({
 				{formatRelative(last?.started_at)}
 			</span>
 			{last && (
-				<span
-					className="text-xs shrink-0 w-20 text-right"
-					style={
-						BACKUP_STATUS_STYLE[
-							last.status as keyof typeof BACKUP_STATUS_STYLE
-						] ?? {}
-					}
-				>
-					{BACKUP_STATUS_LABEL[
-						last.status as keyof typeof BACKUP_STATUS_LABEL
-					] ?? last.status}
-				</span>
+				<span className="text-xs shrink-0 w-20 text-right">
+				<BackupStatusBadge status={last.status} />
+			</span>
 			)}
 			{liveStatusMessage && (
 				<span className="text-xs text-muted-foreground shrink-0 max-w-32 truncate">
