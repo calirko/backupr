@@ -1,53 +1,53 @@
-import {
-	ArrowLeftIcon,
-	CheckSquareIcon,
-	ClockClockwiseIcon,
-	DownloadSimpleIcon,
-	LightningIcon,
-	MagnifyingGlassIcon,
-	RowsIcon,
-	SquaresFourIcon,
-	XSquareIcon,
-} from "@phosphor-icons/react";
-import { Cron } from "croner";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
 import { AddCard, AddRow } from "@/components/add-tile";
 import BackupJobDialog from "@/components/dialog/backup-job";
 import BackupVersionsDialog from "@/components/dialog/backup-versions";
 import { Button } from "@/components/ui/button";
 import {
-	Card,
-	CardAction,
-	CardContent,
-	CardDescription,
-	CardFooter,
-	CardHeader,
-	CardTitle,
+    Card,
+    CardAction,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import {
-	type AgentConnectionStatus,
-	ConnectionStatus,
+    type AgentConnectionStatus,
+    ConnectionStatus,
 } from "@/components/ui/connection-status";
 import { Input } from "@/components/ui/input";
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useDialog } from "@/hooks/use-dialog";
 import { useSocket } from "@/hooks/use-socket";
 import { BACKUP_STATUS_LABEL, BACKUP_STATUS_STYLE } from "@/lib/backup-status";
 import { Hint, LastSeen, Rate } from "@/lib/health";
+import {
+    ArrowLeftIcon,
+    CheckSquareIcon,
+    ClockClockwiseIcon,
+    DownloadSimpleIcon,
+    LightningIcon,
+    MagnifyingGlassIcon,
+    RowsIcon,
+    SquaresFourIcon,
+    XSquareIcon,
+} from "@phosphor-icons/react";
+import { Cron } from "croner";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 interface BackupJob {
 	id: string;
