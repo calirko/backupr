@@ -165,7 +165,7 @@ function JobCard({
 			</CardHeader>
 
 			<CardContent>
-				<div className="space-y-0">
+				<div className="grid grid-cols-2 gap-x-4 [&>div]:gap-2 [&>div>span:first-child]:min-w-0 [&>div>span:first-child]:shrink [&>div>span:last-child]:min-w-0 [&>div:nth-last-child(-n+2)]:border-0">
 					<div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/50 last:border-0">
 						<span className="text-xs text-muted-foreground shrink-0">
 							Status
