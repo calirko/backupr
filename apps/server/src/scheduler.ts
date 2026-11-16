@@ -1,5 +1,5 @@
 import { prisma } from "./lib/prisma";
-import { removeObject } from "./lib/storage";
+import { BUCKET, removeObject, storage } from "./lib/storage";
 import { notifyBackupsFailed } from "./notifications";
 
 const db = prisma;
@@ -710,6 +710,81 @@ export async function enforceRetentionForJob(jobId: string): Promise<void> {
 	await _pruneJob(job.id, job.name);
 }
 
+// ─── Orphaned storage objects ────────────────────────────────────────────────
+
+const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+/** Set ORPHAN_SWEEP=delete to actually remove orphans; anything else only reports them. */
+const ORPHAN_SWEEP_DELETE = process.env.ORPHAN_SWEEP === "delete";
+let orphanSweepRunning = false;
+
+/**
+ * Finds storage objects whose backup row no longer exists and removes them.
+ * Keys have the shape `<agentId>/<jobId>/<backupId>` (see routes/agents.ts).
+ * An object counts as orphaned only when no backup row with that id exists
+ * (a row with a null blob_key is still mid-upload) and it is older than a day.
+ * Keys of any other shape are never touched.
+ */
+async function sweepOrphanedObjects(): Promise<void> {
+	if (orphanSweepRunning) return;
+	orphanSweepRunning = true;
+	try {
+		const cutoff = Date.now() - ORPHAN_MIN_AGE_MS;
+		const candidates: { key: string; backupId: string; size: number }[] = [];
+
+		const stream = storage.listObjectsV2(BUCKET, "", true);
+		for await (const obj of stream as AsyncIterable<{
+			name?: string;
+			size?: number;
+			lastModified?: Date;
+		}>) {
+			if (!obj.name || !obj.lastModified) continue;
+			if (obj.lastModified.getTime() > cutoff) continue;
+			const parts = obj.name.split("/");
+			if (parts.length !== 3 || parts.some((p) => !p)) continue;
+			candidates.push({ key: obj.name, backupId: parts[2] as string, size: obj.size ?? 0 });
+		}
+
+		const existing = new Set<string>();
+		for (let i = 0; i < candidates.length; i += 1000) {
+			const ids = candidates.slice(i, i + 1000).map((c) => c.backupId);
+			const rows = await db.backup.findMany({
+				where: { id: { in: ids } },
+				select: { id: true },
+			});
+			for (const r of rows) existing.add(r.id);
+		}
+
+		const orphans = candidates.filter((c) => !existing.has(c.backupId));
+		if (orphans.length === 0) return;
+
+		const totalGiB = (
+			orphans.reduce((sum, o) => sum + o.size, 0) / 1024 ** 3
+		).toFixed(1);
+
+		if (!ORPHAN_SWEEP_DELETE) {
+			console.warn(
+				`[Scheduler] Found ${orphans.length} orphaned storage object(s) (${totalGiB} GiB). Set ORPHAN_SWEEP=delete to remove them.`,
+			);
+			return;
+		}
+
+		let removed = 0;
+		for (const o of orphans) {
+			try {
+				await removeObject(o.key);
+				removed++;
+			} catch (err) {
+				console.error(`[Scheduler] Failed to remove orphan ${o.key}:`, err);
+			}
+		}
+		console.log(
+			`[Scheduler] Removed ${removed}/${orphans.length} orphaned storage object(s) (${totalGiB} GiB).`,
+		);
+	} finally {
+		orphanSweepRunning = false;
+	}
+}
+
 // ─── Singleton & bootstrap ───────────────────────────────────────────────────
 
 const scheduler = new Scheduler();
@@ -742,6 +817,12 @@ scheduler.register({
 	name: "enforce-retention-policies",
 	intervalMs: 60 * 60_000, // every hour
 	fn: enforceRetentionPolicies,
+});
+
+scheduler.register({
+	name: "sweep-orphaned-objects",
+	intervalMs: 6 * 60 * 60_000, // every 6 hours
+	fn: sweepOrphanedObjects,
 });
 
 export { scheduler };

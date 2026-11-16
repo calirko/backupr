@@ -6,6 +6,7 @@ import {
 	notifyBackupResults,
 	notifyBackupsFailed,
 } from "./notifications";
+import { enforceRetentionForJob } from "./scheduler";
 import { agentRegistry } from "./ws.agent";
 
 const db = prisma;
@@ -202,104 +203,13 @@ export async function handleBackupStatusUpdate(
 		);
 	}
 
-	// If completed, run the retention policy
+	// If completed, run the retention policy (deletes DB rows *and* storage objects)
 	if (status === BackupStatus.COMPLETED) {
 		try {
-			await runBackupPolicy(backup.backup_job_id);
+			await enforceRetentionForJob(backup.backup_job_id);
 		} catch (error) {
 			console.error(
 				`[Backup] Failed to run policy for job ${backup.backup_job_id}:`,
-				error,
-			);
-		}
-	}
-}
-
-/**
- * Executes the retention policy for a backup job.
- * This includes:
- * - Deleting backups exceeding the keep_last_n_backups limit
- * - Deleting backups older than max_backup_age_in_days
- */
-export async function runBackupPolicy(jobId: string): Promise<void> {
-	// 1. Fetch all policies associated with this job
-	const jobPolicies = await db.backupJobPolicy.findMany({
-		where: { backup_job_id: jobId, backup_policy: { deleted_at: null } },
-		include: { backup_policy: true },
-	});
-
-	if (jobPolicies.length === 0) {
-		console.log(`[Backup] No retention policies found for job ${jobId}`);
-		return;
-	}
-
-	// 2. Get all backups for this job
-	const backups = await db.backup.findMany({
-		where: { backup_job_id: jobId },
-		orderBy: { started_at: "desc" },
-	});
-
-	console.log(
-		`[Backup] Running retention policy for job ${jobId} with ${backups.length} backups`,
-	);
-
-	const backupsToDelete: string[] = [];
-	const now = new Date();
-
-	// 3. Apply each policy
-	for (const jobPolicy of jobPolicies) {
-		const policy = jobPolicy.backup_policy;
-
-		// Policy: keep_last_n_backups
-		if (policy.keep_last_n_backups && policy.keep_last_n_backups > 0) {
-			const backupsToKeep = backups.slice(0, policy.keep_last_n_backups);
-			const backupsToRemove = backups.slice(policy.keep_last_n_backups);
-
-			for (const backup of backupsToRemove) {
-				if (!backupsToDelete.includes(backup.id)) {
-					backupsToDelete.push(backup.id);
-					console.log(
-						`[Backup] Backup ${backup.id} exceeds keep_last_n_backups limit (${policy.keep_last_n_backups})`,
-					);
-				}
-			}
-		}
-
-		// Policy: max_backup_age_in_days
-		if (policy.max_backup_age_in_days && policy.max_backup_age_in_days > 0) {
-			const cutoffDate = new Date(
-				now.getTime() - policy.max_backup_age_in_days * 24 * 60 * 60 * 1000,
-			);
-
-			for (const backup of backups) {
-				if (backup.started_at && backup.started_at < cutoffDate) {
-					if (!backupsToDelete.includes(backup.id)) {
-						backupsToDelete.push(backup.id);
-						console.log(
-							`[Backup] Backup ${backup.id} exceeds max_backup_age_in_days (${policy.max_backup_age_in_days} days)`,
-						);
-					}
-				}
-			}
-		}
-	}
-
-	// 4. Delete the backups
-	if (backupsToDelete.length > 0) {
-		try {
-			const result = await db.backup.deleteMany({
-				where: { id: { in: backupsToDelete } },
-			});
-
-			console.log(
-				`[Backup] Deleted ${result.count} backup(s) due to retention policy for job ${jobId}`,
-			);
-
-			// TODO: Delete the actual backup files from storage (MinIO/S3)
-			// This requires coordination with the storage service
-		} catch (error) {
-			console.error(
-				`[Backup] Failed to delete backups for job ${jobId}:`,
 				error,
 			);
 		}
